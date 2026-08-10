@@ -38,6 +38,9 @@ def make_trace(
     quality: float | None = 0.9,
     latency: float = 12.5,
     base_time: datetime | None = None,
+    error_spans: bool = False,
+    output_extra: dict | None = None,
+    extra_observations: list | None = None,
 ) -> dict:
     base_time = base_time or datetime(2026, 1, 1, 12, 0, 0)
     span_names = span_names or [
@@ -58,9 +61,9 @@ def make_trace(
                 start_time=base_time + timedelta(seconds=10 * i),
                 end_time=base_time + timedelta(seconds=10 * i + 8),
                 latency=8.0,
-                level="DEFAULT",
+                level="ERROR" if error_spans else "DEFAULT",
                 input={"doc_id": filename},
-                output={"stage": "ok"},
+                output={"stage": "ok", "error": "boom"} if error_spans else {"stage": "ok"},
             )
         )
     obs.append(
@@ -106,7 +109,15 @@ def make_trace(
         scores.append(Obj(name="mailroom-pipeline-judge", value=verdict, data_type="CATEGORICAL"))
     if quality is not None:
         scores.append(Obj(name="mailroom-pipeline-quality", value=quality, data_type="NUMERIC"))
-    return {
+    output = {
+        "stage": stage,
+        "doc_type": doc_type,
+        "classification_confidence": class_conf,
+        "extraction_confidence": extract_conf,
+    }
+    if output_extra:
+        output.update(output_extra)
+    trace = {
         "id": trace_id,
         "name": "document-pipeline",
         "timestamp": base_time,
@@ -117,14 +128,81 @@ def make_trace(
         "tags": tags or ["mailroom", environment],
         "metadata": {"pipeline": "mailroom", "attempt": attempt},
         "input": {"filename": filename, "matter_id": matter_id, "attempt": attempt},
+        "output": output,
+        "observations": obs,
+        "scores": scores,
+    }
+    if extra_observations:
+        trace["observations"] = [*obs, *extra_observations]
+    return trace
+
+
+def make_trace_v4(
+    trace_id: str,
+    *,
+    filename: str = "v4-sample.pdf",
+    matter_id: str = "MATTER-V4",
+    stage: str = "archived",
+    doc_type: str = "contract",
+) -> dict:
+    """A trace shaped like the Langfuse v4 SDK (camelCase observations).
+
+    v4 returns camelCase at the observation level (`startTime`, `modelId`,
+    `totalTokens`, `totalCost`); trace-level fields stay snake_case in the
+    API responses. The interpreter must accept both shapes.
+    """
+    base_time = datetime(2026, 3, 3, 9, 0, 0)
+    obs = []
+    for i, name in enumerate(
+        ["ingest-document", "classify-document", "extract-fields", "archive-document"]
+    ):
+        obs.append(
+            Obj(
+                id=f"v4-span-{trace_id}-{i}",
+                type="SPAN",
+                name=name,
+                startTime=base_time + timedelta(seconds=10 * i),
+                endTime=base_time + timedelta(seconds=10 * i + 8),
+                latency=8.0,
+                level="DEFAULT",
+            )
+        )
+    obs.append(
+        Obj(
+            id=f"v4-gen-{trace_id}-0",
+            type="GENERATION",
+            name="classify-document",
+            modelId="deepseek/deepseek-v4-flash",
+            startTime=base_time + timedelta(seconds=11),
+            endTime=base_time + timedelta(seconds=20),
+            latency=9.0,
+            usage={"total": 1200, "input": 1000, "output": 200},
+            totalTokens=1200,
+            inputTokens=1000,
+            outputTokens=200,
+            totalCost=0.00015,
+            level="DEFAULT",
+        )
+    )
+    return {
+        "id": trace_id,
+        "name": "document-pipeline",
+        "timestamp": base_time,
+        "updated_at": base_time + timedelta(seconds=80),
+        "latency": 12.5,
+        "session_id": matter_id,
+        "environment": "pilot",
+        "tags": ["mailroom", "pilot"],
+        "metadata": {"pipeline": "mailroom", "attempt": 0},
+        "input": {"filename": filename, "matter_id": matter_id, "attempt": 0},
         "output": {
             "stage": stage,
             "doc_type": doc_type,
-            "classification_confidence": class_conf,
-            "extraction_confidence": extract_conf,
+            "classification_confidence": 0.97,
+            "extraction_confidence": 0.88,
         },
         "observations": obs,
-        "scores": scores,
+        "scores": [],
     }
 
 
@@ -136,9 +214,17 @@ class FakeList:
 class FakeTraceApi:
     def __init__(self, traces: list[dict]):
         self.traces = traces
+        self.calls: list[dict] = []
 
     def list(self, **kw):
-        return FakeList(data=self.traces)
+        self.calls.append(kw)
+        out = self.traces
+        if kw.get("name"):
+            out = [t for t in out if t.get("name") == kw["name"]]
+        if kw.get("tags"):
+            tags = set(kw["tags"].split(","))
+            out = [t for t in out if tags.issubset(set(t.get("tags") or []))]
+        return FakeList(data=out)
 
     def get(self, trace_id: str):
         for t in self.traces:

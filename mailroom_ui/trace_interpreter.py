@@ -63,6 +63,13 @@ def _pick(d: dict[str, Any], *keys: str) -> Any:
     return None
 
 
+# Langfuse v4 returns camelCase at the trace/observation level; older SDK
+# versions and the raw stored input/output payloads use snake_case. Both are
+# accepted everywhere below.
+def _both(d: dict[str, Any], snake: str, camel: str) -> Any:
+    return _pick(d, snake, camel)
+
+
 def _as_dict(value: Any) -> dict[str, Any]:
     if hasattr(value, "model_dump"):
         try:
@@ -83,12 +90,39 @@ def _usage_tokens(usage: Any) -> tuple[Optional[int], Optional[int], Optional[in
 
 def _cost_details(cost: Any) -> float:
     cost = _as_dict(cost)
-    total = cost.get("total") or cost.get("total_cost")
+    total = (
+        cost.get("total")
+        or cost.get("total_cost")
+        or cost.get("totalPrice")
+        or cost.get("totalCost")
+    )
     if total is not None:
         return float(total)
-    inp = cost.get("input") or cost.get("input_cost") or 0
-    out = cost.get("output") or cost.get("output_cost") or 0
-    return float(inp) + float(out)
+    inp = (
+        cost.get("input")
+        or cost.get("input_cost")
+        or cost.get("inputPrice")
+        or 0
+    )
+    out = (
+        cost.get("output")
+        or cost.get("output_cost")
+        or cost.get("outputPrice")
+        or 0
+    )
+    try:
+        return float(inp) + float(out)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def derive_stage(
@@ -194,7 +228,7 @@ def interpret_trace(
     tags = [str(t) for t in (trace.get("tags") or []) if t]
     environment = _clean(trace.get("environment"))
 
-    created = parse_dt(_pick(trace, "timestamp", "created_at"))
+    created = parse_dt(_pick(trace, "timestamp", "created_at", "createdAt"))
     latency = trace.get("latency")
     if latency is not None:
         try:
@@ -207,8 +241,8 @@ def interpret_trace(
     for raw in observations:
         obs = _as_dict(raw)
         obs_type = str(obs.get("type") or "").upper()
-        start = parse_dt(obs.get("start_time"))
-        end = parse_dt(obs.get("end_time"))
+        start = parse_dt(_both(obs, "start_time", "startTime"))
+        end = parse_dt(_both(obs, "end_time", "endTime"))
         obs_latency = obs.get("latency")
         try:
             obs_latency = float(obs_latency) if obs_latency is not None else None
@@ -217,9 +251,6 @@ def interpret_trace(
         is_error = str(obs.get("level") or "").upper() in ("ERROR", "WARNING") or bool(
             obs.get("error") or _as_dict(obs.get("output")).get("error")
         )
-        if obs_type in ("SPAN", "EVENT", "OBSERVATION"):
-            if "model" in obs or obs_type == "GENERATION":
-                pass  # fall through to generation classification below
         if obs_type == "GENERATION" or obs.get("model") is not None or "usage" in obs:
             name = _observation_name(obs)
             usage_in, usage_out = _usage_tokens(obs.get("usage"))[1:]
@@ -230,14 +261,15 @@ def interpret_trace(
                     agent=_clean(obs.get("metadata", {}).get("agent"))
                     if isinstance(obs.get("metadata"), dict)
                     else None,
-                    model=_clean(obs.get("model")),
+                    model=_clean(_both(obs, "model", "modelId")),
                     latency=obs_latency,
                     input=obs.get("input"),
                     output=obs.get("output"),
-                    usage_total_tokens=total,
-                    usage_input_tokens=usage_in,
-                    usage_output_tokens=usage_out,
-                    cost_usd=_cost_details(obs.get("cost_details")) or None,
+                    usage_total_tokens=total or _int(obs.get("totalTokens")),
+                    usage_input_tokens=usage_in or _int(obs.get("inputTokens")),
+                    usage_output_tokens=usage_out or _int(obs.get("outputTokens")),
+                    cost_usd=_cost_details(obs.get("cost_details"))
+                    or _float(_pick(obs, "totalCost", "totalPrice", "total_cost")),
                     prompt_version=_clean(
                         _pick(
                             _as_dict(obs.get("metadata")),
@@ -261,9 +293,11 @@ def interpret_trace(
                     error_message=_clean(
                         obs.get("error")
                         or _as_dict(obs.get("output")).get("error")
-                        or obs.get("metadata", {}).get("error")
-                        if isinstance(obs.get("metadata"), dict)
-                        else obs.get("error")
+                        or (
+                            obs.get("metadata", {}).get("error")
+                            if isinstance(obs.get("metadata"), dict)
+                            else None
+                        )
                     ),
                     input=_as_dict(obs.get("input")) or None,
                     output=_as_dict(obs.get("output")) or None,
@@ -304,7 +338,7 @@ def interpret_trace(
         attempt = metadata.get("attempt")
     filename = _clean(t_input.get("filename")) or _clean(t_input.get("file"))
     matter_id = _clean(t_input.get("matter_id"))
-    session_id = _clean(trace.get("session_id"))
+    session_id = _clean(_both(trace, "session_id", "sessionId"))
     if matter_id is None:
         matter_id = session_id
 
@@ -337,7 +371,7 @@ def interpret_trace(
         tags=tags,
         attempt=int(attempt) if attempt is not None else None,
         created_at=created,
-        updated_at=parse_dt(trace.get("updated_at")) or created,
+        updated_at=parse_dt(_both(trace, "updated_at", "updatedAt")) or created,
         latency=latency,
         stage=stage,
         phase=STAGE_PHASE.get(stage, STAGE_PHASE[Stage.UNKNOWN]),
@@ -353,6 +387,7 @@ def interpret_trace(
         spans=spans,
         generations=generations,
         scores=score_map,
+        score_objects=score_objects,
         routing_path=routing_path,
         verdict=verdict,
         quality=quality,

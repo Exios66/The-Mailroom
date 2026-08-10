@@ -107,6 +107,7 @@ class PipelineRun(BaseModel):
     spans: list[NodeSpan] = Field(default_factory=list)
     generations: list[Generation] = Field(default_factory=list)
     scores: dict[str, Any] = Field(default_factory=dict)
+    score_objects: list[Score] = Field(default_factory=list)
     routing_path: list[str] = Field(default_factory=list)
 
     verdict: Optional[str] = None             # CORRECT / PARTIAL / MISS

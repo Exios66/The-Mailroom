@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -166,6 +167,7 @@ def _dt(value) -> Optional[datetime]:
 
 def run() -> None:
     logging.basicConfig(level=logging.INFO)
+    load_dotenv()
     port = int(os.environ.get("MAILROOM_PORT", "8001"))
     uvicorn.run(create_app(), host="127.0.0.1", port=port, log_level="info")
 

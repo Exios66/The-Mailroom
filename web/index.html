@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THE MAILROOM</title>
+<link rel="stylesheet" href="/static/css/theme.css">
+</head>
+<body>
+<div class="bezel">
+  <div class="screen">
+    <header class="titlebar">
+      <div class="logo">
+        <span class="logo-mark">&#9632;</span>
+        <h1>THE MAILROOM</h1>
+        <span class="logo-sub">llm-mailroom visual engine</span>
+      </div>
+      <div class="title-right">
+        <span id="source-light" class="light light-off"></span>
+        <span id="source-label" class="mono">SOURCE: --</span>
+        <span id="clock" class="mono">--:--:--</span>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="floor">FLOOR</button>
+      <button class="tab" data-view="sessions">SESSIONS</button>
+      <button class="tab" data-view="metrics">METRICS</button>
+      <button class="tab" data-view="console">CONSOLE</button>
+    </nav>
+
+    <main>
+      <section id="view-floor" class="view">
+        <canvas id="floor" width="1440" height="560"></canvas>
+        <div id="floor-hint" class="hint mono">click an envelope to inspect its run</div>
+      </section>
+
+      <section id="view-sessions" class="view" hidden>
+        <div class="panel-head mono">SESSIONS / MATTERS</div>
+        <div id="sessions-list" class="list mono"></div>
+      </section>
+
+      <section id="view-metrics" class="view" hidden>
+        <div class="panel-head mono">METRICS</div>
+        <div id="metrics-grid" class="metrics-grid"></div>
+      </section>
+
+      <section id="view-console" class="view" hidden>
+        <div class="panel-head mono">LIVE CONSOLE</div>
+        <pre id="console-log" class="console mono"></pre>
+      </section>
+    </main>
+
+    <footer class="statusbar mono">
+      <span id="status-left">MAILROOM STANDING BY</span>
+      <span id="status-right"></span>
+    </footer>
+  </div>
+</div>
+
+<div id="inspector" class="overlay" hidden>
+  <div class="overlay-panel">
+    <div class="insp-head">
+      <span id="insp-title" class="mono"></span>
+      <button id="insp-close" class="px-btn mono">X</button>
+    </div>
+    <div id="insp-body" class="mono"></div>
+  </div>
+</div>
+
+<script src="/static/js/sprites.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/floor.js"></script>
+<script src="/static/js/inspector.js"></script>
+<script src="/static/js/sessions.js"></script>
+<script src="/static/js/metrics.js"></script>
+<script src="/static/js/console.js"></script>
+<script src="/static/js/main.js"></script>
+</body>
+</html>

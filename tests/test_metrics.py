@@ -41,3 +41,41 @@ def test_metrics_since_filter():
     base = datetime(2026, 1, 1, 12, 0, 0)
     m = compute_metrics(runs, since=base + timedelta(minutes=3, seconds=21))
     assert m.total_docs == 2
+
+
+def test_p95_generation_latency():
+    base = datetime(2026, 1, 1, 12, 0, 0)
+    runs = []
+    for i in range(10):
+        t = make_trace(f"t95-{i}", stage="archived", verdict=None, quality=None,
+                       base_time=base + timedelta(minutes=i))
+        for gen in [o for o in t["observations"] if o.type == "GENERATION"]:
+            gen.latency = float(0.1 + i)
+        runs.append(interpret_trace(t, t["observations"], t["scores"]))
+    m = compute_metrics(runs)
+    assert m.p95_generation_latency_s == 9.4
+
+
+def test_verdict_mix_counts():
+    base = datetime(2026, 1, 1, 12, 0, 0)
+    runs = []
+    for i, verdict in enumerate(["CORRECT", "CORRECT", "PARTIAL", "MISS", None]):
+        t = make_trace(
+            f"tv-{i}",
+            stage="archived" if verdict else "review",
+            verdict=verdict,
+            quality=0.8 if verdict else None,
+            base_time=base + timedelta(minutes=i),
+        )
+        runs.append(interpret_trace(t, t["observations"], t["scores"]))
+    m = compute_metrics(runs)
+    assert m.verdict_counts == {"CORRECT": 2, "PARTIAL": 1, "MISS": 1}
+    assert m.avg_quality == 0.8
+
+
+def test_metrics_empty():
+    m = compute_metrics([])
+    assert m.total_docs == 0
+    assert m.p95_generation_latency_s == 0.0
+    assert m.avg_quality is None
+    assert m.verdict_counts == {}
