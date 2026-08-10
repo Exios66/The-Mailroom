@@ -13,17 +13,69 @@ All notable changes to The-Mailroom are documented here, following
   v2/v3 snake_case shapes (`trace_interpreter.py` `_both`/`_pick` helpers).
 - `tests/fake_langfuse.py:make_trace_v4` — v4-shaped (camelCase) trace
   fixture; interpreter tests cover both shapes.
-- M2 (in progress): `web/index.html` app shell and `web/js/sprites.js`
-  hand-authored pixel-art palette + sprites (agents, envelopes, stamps, bins,
-  conveyor, terminals) derived from the AgentLaboratory visual analysis.
+- M2 web engine (complete): `web/css/theme.css` pixel-art theme (bezel,
+  scanlines, titlebar, tabs, statusbar, overlay panels, metric tiles);
+  `web/js/api.js` (fetch client + WebSocket with exponential-backoff
+  reconnect + format helpers); `web/js/floor.js` canvas conveyor renderer
+  (10 stations, rollers, bins, terminals, source lamp, envelopes animated
+  to their stage target with per-doc-type tint + verdict/review/failed
+  stamps, click/hover inspection); `web/js/inspector.js` (spans timeline,
+  LLM generations, scores); `web/js/sessions.js`; `web/js/metrics.js`;
+  `web/js/console.js` (AgentLab-style banners); `web/js/main.js` app shell
+  (tabs, clock, source light, WS snapshot wiring with polling fallback,
+  "MAILROOM CLOSED — no Langfuse connection" overlay).
+- M3 review queue: `web/js/review.js` + REVIEW tab listing
+  `/api/review-queue` runs (escalation reason, confidence, verdict) with
+  30s auto-refresh while visible.
+- `scripts/seed_demo.py` — seeds hardcoded demo scenarios INTO Langfuse
+  (env `demo`, deterministic `demo-<slug>` trace ids, verb-first spans,
+  generations with usage/cost, judge verdict/quality scores via a
+  CATEGORICAL `mailroom-pipeline-judge` score config) — never served
+  locally. Verification modes: `--check` (asserts the stored Langfuse
+  records against what was seeded), `--check-api` (asserts the live server
+  display payloads), `--check-logs` (asserts against run logs physically
+  saved by llm-mailroom's `sync_langfuse_logs.py`). Explicit request
+  timeouts on every API call; credential preflight; delete-then-reseed
+  with settle (ingestion appends, so re-seeding must start clean).
 
 ### Changed
 - Generation cost is read from `cost_details` (v2/v3) or top-level
-  `totalCost`/`totalPrice` (v4), never from a single fixed field.
+  `totalCost`/`totalPrice` (v4), never from a single fixed field — v4 also
+  stores the field camelCase as `costDetails`.
+- Observation classification: explicit `type` (SPAN/EVENT/GENERATION)
+  decides span-vs-generation; v4 spans carry a zeroed `usage` dict that
+  previously misclassified every span as a generation. The
+  model/usage heuristic now applies only to `OBSERVATION`-typed or
+  type-less records (the pipeline's auto-traced generations).
+- CATEGORICAL scores (judge verdicts) resolve their stored numeric index
+  back to the config label (`score_configs` param of `interpret_trace`,
+  fed by `LangfuseSource.get_score_configs`). Score `data_type` read via
+  `_both(data_type, dataType)`.
+- `LangfuseSource.get_scores` reads the v3 scores API first: on Langfuse
+  v4 the v1 endpoint ignores `trace_id` (returns global pages, attributing
+  scores to the wrong traces) and its values are label-resolved indexes;
+  v3 filters correctly and returns labels.
+- `LangfuseSource.get_observations` uses the trace record's embedded
+  observation set as the primary source (complete records: usage, cost,
+  model, io) with the v2 index as fallback — one API call instead of two.
+- `LangfuseSource.health()` is a live, briefly-cached API check; the
+  server's `/api/health` reports its result. A revoked key or outage now
+  surfaces as `langfuse: false` instead of a stale startup flag.
+- All `LangfuseSource` read methods raise `LangfuseUnavailable` on any
+  API failure; the server maps it to a 503 `{"error": "langfuse
+  unavailable"}` instead of a raw 500.
+- Poller `detail_ttl` raised 15s → 60s so full-detail fetch load on
+  Langfuse stays well under rate limits.
 
 ### Fixed
 - Cost extraction regressed during v4 tolerance work — observations were
   searched for cost at the wrong level, zeroing all run costs.
+- `server/main.py:_serialize` imported `floor_payload` only in the
+  `full=False` branch — `/api/traces/{id}` crashed with `UnboundLocalError`.
+- `web/js/sprites.js` was missing the `const SORTER = [` declaration —
+  the floor's first sprite referenced an undefined matrix.
+- `tests/test_metrics.py::test_p95_generation_latency` expected 9.4 but
+  the fixture (two generations per trace) yields a nearest-rank p95 of 9.1.
 
 ## [0.1.0] - 2026-08-10
 

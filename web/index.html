@@ -24,6 +24,7 @@
 
     <nav class="tabs" id="tabs">
       <button class="tab active" data-view="floor">FLOOR</button>
+      <button class="tab" data-view="review">REVIEW</button>
       <button class="tab" data-view="sessions">SESSIONS</button>
       <button class="tab" data-view="metrics">METRICS</button>
       <button class="tab" data-view="console">CONSOLE</button>
@@ -33,6 +34,11 @@
       <section id="view-floor" class="view">
         <canvas id="floor" width="1440" height="560"></canvas>
         <div id="floor-hint" class="hint mono">click an envelope to inspect its run</div>
+      </section>
+
+      <section id="view-review" class="view" hidden>
+        <div class="panel-head mono">REVIEW SIDING — WAITING ON A HUMAN</div>
+        <div id="review-queue" class="list mono"></div>
       </section>
 
       <section id="view-sessions" class="view" hidden>
@@ -88,6 +94,7 @@
 <script src="/static/js/api.js"></script>
 <script src="/static/js/floor.js"></script>
 <script src="/static/js/inspector.js"></script>
+<script src="/static/js/review.js"></script>
 <script src="/static/js/sessions.js"></script>
 <script src="/static/js/metrics.js"></script>
 <script src="/static/js/console.js"></script>

@@ -111,7 +111,13 @@ python scripts/release.py --help     # semver release workflow (see below)
 ## Milestone status (in-flight work)
 
 - **M1 — data core + API + tests**: DONE (mailroom_ui/, server/, tests/ green).
-- **M2 — pixel engine + static web**: IN PROGRESS — `web/index.html` + `web/js/sprites.js` exist; `theme.css`, `floor.js`, screen views (`inspector`/`sessions`/`metrics`/`console`), `api.js`, `main.js` are next.
-- **M3 — live mode** (WS wiring, envelope animation bound to real trace state, review queue) — planned.
+- **M2 — pixel engine + static web**: DONE — `web/` SPA complete (`index.html`,
+  `theme.css`, `sprites.js`, `api.js`, `floor.js`, `inspector.js`,
+  `sessions.js`, `metrics.js`, `console.js`, `main.js`).
+- **M3 — live mode**: DONE — WS wiring with reconnect + polling fallback,
+  envelope animation bound to real trace state, REVIEW queue tab.
 - **M4 — TUI console** (rich, AgentLab-style) — planned.
-- **M5 — polish**: `scripts/seed_demo.py`, README/docs, sprite review, acceptance against live traces — planned.
+- **M5 — polish**: in progress — `scripts/seed_demo.py` seeds demo runs INTO
+  Langfuse (env `demo`) with `--check` / `--check-api` / `--check-logs`
+  verification modes; sprite review + acceptance against live traces
+  remaining.

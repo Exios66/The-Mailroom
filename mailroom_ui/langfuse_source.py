@@ -118,6 +118,16 @@ class LangfuseSource:
             raise LangfuseUnavailable("client.api unavailable")
         return getattr(api, resource, None)
 
+    def _guarded(self, label: str, fn: Callable[[], Any]) -> Any:
+        """Any Langfuse API failure surfaces as LangfuseUnavailable — the
+        documented contract for callers (never stale, never fabricated)."""
+        try:
+            return fn()
+        except LangfuseUnavailable:
+            raise
+        except Exception as exc:
+            raise LangfuseUnavailable(f"{label}: {str(exc)[:200]}") from exc
+
     # ----------------------------------------------------------------- traces
 
     def list_traces(
@@ -146,7 +156,7 @@ class LangfuseSource:
             kw["environment"] = ",".join(environments)
         if name:
             kw["name"] = name
-        resp = trace_api.list(**kw)
+        resp = self._guarded(f"trace.list", lambda: trace_api.list(**kw))
         out = [_to_dict(t) for t in _page_data(resp)]
         self.cache.set(key, out, self.poll_cache_ttl)
         return out
@@ -184,7 +194,8 @@ class LangfuseSource:
             obs_api = self._api("observations")
             if obs_api is None:
                 return []
-            resp = obs_api.get_many(trace_id=trace_id, limit=100)
+            resp = self._guarded("observations.get_many",
+                                 lambda: obs_api.get_many(trace_id=trace_id, limit=100))
             out = [_to_dict(o) for o in _page_data(resp)]
         self.cache.set(key, out, self.cache_ttl)
         return out
@@ -194,11 +205,25 @@ class LangfuseSource:
         cached = self.cache.get(key)
         if cached is not None:
             return cached
-        scores_api = self._api("scores")
-        if scores_api is None:
-            return []
-        resp = scores_api.get_many(trace_id=trace_id, limit=100)
-        out = [_to_dict(s) for s in _page_data(resp)]
+        # v3 scores endpoint: trace filter works and CATEGORICAL values come
+        # back label-resolved. The v1 endpoint ignores `trace_id` on Langfuse
+        # v4 (returns global pages) — never use it as the primary read.
+        v3 = getattr(self.client, "api", None) and getattr(self.client.api, "scores_v3", None)
+        out: list[dict[str, Any]] = []
+        if v3 is not None:
+            try:
+                resp = self._guarded("scores.get_many_v3",
+                                     lambda: v3.get_many_v3(trace_id=trace_id, limit=100))
+                out = [_to_dict(o) for o in _page_data(resp)]
+            except LangfuseUnavailable:
+                out = []
+        if not out:
+            scores_api = self._api("scores")
+            if scores_api is None:
+                return []
+            resp = self._guarded("scores.get_many",
+                                 lambda: scores_api.get_many(trace_id=trace_id, limit=100))
+            out = [_to_dict(o) for o in _page_data(resp)]
         self.cache.set(key, out, self.cache_ttl)
         return out
 
@@ -251,10 +276,8 @@ class LangfuseSource:
         sessions_api = self._api("sessions")
         if sessions_api is None:
             return []
-        try:
-            resp = sessions_api.list(limit=limit)
-        except Exception:
-            return []
+        resp = self._guarded("sessions.list",
+                             lambda: sessions_api.list(limit=limit))
         out = [_to_dict(s) for s in _page_data(resp)]
         self.cache.set(key, out, self.cache_ttl)
         return out
@@ -265,8 +288,9 @@ class LangfuseSource:
         if cached is not None:
             return cached
         try:
-            resp = self._api("sessions").get(session_id, limit=limit)
-        except Exception:
+            resp = self._guarded("sessions.get",
+                                 lambda: self._api("sessions").get(session_id, limit=limit))
+        except LangfuseUnavailable:
             return []
         out = [_to_dict(t) for t in _page_data(resp)]
         self.cache.set(key, out, self.cache_ttl)
@@ -275,6 +299,7 @@ class LangfuseSource:
     # ---------------------------------------------------------------- health
 
     def health(self) -> dict[str, Any]:
+        """Live Langfuse reachability: real API call, no cache (must be fresh)."""
         try:
             self.list_traces(limit=1)
             ok = True

@@ -19,6 +19,9 @@ const Main = (() => {
   let pollTimer = null;
   let fallbackTimer = null;
   let activeTab = "floor";
+  let demoMode = false;
+  let demoTimer = null;
+  let demoRuns = [];
 
   function p2(n) { return String(n).padStart(2, "0"); }
 
@@ -39,7 +42,7 @@ const Main = (() => {
   }
 
   function applySource() {
-    if (!langfuseOk) {
+    if (!langfuseOk && !demoMode) {
       setLamp("red");
       sourceLabelEl.textContent = "SOURCE: OFFLINE";
       statusLeftEl.textContent = "MAILROOM CLOSED — NO LANGFUSE CONNECTION";
@@ -47,6 +50,22 @@ const Main = (() => {
       closedEl.hidden = false;
       Floor.reset();
       Floor.setSource("red");
+    } else if (demoMode && !langfuseOk) {
+      setLamp("gold");
+      sourceLabelEl.textContent = "SOURCE: DEMO MODE";
+      statusLeftEl.textContent = "MAILROOM DEMO — SIMULATED PIPELINE RUNNING";
+      statusLeftEl.className = "st-warn mono";
+      closedEl.hidden = true;
+      Floor.setSource("gold");
+      startDemo();
+    } else if (demoMode && langfuseOk) {
+      setLamp("gold");
+      sourceLabelEl.textContent = "SOURCE: DEMO MODE (LANGFUSE UP)";
+      statusLeftEl.textContent = "MAILROOM DEMO — SIMULATED PIPELINE (LANGFUSE AVAILABLE)";
+      statusLeftEl.className = "st-warn mono";
+      closedEl.hidden = true;
+      Floor.setSource("gold");
+      startDemo();
     } else {
       setLamp(wsOk ? "green" : "gold");
       sourceLabelEl.textContent = "SOURCE: LANGFUSE";
@@ -54,11 +73,78 @@ const Main = (() => {
       statusLeftEl.className = "st-good mono";
       closedEl.hidden = true;
       Floor.setSource(wsOk ? "green" : "gold");
+      stopDemo();
     }
   }
 
+  function startDemo() {
+    if (demoTimer) return;
+    demoRuns = generateDemoRuns();
+    let idx = 0;
+    demoTimer = setInterval(() => {
+      if (!demoMode || langfuseOk) return stopDemo();
+      const run = demoRuns[idx % demoRuns.length];
+      run.timestamp = Date.now();
+      Floor.update([run]);
+      ConsoleView.log(`DEMO ${run.filename} → ${run.stage}${run.verdict ? ` · ${run.verdict}` : ""}`, "c-blue");
+      idx++;
+    }, 3000);
+    ConsoleView.banner("DEMO MODE ACTIVE — SIMULATED PIPELINE");
+  }
+
+  function stopDemo() {
+    if (demoTimer) {
+      clearInterval(demoTimer);
+      demoTimer = null;
+    }
+    if (!langfuseOk) Floor.reset();
+  }
+
+  function generateDemoRuns() {
+    const stages = [
+      { stage: "inbox", phase: "intake_sort", doc_type: "contract", filename: "contract_01_nda.pdf" },
+      { stage: "ingest", phase: "intake_sort", doc_type: "contract", filename: "contract_02_msa.pdf" },
+      { stage: "classify", phase: "intake_sort", doc_type: "contract", filename: "contract_03_sa.pdf", classification_confidence: 0.96 },
+      { stage: "extract", phase: "extraction", doc_type: "contract", filename: "contract_04_jv.pdf", extraction_confidence: 0.89 },
+      { stage: "boss", phase: "extraction", doc_type: "contract", filename: "contract_05_conflict.pdf", verdict: "PARTIAL", quality: 0.65 },
+      { stage: "report", phase: "reporting", doc_type: "contract", filename: "contract_06_report.pdf" },
+      { stage: "archive", phase: "reporting", doc_type: "contract", filename: "contract_07_archive.pdf" },
+      { stage: "archived", phase: "terminal", doc_type: "contract", filename: "contract_08_done.pdf", verdict: "CORRECT", quality: 0.94 },
+      { stage: "review", phase: "review", doc_type: "due_diligence", filename: "dd_01_liability.pdf", review_decision: "human review", escalation_reason: "low extraction confidence" },
+      { stage: "failed", phase: "terminal", doc_type: "compliance_filing", filename: "compliance_01_filing.pdf", error_message: "extraction failed: invalid JSON" },
+    ];
+    return stages.map((s, i) => ({
+      trace_id: `demo-run-${i}`,
+      filename: s.filename,
+      matter_id: "DEMO-MATTER",
+      session_id: "DEMO-MATTER",
+      environment: "demo",
+      tags: ["mailroom", "demo", "demo-mode"],
+      attempt: 1,
+      stage: s.stage,
+      phase: s.phase,
+      doc_type: s.doc_type,
+      classification_confidence: s.classification_confidence,
+      extraction_confidence: s.extraction_confidence,
+      review_decision: s.review_decision,
+      escalation_reason: s.escalation_reason,
+      error_message: s.error_message,
+      verdict: s.verdict,
+      quality: s.quality,
+      latency: 5 + Math.random() * 20,
+      llm_call_count: 2 + Math.floor(Math.random() * 4),
+      total_tokens: 2000 + Math.floor(Math.random() * 3000),
+      cost_usd: 0.0005 + Math.random() * 0.002,
+      retried: Math.random() > 0.7,
+      needs_human: s.stage === "review",
+      created_at: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+      updated_at: new Date().toISOString(),
+      routing_path: [],
+    }));
+  }
+
   function applySnapshot(runs) {
-    if (!langfuseOk) return;
+    if (!langfuseOk && !demoMode) return;
     lastSnapshot = runs;
     const ids = new Set(runs.map((r) => r.trace_id));
     const added = [...ids].filter((id) => !lastIds.has(id));
@@ -139,7 +225,10 @@ const Main = (() => {
     activeTab = name;
     for (const t of tabEls) t.classList.toggle("active", t.dataset.view === name);
     for (const v of document.querySelectorAll(".view")) v.hidden = v.id !== `view-${name}`;
-    if (name === "sessions") {
+    if (name === "review") {
+      ReviewView.refresh().catch(() => {});
+      ConsoleView.log("review queue refreshed", "c-dim");
+    } else if (name === "sessions") {
       SessionsView.refresh().catch(() => {});
       ConsoleView.log("sessions refreshed", "c-dim");
     } else if (name === "metrics") {
@@ -176,13 +265,27 @@ const Main = (() => {
     for (const t of tabEls) {
       t.addEventListener("click", () => switchView(t.dataset.view));
     }
+    setInterval(() => {
+      if (activeTab === "review") ReviewView.refresh().catch(() => {});
+      if (activeTab === "sessions") SessionsView.refresh().catch(() => {});
+      if (activeTab === "metrics") MetricsView.refresh().catch(() => {});
+    }, 30000);
 
     document.getElementById("closed-retry").addEventListener("click", () => {
       ConsoleView.log("retrying connection…", "c-dim");
       checkHealth();
     });
 
-    setInterval(checkHealth, 20000);
+    // Demo mode toggle (D key)
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "d" || ev.key === "D") {
+        demoMode = !demoMode;
+        ConsoleView.log(`DEMO MODE ${demoMode ? "ON" : "OFF"}`, demoMode ? "c-ok" : "c-warn");
+        applySource();
+      }
+    });
+
+    setInterval(checkHealth, 5000);
     checkHealth();
 
     setTimeout(() => {

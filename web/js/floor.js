@@ -15,6 +15,7 @@ const Floor = (() => {
   const STAMP_H = 32;
   const ENV_Y = 220;
   const SIDING_Y = 384;
+  const AGENT_Y = 48;
 
   const STATIONS = [
     { key: "sorter", x: 24, label: "SORTER" },
@@ -221,16 +222,16 @@ const Floor = (() => {
     for (const s of STATIONS) {
       const rows = SPRITES[s.key];
       if (!rows) continue;
-      drawSprite(ctx, rows, s.x, 132, PX);
+      drawSprite(ctx, rows, s.x, AGENT_Y, PX);
       const prop = PROPS[s.key];
       if (prop && prop.rows) {
-        drawSprite(ctx, prop.rows, s.x + prop.x * PX, 132 + prop.y * PX, PX);
+        drawSprite(ctx, prop.rows, s.x + prop.x * PX, AGENT_Y + prop.y * PX, PX);
       }
     }
     ctx.font = "bold 9px 'Courier New', monospace";
     ctx.fillStyle = "#e8dcc3";
     ctx.textAlign = "center";
-    for (const s of STATIONS) ctx.fillText(s.label, s.x + 64, 270);
+    for (const s of STATIONS) ctx.fillText(s.label, s.x + 64, AGENT_Y + 138);
   }
 
   function drawEnvelopes(t) {

@@ -12,10 +12,10 @@ from typing import Optional
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from mailroom_ui.langfuse_source import LangfuseSource, list_recent_runs
+from mailroom_ui.langfuse_source import LangfuseSource, LangfuseUnavailable, list_recent_runs
 from mailroom_ui.metrics import compute_metrics
 from mailroom_ui.models import PipelineRun, SessionSummary
 from mailroom_ui.pipeline_schema import DOC_CLASSES
@@ -42,9 +42,16 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
 
     app = FastAPI(title="The-Mailroom", version="0.1.0", lifespan=lifespan)
 
+    @app.exception_handler(LangfuseUnavailable)
+    async def langfuse_down_handler(request, exc):
+        return JSONResponse(
+            status_code=503,
+            content={"error": "langfuse unavailable", "detail": str(exc)},
+        )
+
     @app.get("/api/health")
     def health():
-        return {"status": "ok", "source": "langfuse", "langfuse": src.available}
+        return src.health()
 
     @app.get("/api/traces")
     def traces(
