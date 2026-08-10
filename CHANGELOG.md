@@ -27,6 +27,14 @@ All notable changes to The-Mailroom are documented here, following
 - M3 review queue: `web/js/review.js` + REVIEW tab listing
   `/api/review-queue` runs (escalation reason, confidence, verdict) with
   30s auto-refresh while visible.
+- M4 TUI console: `tui/mailroom_console.py` (entry point `mailroom-tui`) —
+  AgentLab-style live console (`*** Entering/Moving to station: ... ***`
+  banners, judge-verdict banners, per-run floor table, review siding,
+  metrics dashboard, full inspect panels: spans/generations/scores). Reads
+  the same Langfuse-derived display API; subscribes to the `/ws` floor
+  snapshots (full payloads) with an HTTP fallback; `--once` one-shot mode
+  for scripting/CI. Keybindings: f/r/m/i/c/q.
+- `tests/test_tui.py` — TUI banner/table rendering tests (no live server).
 - `scripts/seed_demo.py` — seeds hardcoded demo scenarios INTO Langfuse
   (env `demo`, deterministic `demo-<slug>` trace ids, verb-first spans,
   generations with usage/cost, judge verdict/quality scores via a

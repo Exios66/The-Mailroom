@@ -116,8 +116,12 @@ python scripts/release.py --help     # semver release workflow (see below)
   `sessions.js`, `metrics.js`, `console.js`, `main.js`).
 - **M3 — live mode**: DONE — WS wiring with reconnect + polling fallback,
   envelope animation bound to real trace state, REVIEW queue tab.
-- **M4 — TUI console** (rich, AgentLab-style) — planned.
-- **M5 — polish**: in progress — `scripts/seed_demo.py` seeds demo runs INTO
+- **M4 — TUI console**: DONE — `tui/mailroom_console.py` (`mailroom-tui`),
+  AgentLab-style banners + per-doc tables over the same display API / WS
+  snapshots (`--once` for scripting).
+- **M5 — polish**: DONE — `scripts/seed_demo.py` seeds demo runs INTO
   Langfuse (env `demo`) with `--check` / `--check-api` / `--check-logs`
-  verification modes; sprite review + acceptance against live traces
-  remaining.
+  verification modes (asserted 10/10 stored + 10/10 display against live
+  Langfuse); sprite layout verified programmatically (pixel-sampled PNG
+  checks). Remaining: acceptance sweep of new doc classes/live traces,
+  sprite expansions.

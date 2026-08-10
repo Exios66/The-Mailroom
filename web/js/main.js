@@ -80,12 +80,15 @@ const Main = (() => {
   function startDemo() {
     if (demoTimer) return;
     demoRuns = generateDemoRuns();
+    window.Mailroom = window.Mailroom || {};
+    window.Mailroom.demoRuns = demoRuns;
+    window.Mailroom.demoMode = true;
+    Floor.update(demoRuns);
     let idx = 0;
     demoTimer = setInterval(() => {
-      if (!demoMode || langfuseOk) return stopDemo();
+      if (!demoMode) return stopDemo();
       const run = demoRuns[idx % demoRuns.length];
-      run.timestamp = Date.now();
-      Floor.update([run]);
+      run.updated_at = new Date().toISOString();
       ConsoleView.log(`DEMO ${run.filename} → ${run.stage}${run.verdict ? ` · ${run.verdict}` : ""}`, "c-blue");
       idx++;
     }, 3000);
@@ -102,16 +105,16 @@ const Main = (() => {
 
   function generateDemoRuns() {
     const stages = [
-      { stage: "inbox", phase: "intake_sort", doc_type: "contract", filename: "contract_01_nda.pdf" },
-      { stage: "ingest", phase: "intake_sort", doc_type: "contract", filename: "contract_02_msa.pdf" },
-      { stage: "classify", phase: "intake_sort", doc_type: "contract", filename: "contract_03_sa.pdf", classification_confidence: 0.96 },
-      { stage: "extract", phase: "extraction", doc_type: "contract", filename: "contract_04_jv.pdf", extraction_confidence: 0.89 },
-      { stage: "boss", phase: "extraction", doc_type: "contract", filename: "contract_05_conflict.pdf", verdict: "PARTIAL", quality: 0.65 },
-      { stage: "report", phase: "reporting", doc_type: "contract", filename: "contract_06_report.pdf" },
-      { stage: "archive", phase: "reporting", doc_type: "contract", filename: "contract_07_archive.pdf" },
-      { stage: "archived", phase: "terminal", doc_type: "contract", filename: "contract_08_done.pdf", verdict: "CORRECT", quality: 0.94 },
-      { stage: "review", phase: "review", doc_type: "due_diligence", filename: "dd_01_liability.pdf", review_decision: "human review", escalation_reason: "low extraction confidence" },
-      { stage: "failed", phase: "terminal", doc_type: "compliance_filing", filename: "compliance_01_filing.pdf", error_message: "extraction failed: invalid JSON" },
+      { stage: "archived", phase: "terminal", doc_type: "contract", filename: "contract_acme_nda.pdf", verdict: "CORRECT", quality: 0.96, classification_confidence: 0.98, extraction_confidence: 0.94 },
+      { stage: "archived", phase: "terminal", doc_type: "contract", filename: "contract_acme_msa.pdf", verdict: "CORRECT", quality: 0.93, classification_confidence: 0.97, extraction_confidence: 0.91 },
+      { stage: "archived", phase: "terminal", doc_type: "corporate_record", filename: "corp_bylaws_v2.pdf", verdict: "CORRECT", quality: 0.95, classification_confidence: 0.99, extraction_confidence: 0.97 },
+      { stage: "archived", phase: "terminal", doc_type: "due_diligence", filename: "dd_checklist_q3.pdf", verdict: "PARTIAL", quality: 0.72, classification_confidence: 0.93, extraction_confidence: 0.68 },
+      { stage: "archived", phase: "terminal", doc_type: "correspondence", filename: "letter_demand_001.pdf", verdict: "CORRECT", quality: 0.88, classification_confidence: 0.95, extraction_confidence: 0.84 },
+      { stage: "review", phase: "review", doc_type: "compliance_filing", filename: "compliance_form_10k.pdf", review_decision: "human review", escalation_reason: "low extraction confidence on indemnification clause" },
+      { stage: "failed", phase: "terminal", doc_type: "court_opinion", filename: "court_ruling_2026.pdf", error_message: "extraction failed: LLM output not valid JSON" },
+      { stage: "classify", phase: "intake_sort", doc_type: "contract", filename: "contract_new_consulting.pdf", classification_confidence: 0.91 },
+      { stage: "extract", phase: "extraction", doc_type: "corporate_record", filename: "corp_board_minutes.pdf", extraction_confidence: 0.82 },
+      { stage: "report", phase: "reporting", doc_type: "due_diligence", filename: "dd_summary_report.pdf" },
     ];
     return stages.map((s, i) => ({
       trace_id: `demo-run-${i}`,
@@ -131,13 +134,13 @@ const Main = (() => {
       error_message: s.error_message,
       verdict: s.verdict,
       quality: s.quality,
-      latency: 5 + Math.random() * 20,
+      latency: 8 + Math.random() * 15,
       llm_call_count: 2 + Math.floor(Math.random() * 4),
-      total_tokens: 2000 + Math.floor(Math.random() * 3000),
-      cost_usd: 0.0005 + Math.random() * 0.002,
+      total_tokens: 3000 + Math.floor(Math.random() * 4000),
+      cost_usd: 0.001 + Math.random() * 0.003,
       retried: Math.random() > 0.7,
       needs_human: s.stage === "review",
-      created_at: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+      created_at: new Date(Date.now() - i * 60000).toISOString(),
       updated_at: new Date().toISOString(),
       routing_path: [],
     }));

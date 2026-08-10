@@ -1,4 +1,5 @@
-/* The-Mailroom metrics view: aggregation tiles from /api/metrics. */
+/* The-Mailroom metrics view: aggregation tiles.
+ * Works with /api/metrics in live mode, or computes from local data in demo mode. */
 
 const MetricsView = (() => {
   const gridEl = document.getElementById("metrics-grid");
@@ -23,6 +24,53 @@ const MetricsView = (() => {
       <div class="tile-label" style="margin:0 0 8px">${title}</div>
       ${rows}
     </div>`;
+  }
+
+  function computeLocalMetrics(runs) {
+    const m = {
+      total_docs: 0,
+      archived: 0,
+      review: 0,
+      failed: 0,
+      in_flight: 0,
+      total_cost_usd: 0,
+      total_tokens: 0,
+      llm_calls: 0,
+      avg_cost_usd: 0,
+      avg_latency_s: 0,
+      p95_generation_latency_s: 0,
+      verdict_counts: {},
+      per_doc_type: {},
+      avg_quality: null,
+    };
+    const latencies = [];
+    const qualities = [];
+    for (const r of runs) {
+      m.total_docs++;
+      if (r.stage === "archived") m.archived++;
+      else if (r.stage === "review" || r.needs_human) m.review++;
+      else if (r.stage === "failed") m.failed++;
+      else m.in_flight++;
+      m.total_cost_usd += r.cost_usd || 0;
+      m.total_tokens += r.total_tokens || 0;
+      m.llm_calls += r.llm_call_count || 0;
+      if (r.latency != null) latencies.push(r.latency);
+      if (r.verdict) {
+        m.verdict_counts[r.verdict] = (m.verdict_counts[r.verdict] || 0) + 1;
+      }
+      if (r.quality != null) qualities.push(r.quality);
+      if (r.doc_type) {
+        m.per_doc_type[r.doc_type] = (m.per_doc_type[r.doc_type] || 0) + 1;
+      }
+    }
+    if (m.total_docs > 0) m.avg_cost_usd = m.total_cost_usd / m.total_docs;
+    if (latencies.length > 0) {
+      m.avg_latency_s = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+    }
+    if (qualities.length > 0) {
+      m.avg_quality = qualities.reduce((a, b) => a + b, 0) / qualities.length;
+    }
+    return m;
   }
 
   function render(m) {
@@ -62,7 +110,13 @@ const MetricsView = (() => {
 
   async function refresh(since = 3600) {
     try {
-      const data = await Mailroom.api.metrics(since);
+      let data;
+      if (window.Mailroom.demoMode) {
+        const runs = window.Mailroom.demoRuns || [];
+        data = computeLocalMetrics(runs);
+      } else {
+        data = await Mailroom.api.metrics(since);
+      }
       render(data);
       return data;
     } catch (err) {
@@ -71,5 +125,5 @@ const MetricsView = (() => {
     }
   }
 
-  return { refresh };
+  return { refresh, computeLocalMetrics };
 })();

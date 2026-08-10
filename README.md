@@ -12,6 +12,7 @@ falls back to local data.
 pip install -e ".[dev]"
 cp .env.example .env      # add LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY
 mailroom-web              # → http://127.0.0.1:8001
+mailroom-tui              # AgentLab-style live console (same data, in a terminal)
 ```
 
 ## What you see
@@ -28,6 +29,11 @@ mailroom-web              # → http://127.0.0.1:8001
 - **METRICS** — docs processed, archived/review/failed, cost, tokens, p95
   generation latency, judge-verdict mix, per-doc-type counts.
 - **CONSOLE** — a live scrolling log of the pipeline, AgentLaboratory-style.
+- **TUI** (`mailroom-tui`) — the same pipeline in a terminal: per-doc tables,
+  `*** Beginning station: ... ***` banners as runs arrive and advance, judge
+  verdict banners, review siding, metrics, and full trace inspection. It
+  subscribes to the same WebSocket floor snapshots as the web UI (`--once`
+  renders a single frame for scripting).
 
 ## Demo data (play-testing without a live run)
 

@@ -1,80 +1,130 @@
 /* The-Mailroom floor: canvas conveyor renderer.
- * Every envelope is bound to one Langfuse-derived run; position, stamp and
- * tint are derived from the run's stage / doc type / verdict. */
+ * Clean, bright pixel envelopes flowing through stations.
+ * Archived items leave the floor entirely. */
 
 const Floor = (() => {
   const canvas = document.getElementById("floor");
   const ctx = canvas.getContext("2d");
-  const PX = 4;
   const W = 1440;
-  const H = 560;
+  const H = 480;
 
-  const ENV_W = 80;
-  const ENV_H = 56;
-  const STAMP_W = 40;
-  const STAMP_H = 32;
-  const ENV_Y = 220;
-  const SIDING_Y = 384;
-  const AGENT_Y = 48;
-
+  // 6 stations: x positions evenly distributed
   const STATIONS = [
-    { key: "sorter", x: 24, label: "SORTER" },
-    { key: "specialist_contract", x: 168, label: "CONTRACTS" },
-    { key: "specialist_corporate", x: 312, label: "CORPORATE" },
-    { key: "specialist_due_diligence", x: 456, label: "DUE DILIGENCE" },
-    { key: "specialist_correspondence", x: 600, label: "CORRESP." },
-    { key: "specialist_compliance", x: 744, label: "COMPLIANCE" },
-    { key: "specialist_court", x: 888, label: "COURT OPIN." },
-    { key: "boss", x: 1032, label: "BOSS" },
-    { key: "reporter", x: 1176, label: "REPORTER" },
-    { key: "archivist", x: 1312, label: "ARCHIVIST" },
-  ];
-  const STATION_BY_KEY = {};
-  for (const s of STATIONS) STATION_BY_KEY[s.key] = s;
-
-  const SPEC_BY_DOC = {
-    contract: "specialist_contract",
-    corporate_record: "specialist_corporate",
-    due_diligence: "specialist_due_diligence",
-    correspondence: "specialist_correspondence",
-    compliance_filing: "specialist_compliance",
-    court_opinion: "specialist_court",
-  };
-
-  const ROOM_LABELS = [
-    { text: "INTAKE & SORT", x: 92 },
-    { text: "EXTRACTION & ADJUDICATION", x: 612 },
-    { text: "REPORTING & ARCHIVE", x: 1250 },
+    { key: "sorter", x: 80, label: "SORTER", color: "#7d97b5" },
+    { key: "extract", x: 320, label: "EXTRACT", color: "#d9a866" },
+    { key: "boss", x: 560, label: "BOSS", color: "#95272e" },
+    { key: "report", x: 800, label: "REPORT", color: "#659099" },
+    { key: "archive", x: 1040, label: "ARCHIVE", color: "#5f9e6e" },
+    { key: "review", x: 1280, label: "REVIEW", color: "#f7d156" },
   ];
 
-  function targetFor(run) {
-    const st = run.stage;
-    if (st === "failed") return { x: 1010, y: SIDING_Y };
-    if (st === "review") return { x: 670, y: SIDING_Y };
-    if (SPEC_BY_DOC[run.doc_type]) {
-      const s = STATION_BY_KEY[SPEC_BY_DOC[run.doc_type]];
-      return { x: s.x + 20, y: ENV_Y };
-    }
-    switch (st) {
-      case "boss": return { x: STATION_BY_KEY.boss.x + 20, y: ENV_Y };
-      case "report": return { x: STATION_BY_KEY.reporter.x + 20, y: ENV_Y };
-      case "catalog":
-      case "archive":
-      case "archived": return { x: STATION_BY_KEY.archivist.x + 8, y: ENV_Y };
-      default: return { x: 68, y: ENV_Y };
-    }
-  }
-
-  function stampFor(run) {
-    if (run.stage === "failed") return SPRITES.stamp_failed;
-    if (run.stage === "review" || run.needs_human) return SPRITES.stamp_review;
-    if (run.verdict === "CORRECT" || run.stage === "archived") return SPRITES.stamp_approved;
-    return null;
-  }
+  const ENV_Y = 240;       // y position for envelopes on conveyor
+  const ENV_W = 32;        // envelope width in pixels
+  const ENV_H = 22;        // envelope height in pixels
 
   const envs = new Map();
   let hoveredId = null;
   let sourceState = "gold";
+
+  function targetFor(run) {
+    const st = run.stage;
+    // Archived/failed items leave the floor
+    if (st === "archived" || st === "failed") {
+      return { x: 1500, y: 440, remove: true };
+    }
+    if (st === "review" || run.needs_human) {
+      return { x: STATIONS[5].x, y: ENV_Y };
+    }
+    if (st === "classify" || st === "ingest" || st === "inbox") {
+      return { x: STATIONS[0].x, y: ENV_Y };
+    }
+    if (st === "extract") {
+      return { x: STATIONS[1].x, y: ENV_Y };
+    }
+    if (st === "boss") {
+      return { x: STATIONS[2].x, y: ENV_Y };
+    }
+    if (st === "report" || st === "catalog" || st === "archive") {
+      return { x: STATIONS[3].x, y: ENV_Y };
+    }
+    return { x: STATIONS[4].x, y: ENV_Y };
+  }
+
+  function tintFor(run) {
+    const colors = {
+      contract: "#7d97b5",
+      corporate_record: "#659099",
+      due_diligence: "#d9a866",
+      correspondence: "#f2d4aa",
+      compliance_filing: "#8fd0a0",
+      court_opinion: "#e26863",
+    };
+    return colors[run.doc_type] || "#a09f9f";
+  }
+
+  function drawEnvelope(x, y, tint) {
+    // Border (black)
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(x, y, ENV_W, ENV_H);
+    // Paper body (cream)
+    ctx.fillStyle = "#faf3e6";
+    ctx.fillRect(x + 1, y + 1, ENV_W - 2, ENV_H - 2);
+    // Color stripe at top-left
+    ctx.fillStyle = tint;
+    ctx.fillRect(x + 2, y + 2, 6, 6);
+    // Fold lines
+    ctx.fillStyle = "#e8dcc3";
+    ctx.fillRect(x + 2, y + ENV_H / 2 - 1, ENV_W - 4, 2);
+    ctx.fillRect(x + 2, y + ENV_H / 2 + 3, ENV_W - 4, 2);
+    // Re-draw border
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(x, y, ENV_W, 1);
+    ctx.fillRect(x, y + ENV_H - 1, ENV_W, 1);
+    ctx.fillRect(x, y, 1, ENV_H);
+    ctx.fillRect(x + ENV_W - 1, y, 1, ENV_H);
+  }
+
+  function drawStation(s) {
+    // Station desk/marker
+    ctx.fillStyle = "#3a2f22";
+    ctx.fillRect(s.x - 20, ENV_Y + ENV_H + 4, 120, 4);
+    ctx.fillStyle = "#a48c6d";
+    ctx.fillRect(s.x - 20, ENV_Y + ENV_H + 4, 120, 1);
+    // Station color bar above
+    ctx.fillStyle = s.color;
+    ctx.fillRect(s.x - 10, ENV_Y - 20, 100, 4);
+    // Label
+    ctx.font = "bold 10px 'Courier New', monospace";
+    ctx.fillStyle = s.color;
+    ctx.textAlign = "center";
+    ctx.fillText(s.label, s.x + 40, ENV_Y - 26);
+  }
+
+  function drawConveyor() {
+    // Conveyor belt
+    ctx.fillStyle = "#2a2a2e";
+    ctx.fillRect(0, ENV_Y + ENV_H + 10, W, 24);
+    ctx.fillStyle = "#3a3a3e";
+    ctx.fillRect(0, ENV_Y + ENV_H + 10, W, 2);
+    // Belt segments
+    ctx.fillStyle = "#1a1a1d";
+    for (let x = 0; x < W; x += 32) {
+      ctx.fillRect(x, ENV_Y + ENV_H + 10, 1, 24);
+    }
+  }
+
+  function drawBackground() {
+    ctx.fillStyle = "#141416";
+    ctx.fillRect(0, 0, W, H);
+    // Room labels
+    ctx.font = "bold 9px 'Courier New', monospace";
+    ctx.fillStyle = "#7d97b5";
+    ctx.textAlign = "center";
+    ctx.fillText("INTAKE & SORT", 160, 30);
+    ctx.fillText("EXTRACTION & ADJUDICATION", 560, 30);
+    ctx.fillText("REPORTING & ARCHIVE", 1040, 30);
+    ctx.fillText("REVIEW SIDING", 1280, 30);
+  }
 
   function update(runs) {
     const seen = new Set();
@@ -86,19 +136,19 @@ const Floor = (() => {
       if (!e) {
         e = {
           id: run.trace_id,
-          x: -60,
-          y: 430,
+          x: -50,
+          y: ENV_Y,
           seed: Math.random() * 1000,
           alpha: 1,
+          run: run,
         };
         envs.set(run.trace_id, e);
       }
       e.run = run;
       e.tx = t.x;
       e.ty = t.y;
-      e.tint = DOC_TYPE_COLORS[run.doc_type] || DOC_TYPE_DEFAULT;
-      e.stamp = stampFor(run);
-      e.retried = !!run.retried;
+      e.remove = !!t.remove;
+      e.tint = tintFor(run);
       e.dying = false;
     }
     for (const [id, e] of envs) {
@@ -124,7 +174,7 @@ const Floor = (() => {
 
   function hitTest(p) {
     for (const e of [...envs.values()].reverse()) {
-      if (e.dying) continue;
+      if (e.dying || e.alpha <= 0.3) continue;
       if (p.x >= e.x && p.x <= e.x + ENV_W && p.y >= e.y && p.y <= e.y + ENV_H) {
         return e;
       }
@@ -157,97 +207,14 @@ const Floor = (() => {
     if (callbacks.hover) callbacks.hover(null);
   });
 
-  /* ---- drawing ---- */
-
-  function drawWall(t) {
-    ctx.fillStyle = "#17171a";
-    ctx.fillRect(0, 0, W, 260);
-    ctx.fillStyle = "#1d1d20";
-    ctx.fillRect(0, 308, W, H - 308);
-    ctx.fillStyle = "#141416";
-    ctx.fillRect(0, 280, W, H - 280);
-
-    for (const p of [156, 1164]) {
-      ctx.fillStyle = "#2e2e33";
-      ctx.fillRect(p, 0, 10, 276);
-      ctx.fillStyle = "#1a1a1d";
-      ctx.fillRect(p + 1, 0, 2, 276);
-      ctx.fillStyle = "#3c3c42";
-      ctx.fillRect(p + 7, 0, 2, 276);
-    }
-
-    ctx.textAlign = "center";
-    ctx.font = "bold 12px 'Courier New', monospace";
-    ctx.fillStyle = "#7d97b5";
-    for (const r of ROOM_LABELS) ctx.fillText(r.text, r.x, 18);
-  }
-
-  function drawDesk() {
-    ctx.fillStyle = "#3a2f22";
-    ctx.fillRect(0, 260, W, 16);
-    ctx.fillStyle = "#a48c6d";
-    ctx.fillRect(0, 260, W, 3);
-    ctx.fillStyle = "#684b32";
-    ctx.fillRect(0, 268, W, 4);
-  }
-
-  function drawConveyor() {
-    for (let x = 0; x < W; x += 64) {
-      drawSprite(ctx, SPRITES.roller, x, 276, PX);
-    }
-    drawSprite(ctx, SPRITES.node_start, 0, 276, PX);
-    drawSprite(ctx, SPRITES.node_end, 1368, 276, PX);
-
-    const lamps = { green: SPRITES.lamp_green, gold: SPRITES.lamp_gold, red: SPRITES.lamp_red };
-    drawSprite(ctx, lamps[sourceState] || SPRITES.lamp_gold, 24, 232, PX);
-  }
-
-  function drawBins(t) {
-    drawSprite(ctx, SPRITES.bin_inbox, 24, 408, PX);
-    drawSprite(ctx, SPRITES.bin_review, 640, 408, PX);
-    drawSprite(ctx, SPRITES.bin_failed, 980, 408, PX);
-
-    const blink = Math.floor(t / 500) % 2 === 0;
-    if (blink) drawSprite(ctx, SPRITES.lamp_red, 654, 372, PX);
-
-    ctx.font = "bold 9px 'Courier New', monospace";
-    ctx.fillStyle = "#a09f9f";
-    ctx.textAlign = "center";
-    ctx.fillText("INBOX", 64, 466);
-    ctx.fillText("REVIEW SIDING", 680, 466);
-    ctx.fillText("FAILED", 1020, 466);
-  }
-
-  function drawAgents() {
-    for (const s of STATIONS) {
-      const rows = SPRITES[s.key];
-      if (!rows) continue;
-      drawSprite(ctx, rows, s.x, AGENT_Y, PX);
-      const prop = PROPS[s.key];
-      if (prop && prop.rows) {
-        drawSprite(ctx, prop.rows, s.x + prop.x * PX, AGENT_Y + prop.y * PX, PX);
-      }
-    }
-    ctx.font = "bold 9px 'Courier New', monospace";
-    ctx.fillStyle = "#e8dcc3";
-    ctx.textAlign = "center";
-    for (const s of STATIONS) ctx.fillText(s.label, s.x + 64, AGENT_Y + 138);
-  }
-
   function drawEnvelopes(t) {
     for (const e of envs.values()) {
-      if (!e.run) continue;
-      const bob = e.y >= 300 ? 0 : Math.sin(t / 300 + e.seed) * 2;
-      const y = e.y + bob;
-      ctx.globalAlpha = Math.max(0, Math.min(1, e.alpha));
-      drawSprite(ctx, SPRITES.envelope, e.x, y, PX, e.tint);
-      if (e.stamp) drawSprite(ctx, e.stamp, e.x + 40, y, PX);
-      if (e.retried) {
-        ctx.fillStyle = "#f7d156";
-        ctx.fillRect(e.x + 2, y + 2, 6, 6);
-      }
-      if (e.id === hoveredId) {
-        ctx.strokeStyle = "#ffffff";
+      if (e.alpha <= 0) continue;
+      const y = e.y;
+      ctx.globalAlpha = e.alpha;
+      drawEnvelope(e.x, y, e.tint);
+      if (e.id === hoveredId && !e.dying) {
+        ctx.strokeStyle = "#f7d156";
         ctx.lineWidth = 2;
         ctx.strokeRect(e.x - 2, y - 2, ENV_W + 4, ENV_H + 4);
       }
@@ -255,32 +222,41 @@ const Floor = (() => {
     ctx.globalAlpha = 1;
   }
 
-  function draw(t) {
-    ctx.clearRect(0, 0, W, H);
-    ctx.imageSmoothingEnabled = false;
-    drawWall(t);
-    drawDesk();
-    drawConveyor();
-    drawBins(t);
-    drawAgents();
-    drawEnvelopes(t);
+  function drawStatus(t) {
+    const active = [...envs.values()].filter((e) => !e.dying && e.alpha > 0.3).length;
+    ctx.font = "bold 11px 'Courier New', monospace";
+    ctx.fillStyle = "#7d97b5";
+    ctx.textAlign = "left";
+    ctx.fillText(`ACTIVE: ${active}`, 20, 460);
+    const statusColor = sourceState === "red" ? "#e26863" :
+                        sourceState === "green" ? "#5f9e6e" : "#f7d156";
+    ctx.fillStyle = statusColor;
+    ctx.fillText(`SOURCE: ${sourceState.toUpperCase()}`, 20, 475);
   }
 
-  /* ---- animation loop ---- */
+  function draw(t) {
+    ctx.clearRect(0, 0, W, H);
+    drawBackground();
+    for (const s of STATIONS) drawStation(s);
+    drawConveyor();
+    drawEnvelopes(t);
+    drawStatus(t);
+  }
 
   function frame(t) {
-    for (const e of envs.values()) {
+    for (const e of [...envs.values()]) {
       if (!e.dying) {
-        e.x += (e.tx - e.x) * 0.055;
-        e.y += (e.ty - e.y) * 0.055;
-        if (Math.abs(e.tx - e.x) < 1) e.x = e.tx;
-        if (Math.abs(e.ty - e.y) < 1) e.y = e.ty;
+        e.x += (e.tx - e.x) * 0.08;
+        e.y += (e.ty - e.y) * 0.08;
+        // Remove archived/failed items that reach offscreen
+        if (e.remove && Math.abs(e.x - e.tx) < 5) {
+          e.dying = true;
+        }
       } else {
-        e.alpha -= 0.04;
+        e.alpha -= 0.06;
         if (e.alpha <= 0) {
           envs.delete(e.id);
           if (hoveredId === e.id) hoveredId = null;
-          continue;
         }
       }
     }
