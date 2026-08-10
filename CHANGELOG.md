@@ -74,6 +74,15 @@ All notable changes to The-Mailroom are documented here, following
   `full=False` branch — `/api/traces/{id}` crashed with `UnboundLocalError`.
 - `web/js/sprites.js` was missing the `const SORTER = [` declaration —
   the floor's first sprite referenced an undefined matrix.
+- `web/js/sprites.js:drawSprite` treated `x`/`y` as sprite-grid units
+  (`(x + c) * px`) while `floor.js` passes canvas pixels — every sprite
+  drawn off-origin landed 4× away (most off-canvas; envelopes rendered at
+  `e.x * 4` while the hover outline drew at `e.x`, so envelopes were
+  invisible until hovered). `drawSprite` now uses pixel semantics.
+- The `SPRITES` map never registered the three stamps
+  (`stamp_approved`/`stamp_review`/`stamp_failed`) — `floor.js` stamping
+  silently referenced `undefined` and no envelope ever showed its verdict
+  stamp.
 - `tests/test_metrics.py::test_p95_generation_latency` expected 9.4 but
   the fixture (two generations per trace) yields a nearest-rank p95 of 9.1.
 

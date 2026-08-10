@@ -325,8 +325,7 @@ def attach_scores(run, spec, judge_config_id=None):
     run.scores.append(_score(run.tid, "total_tokens", total_tokens))
     run.scores.append(_score(run.tid, "stage_completed", 1, "BOOLEAN"))
     if spec.get("verdict"):
-        verdict_idx = {"CORRECT": 0, "PARTIAL": 1, "MISS": 2}[spec["verdict"]]
-        run.scores.append(_score(run.tid, JUDGE_CONFIG_NAME, verdict_idx,
+        run.scores.append(_score(run.tid, JUDGE_CONFIG_NAME, spec["verdict"],
                                  "CATEGORICAL", comment="demo judge run",
                                  config_id=judge_config_id))
         run.scores.append(_score(run.tid, "mailroom-pipeline-quality", spec["quality"],
@@ -593,6 +592,39 @@ def assert_run(expect: dict, run, label: str) -> list[str]:
     return fails
 
 
+def reattach_missing_scores(specs) -> None:
+    """Re-create any scores still missing for the given runs (fresh write
+    client, paced). Idempotent: score ids upsert, so re-attaching what
+    already landed is harmless."""
+    from mailroom_ui.langfuse_source import LangfuseSource
+
+    client = make_langfuse_client()
+    cfg_id = ensure_score_configs(client)
+    src = LangfuseSource()
+    v3 = client.api.scores_v3
+    for spec in specs:
+        tid = f"demo-{spec['slug']}"
+        try:
+            resp = v3.get_many_v3(trace_id=tid, limit=100,
+                                  request_options={"timeout_in_seconds": 20})
+            existing = {s.name for s in (resp.data or [])}
+        except Exception:
+            continue
+        run = build_run(spec, datetime.now(timezone.utc))
+        attach_scores(run, spec, cfg_id)
+        for sc in run.scores:
+            if sc.name not in existing:
+                print(f"  re-attaching missing score {sc.name} on {tid}", file=sys.stderr)
+                client.create_score(
+                    trace_id=tid, name=sc.name, value=sc.value,
+                    data_type=sc.data_type, comment=sc.comment,
+                    config_id=sc.config_id, score_id=sc.id,
+                )
+                time.sleep(1.0)
+    client.flush()
+    client.shutdown()
+
+
 def run_check(specs, check_api: bool, api_base: str) -> None:
     from mailroom_ui.langfuse_source import LangfuseSource
 
@@ -602,10 +634,11 @@ def run_check(specs, check_api: bool, api_base: str) -> None:
     found_runs: set = set()
     failed_runs: set = set()
 
-    # Score ingestion lands eventually (minutes under backlog); poll the
-    # stored-log verification until it stabilizes.
+    # Score ingestion lands eventually (minutes under backlog and burst
+    # drops); poll the stored-log verification until it stabilizes, re-
+    # attaching any missing scores between attempts.
     pending = list(expects)
-    for attempt in (1, 2, 3):
+    for attempt in (1, 2, 3, 4):
         if not pending:
             break
         print(f"\nVERIFY against stored Langfuse logs — attempt {attempt} "
@@ -623,7 +656,10 @@ def run_check(specs, check_api: bool, api_base: str) -> None:
                 failed_runs.add(expect["tid"])
                 still_pending.append(expect)
         pending = still_pending
-        if pending and attempt < 3:
+        if pending and attempt < 4:
+            pending_specs = [s for s in specs
+                             if f"demo-{s['slug']}" in {e["tid"] for e in pending}]
+            reattach_missing_scores(pending_specs)
             time.sleep(60)
 
     fails = len(failed_runs)

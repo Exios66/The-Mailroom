@@ -719,6 +719,9 @@ const SPRITES = {
   reporter: REPORTER,
   archivist: ARCHIVIST,
   envelope: ENVELOPE,
+  stamp_approved: STAMP_APPROVED,
+  stamp_review: STAMP_REVIEW,
+  stamp_failed: STAMP_FAILED,
   bin_inbox: BIN_INBOX,
   bin_review: BIN_REVIEW,
   bin_failed: BIN_FAILED,
@@ -744,7 +747,8 @@ const PROPS = {
   archivist: { rows: PROP_CABINET, x: 12, y: 0 },
 };
 
-/* Draw a sprite onto a canvas context at integer pixel scale.
+/* Draw a sprite onto a canvas context. `x`/`y` are CANVAS PIXEL coordinates
+ * (floor.js works in pixels); each sprite cell becomes a `px`-sized pixel.
  * `tint` (optional) recolors the envelope stamp char 'R' -> a hex color. */
 function drawSprite(ctx, rows, x, y, px, tint) {
   for (let r = 0; r < rows.length; r++) {
@@ -756,7 +760,7 @@ function drawSprite(ctx, rows, x, y, px, tint) {
       if (ch === 'R' && tint) color = tint;
       if (!color) continue;
       ctx.fillStyle = color;
-      ctx.fillRect((x + c) * px, (y + r) * px, px, px);
+      ctx.fillRect(x + c * px, y + r * px, px, px);
     }
   }
 }
