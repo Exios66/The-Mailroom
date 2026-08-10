@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+
+from mailroom_ui.metrics import compute_metrics
+from mailroom_ui.trace_interpreter import interpret_trace
+from tests.fake_langfuse import make_trace
+
+
+def _runs():
+    runs = []
+    for i, stage in enumerate(["archived", "archived", "review", "failed", "processing"]):
+        t = make_trace(
+            f"t{i}",
+            stage=stage,
+            doc_type="contract" if i % 2 == 0 else "correspondence",
+            verdict="CORRECT" if stage == "archived" else None,
+            quality=0.9 if stage == "archived" else None,
+            base_time=datetime(2026, 1, 1, 12, 0, 0) + timedelta(minutes=i),
+        )
+        runs.append(interpret_trace(t, t["observations"], t["scores"]))
+    return runs
+
+
+def test_metrics_counts():
+    m = compute_metrics(_runs())
+    assert m.total_docs == 5
+    assert m.archived == 2
+    assert m.review == 1
+    assert m.failed == 1
+    assert m.in_flight == 1
+    assert m.verdict_counts == {"CORRECT": 2}
+    assert m.avg_quality == 0.9
+    assert m.per_doc_type["contract"] == 3
+    assert m.per_doc_type["correspondence"] == 2
+    assert m.llm_calls == 10
+
+
+def test_metrics_since_filter():
+    runs = _runs()
+    m = compute_metrics(runs, since=datetime(2026, 1, 1, 12, 0, 0) + timedelta(minutes=3))
+    assert m.total_docs == 2

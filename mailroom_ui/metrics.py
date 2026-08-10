@@ -1,0 +1,60 @@
+"""Aggregations over interpreted runs — every number from Langfuse data."""
+
+from __future__ import annotations
+
+import statistics
+from datetime import datetime
+from typing import Iterable, Optional
+
+from .models import Metrics, PipelineRun, Stage
+
+
+def _p95(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    values = sorted(values)
+    idx = min(len(values) - 1, int(round(0.95 * len(values))) - 1)
+    return round(values[idx], 3)
+
+
+def compute_metrics(runs: Iterable[PipelineRun], since: Optional[datetime] = None) -> Metrics:
+    m = Metrics()
+    all_latencies: list[float] = []
+    gen_latencies: list[float] = []
+    qualities: list[float] = []
+
+    for run in runs:
+        if since is not None and (run.updated_at or run.created_at or datetime.min) < since:
+            continue
+        m.total_docs += 1
+        if run.stage == Stage.ARCHIVED:
+            m.archived += 1
+        elif run.stage == Stage.HUMAN_REVIEW:
+            m.review += 1
+        elif run.stage == Stage.FAILED:
+            m.failed += 1
+        else:
+            m.in_flight += 1
+        m.total_cost_usd += run.cost_usd
+        m.total_tokens += run.total_tokens
+        m.llm_calls += run.llm_call_count
+        if run.latency is not None:
+            all_latencies.append(run.latency)
+        for g in run.generations:
+            if g.latency is not None:
+                gen_latencies.append(g.latency)
+        if run.verdict:
+            m.verdict_counts[run.verdict] = m.verdict_counts.get(run.verdict, 0) + 1
+        if run.quality is not None:
+            qualities.append(run.quality)
+        if run.doc_type:
+            m.per_doc_type[run.doc_type] = m.per_doc_type.get(run.doc_type, 0) + 1
+
+    if m.total_docs:
+        m.avg_cost_usd = round(m.total_cost_usd / m.total_docs, 4)
+    if all_latencies:
+        m.avg_latency_s = round(statistics.mean(all_latencies), 2)
+    m.p95_generation_latency_s = _p95(gen_latencies)
+    if qualities:
+        m.avg_quality = round(statistics.mean(qualities), 3)
+    return m

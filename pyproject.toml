@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "the-mailroom"
+version = "0.1.0"
+description = "Pixel-art visualization console for the llm-mailroom multi-agent pipeline — Langfuse is the sole source of truth."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "langfuse>=2.50",
+    "pydantic>=2.0",
+    "rich>=13.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[project.scripts]
+mailroom-web = "server.main:run"
+mailroom-tui = "tui.mailroom_console:run"
+
+[tool.setuptools.packages.find]
+include = ["mailroom_ui*", "server*", "tui*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
