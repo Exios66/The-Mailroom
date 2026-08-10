@@ -138,6 +138,35 @@ def _observation_name(obs: dict[str, Any]) -> Optional[str]:
     return _clean(obs.get("type"))
 
 
+# Pilot/attempt re-runs reuse the deterministic trace id, so a trace can carry
+# several full runs of the same document. Observations are clustered by time
+# gaps (> RUN_GAP_S between consecutive observations starts a new cluster) and
+# only the latest cluster is displayed — one envelope per trace, latest run.
+RUN_GAP_S = 60.0
+
+
+def _latest_cluster(items: list[Any], *, get_start) -> list[Any]:
+    """Keep only the trailing cluster of a chronological sequence."""
+    if len(items) < 2:
+        return items
+    ordered = sorted(items, key=lambda i: get_start(i) or datetime.min)
+    start_times = [get_start(i) for i in ordered]
+    gap_at: Optional[int] = None
+    prev: Optional[datetime] = None
+    for idx, t in enumerate(start_times):
+        if t is not None and prev is not None:
+            try:
+                if (t - prev).total_seconds() > RUN_GAP_S:
+                    gap_at = idx
+            except TypeError:
+                pass
+        if t is not None:
+            prev = t
+    if gap_at is None:
+        return items
+    return ordered[gap_at:]
+
+
 def interpret_trace(
     trace: dict[str, Any],
     observations: Optional[list[dict[str, Any]]] = None,
@@ -243,6 +272,10 @@ def interpret_trace(
 
     spans.sort(key=lambda s: s.start_time or datetime.min)
     generations.sort(key=lambda g: g.start_time or datetime.min)
+    # A trace may carry several runs (deterministic trace ids are reused by
+    # pilot/attempt re-runs). Keep only the latest run's observations.
+    spans = _latest_cluster(spans, get_start=lambda s: s.start_time)
+    generations = _latest_cluster(generations, get_start=lambda g: g.start_time)
 
     score_map: dict[str, Any] = {}
     score_objects: list[Score] = []

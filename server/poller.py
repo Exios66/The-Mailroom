@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
@@ -57,13 +58,16 @@ class PollHub:
         interval: float = 3.0,
         window: float = 6 * 3600,
         limit: int = 100,
+        detail_ttl: float = 15.0,
     ) -> None:
         self.source = source
         self.interval = interval
         self.window = window
         self.limit = limit
+        self.detail_ttl = detail_ttl
         self.clients: set[WebSocket] = set()
         self.snapshot: list[dict[str, Any]] = []
+        self._details: dict[str, tuple[float, dict[str, Any]]] = {}
         self._task: Optional[asyncio.Task] = None
         self._stop = asyncio.Event()
 
@@ -118,4 +122,26 @@ class PollHub:
         except Exception as exc:
             log.warning("langfuse fetch failed: %s", exc)
             return self.snapshot
-        return [floor_payload(r) for r in runs]
+        now = time.monotonic()
+        out: list[dict[str, Any]] = []
+        current_ids: set[str] = set()
+        for run in runs:
+            if not run.trace_id:
+                continue
+            current_ids.add(run.trace_id)
+            cached = self._details.get(run.trace_id)
+            payload = None
+            if cached is not None and now - cached[0] < self.detail_ttl:
+                payload = cached[1]
+            else:
+                try:
+                    full = self.source.get_run(run.trace_id)
+                except Exception:
+                    full = None
+                payload = floor_payload(full) if full is not None else floor_payload(run)
+                self._details[run.trace_id] = (now, payload)
+            out.append(payload)
+        for tid in list(self._details):
+            if tid not in current_ids:
+                del self._details[tid]
+        return out

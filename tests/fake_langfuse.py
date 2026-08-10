@@ -78,6 +78,7 @@ def make_trace(
             cost_details={"total": 0.00015},
             level="DEFAULT",
         )
+    )
     obs.append(
         Obj(
             id=f"gen-{trace_id}-1",
@@ -93,6 +94,7 @@ def make_trace(
             cost_details={"total": 0.0004},
             level="DEFAULT",
         )
+    )
     scores = [
         Obj(name="classification_confidence", value=class_conf, data_type="NUMERIC"),
         Obj(name="extraction_confidence", value=extract_conf, data_type="NUMERIC"),

@@ -38,5 +38,6 @@ def test_metrics_counts():
 
 def test_metrics_since_filter():
     runs = _runs()
-    m = compute_metrics(runs, since=datetime(2026, 1, 1, 12, 0, 0) + timedelta(minutes=3))
+    base = datetime(2026, 1, 1, 12, 0, 0)
+    m = compute_metrics(runs, since=base + timedelta(minutes=3, seconds=21))
     assert m.total_docs == 2

@@ -127,9 +127,10 @@ class LangfuseSource:
         limit: int = 200,
         tags: Optional[list[str]] = None,
         environments: Optional[list[str]] = None,
+        name: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """Raw trace summaries (list page)."""
-        key = f"traces:{since}:{limit}:{tags}:{environments}"
+        key = f"traces:{since}:{limit}:{tags}:{environments}:{name}"
         cached = self.cache.get(key)
         if cached is not None:
             return cached
@@ -143,6 +144,8 @@ class LangfuseSource:
             kw["tags"] = ",".join(tags)
         if environments:
             kw["environment"] = ",".join(environments)
+        if name:
+            kw["name"] = name
         resp = trace_api.list(**kw)
         out = [_to_dict(t) for t in _page_data(resp)]
         self.cache.set(key, out, self.poll_cache_ttl)
@@ -174,7 +177,7 @@ class LangfuseSource:
         obs_api = self._api("observations")
         if obs_api is None:
             return []
-        resp = obs_api.get_many(trace_id=trace_id, limit=200)
+        resp = obs_api.get_many(trace_id=trace_id, limit=100)
         out = [_to_dict(o) for o in _page_data(resp)]
         self.cache.set(key, out, self.cache_ttl)
         return out
@@ -187,7 +190,7 @@ class LangfuseSource:
         scores_api = self._api("scores")
         if scores_api is None:
             return []
-        resp = scores_api.get_many(trace_id=trace_id, limit=200)
+        resp = scores_api.get_many(trace_id=trace_id, limit=100)
         out = [_to_dict(s) for s in _page_data(resp)]
         self.cache.set(key, out, self.cache_ttl)
         return out
@@ -254,7 +257,7 @@ def list_recent_runs(
     Uses the trace-list response only (light runs) — cheap enough to poll.
     """
     since = since or (datetime.now() - timedelta(hours=6))
-    traces = source.list_traces(since=since, limit=limit)
+    traces = source.list_traces(since=since, limit=limit, name="document-pipeline")
     runs = []
     for t in traces:
         tid = t.get("id")

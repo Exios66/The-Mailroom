@@ -117,7 +117,7 @@ class PipelineRun(BaseModel):
 
     @property
     def retried(self) -> bool:
-        return len(self.routing_path) != len(set(self.routing_path))
+        return Stage.RETRY_CLASSIFY.value in self.routing_path or Stage.RETRY_EXTRACT.value in self.routing_path
 
     @property
     def needs_human(self) -> bool:
