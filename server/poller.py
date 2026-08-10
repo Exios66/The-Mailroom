@@ -58,7 +58,7 @@ class PollHub:
         interval: float = 3.0,
         window: float = 6 * 3600,
         limit: int = 100,
-        detail_ttl: float = 15.0,
+        detail_ttl: float = 60.0,
     ) -> None:
         self.source = source
         self.interval = interval

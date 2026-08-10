@@ -207,11 +207,15 @@ def interpret_trace(
     scores: Optional[list[dict[str, Any]]] = None,
     *,
     schema: PipelineSchema = DEFAULT_SCHEMA,
+    score_configs: Optional[dict[str, dict[str, Any]]] = None,
 ) -> PipelineRun:
     """Interpret one Langfuse trace into a display-ready PipelineRun.
 
     `observations`/`scores` are optional: when omitted the run is a "light"
     interpretation (list-level data only) with no span/generation detail.
+    `score_configs` (name -> {"data_type", "categories": [{"value", "label"}]})
+    lets CATEGORICAL scores (e.g. judge verdicts) resolve their numeric value
+    back to the label the pipeline assigned.
     """
     trace = _as_dict(trace)
     observations = observations or []
@@ -251,7 +255,7 @@ def interpret_trace(
         is_error = str(obs.get("level") or "").upper() in ("ERROR", "WARNING") or bool(
             obs.get("error") or _as_dict(obs.get("output")).get("error")
         )
-        if obs_type == "GENERATION" or obs.get("model") is not None or "usage" in obs:
+        if obs_type == "GENERATION":
             name = _observation_name(obs)
             usage_in, usage_out = _usage_tokens(obs.get("usage"))[1:]
             total = _usage_tokens(obs.get("usage"))[0]
@@ -268,7 +272,7 @@ def interpret_trace(
                     usage_total_tokens=total or _int(obs.get("totalTokens")),
                     usage_input_tokens=usage_in or _int(obs.get("inputTokens")),
                     usage_output_tokens=usage_out or _int(obs.get("outputTokens")),
-                    cost_usd=_cost_details(obs.get("cost_details"))
+                    cost_usd=_cost_details(_both(obs, "cost_details", "costDetails"))
                     or _float(_pick(obs, "totalCost", "totalPrice", "total_cost")),
                     prompt_version=_clean(
                         _pick(
@@ -282,7 +286,7 @@ def interpret_trace(
                     end_time=end,
                 )
             )
-        elif obs_type in ("SPAN", "EVENT", "OBSERVATION"):
+        elif obs_type in ("SPAN", "EVENT"):
             spans.append(
                 NodeSpan(
                     name=_observation_name(obs) or "observation",
@@ -303,6 +307,53 @@ def interpret_trace(
                     output=_as_dict(obs.get("output")) or None,
                 )
             )
+        else:
+            # `OBSERVATION` type or no type at all: the pipeline's auto-traced
+            # generations arrive as OBSERVATION + model; classify by
+            # model/usage presence. v4 SPANs (zeroed `usage`) never get here.
+            if obs.get("model") is not None or "usage" in obs:
+                usage_in, usage_out = _usage_tokens(obs.get("usage"))[1:]
+                total = _usage_tokens(obs.get("usage"))[0]
+                generations.append(
+                    Generation(
+                        name=_observation_name(obs),
+                        agent=_clean(obs.get("metadata", {}).get("agent"))
+                        if isinstance(obs.get("metadata"), dict)
+                        else None,
+                        model=_clean(_both(obs, "model", "modelId")),
+                        latency=obs_latency,
+                        input=obs.get("input"),
+                        output=obs.get("output"),
+                        usage_total_tokens=total or _int(obs.get("totalTokens")),
+                        usage_input_tokens=usage_in or _int(obs.get("inputTokens")),
+                        usage_output_tokens=usage_out or _int(obs.get("outputTokens")),
+                        cost_usd=_cost_details(_both(obs, "cost_details", "costDetails"))
+                        or _float(_pick(obs, "totalCost", "totalPrice", "total_cost")),
+                        prompt_version=_clean(
+                            _pick(
+                                _as_dict(obs.get("metadata")),
+                                "langfuse_prompt",
+                                "prompt_id",
+                                "prompt_version",
+                            )
+                        ),
+                        start_time=start,
+                        end_time=end,
+                    )
+                )
+            else:
+                spans.append(
+                    NodeSpan(
+                        name=_observation_name(obs) or "observation",
+                        start_time=start,
+                        end_time=end,
+                        latency=obs_latency,
+                        status="ERROR" if is_error else "SUCCESS",
+                        error_message=_clean(obs.get("error")),
+                        input=_as_dict(obs.get("input")) or None,
+                        output=_as_dict(obs.get("output")) or None,
+                    )
+                )
 
     spans.sort(key=lambda s: s.start_time or datetime.min)
     generations.sort(key=lambda g: g.start_time or datetime.min)
@@ -318,16 +369,26 @@ def interpret_trace(
         name = _clean(s.get("name"))
         if not name:
             continue
+        value = s.get("value")
+        data_type = _clean(_both(s, "data_type", "dataType"))
         score_objects.append(
             Score(
                 name=name,
-                value=s.get("value"),
-                data_type=_clean(s.get("data_type")),
+                value=value,
+                data_type=data_type,
                 comment=_clean(s.get("comment")),
                 observation_id=_clean(s.get("observation_id")),
             )
         )
-        score_map[name] = s.get("value")
+        # CATEGORICAL scores (judge verdicts) are stored as a numeric index
+        # into their score config's categories; resolve back to the label.
+        cfg = (score_configs or {}).get(name)
+        if cfg and data_type == "CATEGORICAL" and isinstance(value, (int, float)):
+            for cat in cfg.get("categories") or []:
+                if float(cat.get("value")) == float(value):
+                    value = cat.get("label")
+                    break
+        score_map[name] = value
 
     stage = derive_stage(t_output, spans, schema=schema)
     routing_path = build_routing_path(spans)

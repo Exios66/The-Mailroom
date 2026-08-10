@@ -174,11 +174,18 @@ class LangfuseSource:
         cached = self.cache.get(key)
         if cached is not None:
             return cached
-        obs_api = self._api("observations")
-        if obs_api is None:
-            return []
-        resp = obs_api.get_many(trace_id=trace_id, limit=100)
-        out = [_to_dict(o) for o in _page_data(resp)]
+        # The trace record embeds its own authoritative observation set
+        # (complete: usage, cost, model, io) — one API call instead of two.
+        embedded = (self.get_trace(trace_id) or {}).get("observations")
+        if isinstance(embedded, list) and embedded:
+            out = [_to_dict(o) for o in embedded]
+        else:
+            # Fallback: the v2 observations index (eventually consistent).
+            obs_api = self._api("observations")
+            if obs_api is None:
+                return []
+            resp = obs_api.get_many(trace_id=trace_id, limit=100)
+            out = [_to_dict(o) for o in _page_data(resp)]
         self.cache.set(key, out, self.cache_ttl)
         return out
 
@@ -195,6 +202,36 @@ class LangfuseSource:
         self.cache.set(key, out, self.cache_ttl)
         return out
 
+    def get_score_configs(self) -> dict[str, dict[str, Any]]:
+        """Project score configs: name -> {"data_type", "categories"}.
+
+        Used to resolve CATEGORICAL score values (judge verdicts) back to
+        their labels. Cached at process level.
+        """
+        key = "score-configs"
+        cached = self.cache.get(key)
+        if cached is not None:
+            return cached
+        out: dict[str, dict[str, Any]] = {}
+        try:
+            cfg_api = self._api("score_configs")
+            if cfg_api is not None:
+                resp = cfg_api.get()
+                for cfg in _page_data(resp):
+                    d = _to_dict(cfg)
+                    name = d.get("name")
+                    if not name:
+                        continue
+                    cats = []
+                    for cat in d.get("categories") or []:
+                        if isinstance(cat, dict) and cat.get("label") is not None:
+                            cats.append({"value": cat.get("value"), "label": cat.get("label")})
+                    out[name] = {"data_type": d.get("data_type"), "categories": cats}
+        except Exception:
+            out = {}
+        self.cache.set(key, out, self.cache_ttl)
+        return out
+
     def get_run(self, trace_id: str) -> Optional[PipelineRun]:
         """Full interpreted pipeline run for one trace (sole source: Langfuse)."""
         trace = self.get_trace(trace_id)
@@ -202,7 +239,7 @@ class LangfuseSource:
             return None
         obs = self.get_observations(trace_id)
         scores = self.get_scores(trace_id)
-        return interpret_trace(trace, obs, scores)
+        return interpret_trace(trace, obs, scores, score_configs=self.get_score_configs())
 
     # --------------------------------------------------------------- sessions
 
