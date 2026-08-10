@@ -234,6 +234,9 @@ const Main = (() => {
     } else if (name === "sessions") {
       SessionsView.refresh().catch(() => {});
       ConsoleView.log("sessions refreshed", "c-dim");
+    } else if (name === "history") {
+      HistoryView.refresh().catch(() => {});
+      ConsoleView.log("history refreshed", "c-dim");
     } else if (name === "metrics") {
       MetricsView.refresh().catch(() => {});
       ConsoleView.log("metrics refreshed", "c-dim");
@@ -271,6 +274,7 @@ const Main = (() => {
     setInterval(() => {
       if (activeTab === "review") ReviewView.refresh().catch(() => {});
       if (activeTab === "sessions") SessionsView.refresh().catch(() => {});
+      if (activeTab === "history") HistoryView.refresh().catch(() => {});
       if (activeTab === "metrics") MetricsView.refresh().catch(() => {});
     }, 30000);
 

@@ -358,6 +358,7 @@ main { min-height: 520px; }
 
 .statusbar .st-bad { color: var(--red-light); font-weight: 700; }
 .statusbar .st-good { color: var(--green-light); font-weight: 700; }
+.statusbar .st-warn { color: var(--gold); font-weight: 700; }
 
 /* ---- inspector overlay ---- */
 

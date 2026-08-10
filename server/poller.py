@@ -121,7 +121,8 @@ class PollHub:
             runs = list_recent_runs(self.source, since=since, limit=self.limit)
         except Exception as exc:
             log.warning("langfuse fetch failed: %s", exc)
-            return self.snapshot
+            self._details.clear()
+            return []
         now = time.monotonic()
         out: list[dict[str, Any]] = []
         current_ids: set[str] = set()

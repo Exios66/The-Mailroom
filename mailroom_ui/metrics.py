@@ -24,8 +24,14 @@ def compute_metrics(runs: Iterable[PipelineRun], since: Optional[datetime] = Non
     qualities: list[float] = []
 
     for run in runs:
-        if since is not None and (run.updated_at or run.created_at or datetime.min) < since:
-            continue
+        run_ts = run.updated_at or run.created_at
+        if since is not None and run_ts is not None:
+            if run_ts.tzinfo is None and since.tzinfo is not None:
+                run_ts = run_ts.replace(tzinfo=since.tzinfo)
+            elif run_ts.tzinfo is not None and since.tzinfo is None:
+                since = since.replace(tzinfo=run_ts.tzinfo)
+            if run_ts < since:
+                continue
         m.total_docs += 1
         if run.stage == Stage.ARCHIVED:
             m.archived += 1

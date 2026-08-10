@@ -35,10 +35,10 @@ const Floor = (() => {
     if (st === "review" || run.needs_human) {
       return { x: STATIONS[5].x, y: ENV_Y };
     }
-    if (st === "classify" || st === "ingest" || st === "inbox") {
+    if (st === "classify" || st === "retry_classify" || st === "ingest" || st === "inbox" || st === "unknown") {
       return { x: STATIONS[0].x, y: ENV_Y };
     }
-    if (st === "extract") {
+    if (st === "extract" || st === "retry_extract") {
       return { x: STATIONS[1].x, y: ENV_Y };
     }
     if (st === "boss") {
@@ -47,7 +47,7 @@ const Floor = (() => {
     if (st === "report" || st === "catalog" || st === "archive") {
       return { x: STATIONS[3].x, y: ENV_Y };
     }
-    return { x: STATIONS[4].x, y: ENV_Y };
+    return { x: STATIONS[0].x, y: ENV_Y };
   }
 
   function tintFor(run) {
@@ -55,7 +55,7 @@ const Floor = (() => {
       contract: "#7d97b5",
       corporate_record: "#659099",
       due_diligence: "#d9a866",
-      correspondence: "#f2d4aa",
+      correspondence: "#e8b478",
       compliance_filing: "#8fd0a0",
       court_opinion: "#e26863",
     };
@@ -266,5 +266,136 @@ const Floor = (() => {
 
   requestAnimationFrame(frame);
 
-  return { update, reset, setSource, onSelect, onHover };
+  /* ---- replay ---- */
+
+  let replayTimers = [];
+  let replayState = null;
+
+  function clearReplayTimers() {
+    for (const t of replayTimers) clearTimeout(t);
+    replayTimers = [];
+  }
+
+  function replay(runData) {
+    clearReplayTimers();
+    // Clear any current envelopes except the one being replayed
+    const replayId = runData.trace_id;
+    for (const [id, e] of envs) {
+      if (id !== replayId) e.dying = true;
+    }
+    replayState = { id: replayId, startTime: Date.now(), steps: [] };
+
+    // Build the stage sequence from routing_path (most accurate) or spans
+    const routingPath = runData.routing_path || [];
+    const spans = runData.spans || [];
+
+    // Compute per-stage timing from spans
+    const stageOrder = ["ingest", "classify", "extract", "boss", "review", "report", "catalog", "archive", "archived"];
+    const stageTimes = {}; // stage -> first start_time
+    const spanToStage = {
+      "ingest-document": "ingest",
+      "classify-document": "classify",
+      "extract-fields": "extract",
+      "adjudicate-conflict": "boss",
+      "route-for-review": "review",
+      "compile-report": "report",
+      "write-catalog": "catalog",
+      "archive-document": "archive",
+    };
+    for (const s of spans) {
+      const st = spanToStage[s.name];
+      if (st && !stageTimes[st] && s.start_time) {
+        stageTimes[st] = new Date(s.start_time).getTime();
+      }
+    }
+
+    // Compute the sequence: if we have timing data, use it; otherwise use routing_path
+    let sequence;
+    if (Object.keys(stageTimes).length > 0) {
+      sequence = Object.entries(stageTimes)
+        .sort((a, b) => a[1] - b[1])
+        .map(([st]) => st);
+    } else if (routingPath.length > 0) {
+      sequence = routingPath;
+    } else {
+      sequence = ["classify", "extract", "archived"];
+    }
+
+    // Create the envelope at the start
+    const stageToTarget = {
+      inbox: 0, ingest: 0, classify: 0, retry_classify: 0, unknown: 0,
+      extract: 1, retry_extract: 1, boss: 2,
+      report: 3, catalog: 3, archive: 3, archived: 4,
+      review: 5, failed: 5,
+    };
+    const stationIdx = (st) => {
+      const idx = stageToTarget[st];
+      return idx != null ? idx : 0;
+    };
+
+    const baseRun = {
+      trace_id: replayId,
+      filename: runData.filename,
+      doc_type: runData.doc_type,
+      verdict: runData.verdict,
+      quality: runData.quality,
+      stage: "archived", // start neutral; will animate through stages
+      needs_human: false,
+      retried: false,
+    };
+    // Create envelope at the first station
+    let e = envs.get(replayId);
+    if (!e) {
+      e = {
+        id: replayId,
+        x: STATIONS[0].x,
+        y: ENV_Y,
+        seed: Math.random() * 1000,
+        alpha: 1,
+        run: { ...baseRun, stage: sequence[0] },
+      };
+      envs.set(replayId, e);
+    } else {
+      e.x = STATIONS[0].x;
+      e.y = ENV_Y;
+      e.run = { ...baseRun, stage: sequence[0] };
+      e.dying = false;
+    }
+    e.tint = tintFor(baseRun);
+    e.tx = STATIONS[0].x;
+    e.ty = ENV_Y;
+
+    // Animate through each stage in sequence
+    let cumulativeDelay = 600; // initial pause so user sees the envelope appear
+    for (let i = 0; i < sequence.length; i++) {
+      const stg = sequence[i];
+      const idx = stationIdx(stg);
+      const t = cumulativeDelay;
+      const timer = setTimeout(() => {
+        const current = envs.get(replayId);
+        if (!current || current.dying) return;
+        current.tx = STATIONS[idx].x;
+        current.ty = ENV_Y;
+        current.run.stage = stg;
+        current.tint = tintFor(current.run);
+        ConsoleView.log(`REPLAY → ${stg}`, "c-blue");
+      }, t);
+      replayTimers.push(timer);
+      cumulativeDelay += 700;
+    }
+
+    // After the sequence finishes, archive it (slide off the floor)
+    const endTimer = setTimeout(() => {
+      const current = envs.get(replayId);
+      if (!current) return;
+      current.run.stage = "archived";
+      current.tx = 1500;
+      current.ty = 440;
+      current.remove = true;
+      ConsoleView.banner(`REPLAY COMPLETE — ${runData.filename || replayId}`);
+    }, cumulativeDelay + 800);
+    replayTimers.push(endTimer);
+  }
+
+  return { update, reset, setSource, onSelect, onHover, replay };
 })();

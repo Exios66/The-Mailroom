@@ -317,14 +317,18 @@ def list_recent_runs(
     """Convenience: recent traces -> interpreted runs, newest first.
 
     Uses the trace-list response only (light runs) — cheap enough to poll.
+    Fetches score configs so CATEGORICAL verdicts can be label-resolved.
+    Also fetches scores per trace so verdicts/qualities surface in light runs.
     """
     since = since or (datetime.now() - timedelta(hours=6))
     traces = source.list_traces(since=since, limit=limit, name="document-pipeline")
+    score_configs = source.get_score_configs()
     runs = []
     for t in traces:
         tid = t.get("id")
         if not tid:
             continue
-        runs.append(interpret_trace(t))
+        scores = source.get_scores(tid)
+        runs.append(interpret_trace(t, scores=scores, score_configs=score_configs))
     runs.sort(key=lambda r: r.updated_at or datetime.min, reverse=True)
     return runs
