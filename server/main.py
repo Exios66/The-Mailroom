@@ -20,7 +20,7 @@ from mailroom_ui.metrics import compute_metrics
 from mailroom_ui.models import PipelineRun, SessionSummary
 from mailroom_ui.pipeline_schema import DOC_CLASSES
 from mailroom_ui.trace_interpreter import interpret_trace
-from server.poller import PollHub
+from server.poller import PollHub, floor_payload
 
 log = logging.getLogger("mailroom.server")
 
@@ -145,8 +145,6 @@ def _recent(src: LangfuseSource, since: int, limit: int) -> list[PipelineRun]:
 
 def _serialize(run: PipelineRun, full: bool = False) -> dict:
     if not full:
-        from server.poller import floor_payload
-
         return floor_payload(run)
     return {
         **floor_payload(run),

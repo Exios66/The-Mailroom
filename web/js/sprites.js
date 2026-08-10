@@ -34,6 +34,9 @@ const PALETTE = {
   'd': '#5d5d5d',     // gray dark
   'm': '#7a4a3a',     // mouth
 };
+
+/* SORTER — blue uniform, gray hair, mail-slot rack beside the desk. */
+const SORTER = [
   '................................',
   '...........kkkkkk..............',
   '...........kHHHHHHk............',

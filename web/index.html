@@ -68,6 +68,22 @@
   </div>
 </div>
 
+<div id="closed" class="overlay" hidden>
+  <div class="overlay-panel closed-panel">
+    <div class="insp-head">
+      <span class="mono">MAILROOM CLOSED</span>
+      <span class="light light-red"></span>
+    </div>
+    <div style="padding:26px 22px">
+      <div class="closed-stamp mono">CLOSED</div>
+      <div class="closed-body mono">no Langfuse connection. The floor is empty until the
+        pipeline's Langfuse project responds — nothing on screen is ever served
+        from local or canned data.</div>
+      <button id="closed-retry" class="px-btn mono">RETRY CONNECTION</button>
+    </div>
+  </div>
+</div>
+
 <script src="/static/js/sprites.js"></script>
 <script src="/static/js/api.js"></script>
 <script src="/static/js/floor.js"></script>

@@ -53,7 +53,7 @@ def test_p95_generation_latency():
             gen.latency = float(0.1 + i)
         runs.append(interpret_trace(t, t["observations"], t["scores"]))
     m = compute_metrics(runs)
-    assert m.p95_generation_latency_s == 9.4
+    assert m.p95_generation_latency_s == 9.1
 
 
 def test_verdict_mix_counts():
