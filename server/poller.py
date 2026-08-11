@@ -98,8 +98,19 @@ class PollHub:
         while not self._stop.is_set():
             try:
                 runs = await asyncio.to_thread(self._fetch)
-                self.snapshot = runs
-                payload = {"type": "snapshot", "runs": runs}
+                # V-4: a partial Langfuse failure must NOT wipe the floor —
+                # keep the last good snapshot and mark it stale so the UI can
+                # show a staleness badge instead of a blank screen with a
+                # green lamp. `_fetch` returns None on failure (instead of
+                # []), meaning "no fresh data".
+                if runs is not None:
+                    self.snapshot = runs
+                payload = {
+                    "type": "snapshot",
+                    "runs": self.snapshot,
+                    "stale": runs is None,
+                    "fetched_at": datetime.now().isoformat(),
+                }
                 dead: list[WebSocket] = []
                 for ws in list(self.clients):
                     try:
@@ -115,14 +126,14 @@ class PollHub:
             except asyncio.TimeoutError:
                 pass
 
-    def _fetch(self) -> list[dict[str, Any]]:
+    def _fetch(self) -> Optional[list[dict[str, Any]]]:
         since = datetime.now() - timedelta(seconds=self.window)
         try:
             runs = list_recent_runs(self.source, since=since, limit=self.limit)
         except Exception as exc:
             log.warning("langfuse fetch failed: %s", exc)
-            self._details.clear()
-            return []
+            # V-4: return None = "no fresh data" (keep last good snapshot).
+            return None
         now = time.monotonic()
         out: list[dict[str, Any]] = []
         current_ids: set[str] = set()

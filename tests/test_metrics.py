@@ -79,3 +79,43 @@ def test_metrics_empty():
     assert m.p95_generation_latency_s == 0.0
     assert m.avg_quality is None
     assert m.verdict_counts == {}
+
+
+class TestTzNormalization:
+    """V-6/V-7: mixed naive/aware datetimes must never crash the snapshot, and
+    window comparisons must convert (not relabel) so non-UTC servers don't
+    drop the last hours of runs."""
+
+    def test_parse_dt_normalizes_to_utc(self):
+        from datetime import datetime, timedelta, timezone
+        from mailroom_ui.trace_interpreter import parse_dt
+
+        # naive input assumed UTC
+        naive = parse_dt(datetime(2026, 8, 10, 12, 0, 0))
+        assert naive.tzinfo is not None
+        assert naive.utcoffset().total_seconds() == 0
+
+        # aware non-UTC input CONVERTED to UTC (V-7: astimezone, not replace)
+        aware = datetime(2026, 8, 10, 12, 0, 0, tzinfo=timezone(timedelta(hours=9)))
+        parsed = parse_dt(aware)
+        assert parsed.hour == 3  # 12:00+09:00 == 03:00 UTC
+
+        # ISO string with Z
+        assert parse_dt("2026-08-10T12:00:00Z").hour == 12
+
+    def test_compute_metrics_mixed_tz_no_crash(self):
+        from datetime import datetime, timedelta, timezone
+        from mailroom_ui.metrics import compute_metrics
+        from mailroom_ui.models import PipelineRun
+
+        naive_run = PipelineRun(
+            trace_id="t1", filename="a.pdf", stage="archived",
+            updated_at=datetime(2026, 8, 10, 12, 0, 0),  # naive
+        )
+        aware_run = PipelineRun(
+            trace_id="t2", filename="b.pdf", stage="failed",
+            updated_at=datetime(2026, 8, 10, 12, 0, 0, tzinfo=timezone(timedelta(hours=-5))),
+        )
+        since = datetime.now(timezone.utc) - timedelta(days=1)
+        m = compute_metrics([naive_run, aware_run], since=since)
+        assert m.total_docs == 2

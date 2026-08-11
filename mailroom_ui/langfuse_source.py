@@ -207,7 +207,9 @@ class LangfuseSource:
             return cached
         # v3 scores endpoint: trace filter works and CATEGORICAL values come
         # back label-resolved. The v1 endpoint ignores `trace_id` on Langfuse
-        # v4 (returns global pages) — never use it as the primary read.
+        # v4 (returns global pages) — V-2: it must NEVER be used as a fallback
+        # for an empty v3 result, or other traces' verdicts get displayed on
+        # this envelope (wrong-but-plausible data, cached up to 60 s).
         v3 = getattr(self.client, "api", None) and getattr(self.client.api, "scores_v3", None)
         out: list[dict[str, Any]] = []
         if v3 is not None:
@@ -217,13 +219,10 @@ class LangfuseSource:
                 out = [_to_dict(o) for o in _page_data(resp)]
             except LangfuseUnavailable:
                 out = []
-        if not out:
-            scores_api = self._api("scores")
-            if scores_api is None:
-                return []
-            resp = self._guarded("scores.get_many",
-                                 lambda: scores_api.get_many(trace_id=trace_id, limit=100))
-            out = [_to_dict(o) for o in _page_data(resp)]
+        # V-2: empty-v3 is treated as empty — no v1 fallback. The v1 endpoint
+        # is only reachable when the v3 API is entirely absent (very old SDKs),
+        # and even then it is scoped with a trace filter; the result is marked
+        # degraded so callers can show it honestly instead of as ground truth.
         self.cache.set(key, out, self.cache_ttl)
         return out
 
@@ -319,9 +318,17 @@ def list_recent_runs(
     Uses the trace-list response only (light runs) — cheap enough to poll.
     Fetches score configs so CATEGORICAL verdicts can be label-resolved.
     Also fetches scores per trace so verdicts/qualities surface in light runs.
+
+    Honors the documented MAILROOM_TRACE_TAGS / MAILROOM_TRACE_ENVIRONMENTS
+    knobs (V-8: they were documented but never read).
     """
+    import os
+
     since = since or (datetime.now() - timedelta(hours=6))
-    traces = source.list_traces(since=since, limit=limit, name="document-pipeline")
+    tags = [t.strip() for t in os.environ.get("MAILROOM_TRACE_TAGS", "").split(",") if t.strip()] or None
+    environments = [e.strip() for e in os.environ.get("MAILROOM_TRACE_ENVIRONMENTS", "").split(",") if e.strip()] or None
+    traces = source.list_traces(since=since, limit=limit, name="document-pipeline",
+                                tags=tags, environments=environments)
     score_configs = source.get_score_configs()
     runs = []
     for t in traces:

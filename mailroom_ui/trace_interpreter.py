@@ -40,14 +40,29 @@ DEFAULT_SCHEMA = PipelineSchema.load()
 
 
 def parse_dt(value: Any) -> Optional[datetime]:
+    """Parse to a tz-aware UTC datetime (V-6/V-7).
+
+    Normalizes EVERY timestamp to UTC so downstream comparisons and sorts
+    never mix naive and aware datetimes (which crashed the snapshot) and
+    never relabel wall-clock time without converting (which shifted metric
+    windows by the full UTC offset). Naive inputs are assumed UTC — Langfuse
+    stores UTC.
+    """
+    from datetime import timezone as _tz
+
     if value is None:
         return None
     if isinstance(value, datetime):
-        return value
+        if value.tzinfo is None:
+            return value.replace(tzinfo=_tz.utc)
+        return value.astimezone(_tz.utc)
     try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError:
         return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_tz.utc)
+    return dt.astimezone(_tz.utc)
 
 
 def _clean(value: Any) -> Optional[str]:

@@ -15,6 +15,11 @@ from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+# V-8: .env must be loaded BEFORE any module-level env reads (the knobs below
+# were read before load_dotenv(), so MAILROOM_POLL_INTERVAL / RECENT_WINDOW /
+# TRACE_LIMIT never applied from .env).
+load_dotenv()
+
 from mailroom_ui.langfuse_source import LangfuseSource, LangfuseUnavailable, list_recent_runs
 from mailroom_ui.metrics import compute_metrics
 from mailroom_ui.models import PipelineRun, SessionSummary
@@ -122,7 +127,16 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
 
     @app.get("/api/meta")
     def meta():
-        return {"doc_classes": DOC_CLASSES, "source": "langfuse"}
+        # V-23: use PipelineSchema.load() so the MAILROOM_TAXONOMY override is
+        # reflected — the module-level DOC_CLASSES constant ignored it.
+        try:
+            from mailroom_ui.pipeline_schema import PipelineSchema
+
+            schema = PipelineSchema.load()
+            classes = schema.doc_classes if hasattr(schema, "doc_classes") else DOC_CLASSES
+        except Exception:
+            classes = DOC_CLASSES
+        return {"doc_classes": classes, "source": "langfuse"}
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
@@ -140,7 +154,11 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
 
         @app.get("/")
         def index():
-            return FileResponse(WEB_DIR / "index.html")
+            # V-22: no-cache on index.html so a deployed SPA is never stale.
+            return FileResponse(
+                WEB_DIR / "index.html",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+            )
 
     return app
 

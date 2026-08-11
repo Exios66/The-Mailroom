@@ -150,6 +150,7 @@ const Floor = (() => {
       e.remove = !!t.remove;
       e.tint = tintFor(run);
       e.dying = false;
+      kickLoop(); // V-17: ensure the animation loop runs when envelopes exist
     }
     for (const [id, e] of envs) {
       if (!seen.has(id)) e.dying = true;
@@ -264,7 +265,32 @@ const Floor = (() => {
     requestAnimationFrame(frame);
   }
 
-  requestAnimationFrame(frame);
+  // V-17: the 60 fps full-canvas redraw ran unconditionally forever, even
+  // when the tab/document was hidden and when there was nothing to animate —
+  // a permanent CPU burn. Pause the loop while hidden or idle (no envelopes),
+  // and resume on visibilitychange so the floor stays live when visible.
+  let rafId = null;
+  let lastFrame = null;
+  function loop(t) {
+    lastFrame = t;
+    if (!document.hidden && envs.size > 0) {
+      frame(t);
+      rafId = requestAnimationFrame(loop);
+    } else {
+      rafId = null;
+    }
+  }
+  function kickLoop() {
+    if (rafId === null) {
+      requestAnimationFrame(loop);
+    }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) kickLoop();
+  });
+  // Resume whenever envelopes are added (update()/replay) and on first load.
+  const _origUpdate = typeof update === "function" ? update : null;
+  kickLoop();
 
   /* ---- replay ---- */
 

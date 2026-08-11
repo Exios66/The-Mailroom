@@ -100,6 +100,14 @@ const Main = (() => {
       clearInterval(demoTimer);
       demoTimer = null;
     }
+    // V-10: the demo flag leaked into live mode — window.Mailroom.demoMode was
+    // set in startDemo() but never reset, so metrics.js kept rendering
+    // fabricated demo numbers after Langfuse came up. Single source of truth:
+    // clear the global flag and drop demo runs whenever demo mode ends.
+    if (window.Mailroom) {
+      window.Mailroom.demoMode = false;
+      delete window.Mailroom.demoRuns;
+    }
     if (!langfuseOk) Floor.reset();
   }
 
@@ -207,6 +215,17 @@ const Main = (() => {
       applySource();
     } else if (msg.type === "snapshot") {
       applySnapshot(msg.runs || []);
+      // V-14: surface staleness + last-updated so a frozen floor with a green
+      // lamp is distinguishable from a live one.
+      if (msg.stale) {
+        sourceLabelEl.textContent = "SOURCE: LANGFUSE (STALE)";
+        sourceLabelEl.className = "st-warn mono";
+      }
+      if (msg.fetched_at) {
+        const t = new Date(msg.fetched_at);
+        statusRightEl.textContent =
+          (statusRightEl.textContent || "") + ` · UPDATED ${t.toLocaleTimeString()}`;
+      }
     }
   }
 

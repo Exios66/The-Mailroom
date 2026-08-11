@@ -34,10 +34,21 @@ const HistoryView = (() => {
       const ts = r.updated_at || r.created_at;
       if (!ts) continue;
       const d = new Date(ts);
-      const key = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:00`;
-      buckets[key] = (buckets[key] || 0) + 1;
+      // V-15: buckets keyed by epoch (numeric) so sort is by TIME, not by
+      // string — localeCompare on "M/D HH:00" mis-ordered across days
+      // ("8/9 23:00" after "8/10 01:00") and the .slice(0,12) could drop the
+      // genuinely newest buckets.
+      const epochKey = Math.floor(d.getTime() / 3600000);
+      buckets[epochKey] = (buckets[epochKey] || 0) + 1;
     }
-    const bucketEntries = Object.entries(buckets).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12);
+    const bucketEntries = Object.entries(buckets)
+      .sort((a, b) => Number(b[0]) - Number(a[0]))
+      .slice(0, 12)
+      .map(([epoch, count]) => {
+        const d = new Date(Number(epoch) * 3600000);
+        const label = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:00`;
+        return [label, count];
+      });
 
     let html = "";
     if (bucketEntries.length) {

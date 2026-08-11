@@ -23,13 +23,25 @@ def compute_metrics(runs: Iterable[PipelineRun], since: Optional[datetime] = Non
     gen_latencies: list[float] = []
     qualities: list[float] = []
 
+    # V-6/V-7: normalize the window to tz-aware UTC (CONVERT, never relabel —
+    # the old replace(tzinfo=...) shifted metric windows by the full UTC
+    # offset on non-UTC servers).
+    if since is not None and since.tzinfo is None:
+        from datetime import timezone as _tz
+
+        since = since.replace(tzinfo=_tz.utc)
+    elif since is not None:
+        from datetime import timezone as _tz
+
+        since = since.astimezone(_tz.utc)
+
     for run in runs:
         run_ts = run.updated_at or run.created_at
         if since is not None and run_ts is not None:
-            if run_ts.tzinfo is None and since.tzinfo is not None:
-                run_ts = run_ts.replace(tzinfo=since.tzinfo)
-            elif run_ts.tzinfo is not None and since.tzinfo is None:
-                since = since.replace(tzinfo=run_ts.tzinfo)
+            if run_ts.tzinfo is None:
+                from datetime import timezone as _tz
+
+                run_ts = run_ts.replace(tzinfo=_tz.utc)
             if run_ts < since:
                 continue
         m.total_docs += 1
