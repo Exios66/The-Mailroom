@@ -11,7 +11,7 @@ The-Mailroom is the **visual engine** for the `llm-mailroom` multi-agent legal-d
   - `mailroom_ui/trace_interpreter.py` — maps its span names, trace metadata/input/output fields, and score names (`JUDGE_VERDICT_SCORES` = `mailroom-pipeline-judge`, `JUDGE_QUALITY_SCORES` = `mailroom-pipeline-quality`).
   - Tests — `tests/fake_langfuse.py` fixtures mirror the trace contract.
   - CHANGELOG entry for the sync (see Release process).
-- **Live override**: `MAILROOM_TAXONOMY` env var → absolute path to llm-mailroom's `config/taxonomy.yaml`. When set, thresholds/doc classes are read from there instead of the bundled mirror (`PipelineSchema.load()`). Requires a restart — config is cached at process level.
+- **Live override**: `MAILROOM_TAXONOMY` env var → absolute path to llm-mailroom's `src/config/taxonomy.yaml`. When set, thresholds/doc classes are read from there instead of the bundled mirror (`PipelineSchema.load()`). Requires a restart — config is cached at process level.
 - **Breakage map** (what happens here if the pipeline changes): new span name → run interpreted as `unknown` stage; new doc class → envelope falls back to the gray default stamp color; renamed judge scores → verdict/quality vanish from runs; new env/tag → filters in `.env` may need updating.
 
 ## Commands
