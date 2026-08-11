@@ -20,7 +20,12 @@ from fastapi.staticfiles import StaticFiles
 # TRACE_LIMIT never applied from .env).
 load_dotenv()
 
-from mailroom_ui.langfuse_source import LangfuseSource, LangfuseUnavailable, list_recent_runs
+from mailroom_ui.langfuse_source import (
+    LangfuseSource,
+    LangfuseUnavailable,
+    enriched_recent_runs,
+    list_recent_runs,
+)
 from mailroom_ui.metrics import compute_metrics
 from mailroom_ui.models import PipelineRun, SessionSummary
 from mailroom_ui.pipeline_schema import DOC_CLASSES
@@ -54,6 +59,16 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
             content={"error": "langfuse unavailable", "detail": str(exc)},
         )
 
+    # V-18: any other server error must come back as JSON with a detail the
+    # SPA can show — the old default 500 was plain text and the frontend
+    # discarded it, leaving a silent blank/zeroed screen.
+    @app.exception_handler(Exception)
+    async def generic_error_handler(request, exc):
+        return JSONResponse(
+            status_code=500,
+            content={"error": "internal server error", "detail": str(exc)[:300]},
+        )
+
     @app.get("/api/health")
     def health():
         return src.health()
@@ -85,7 +100,11 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
 
     @app.get("/api/metrics")
     def metrics(since: int = Query(3600, ge=0, le=86400 * 7)):
-        runs = _recent(src, since, TRACE_LIMIT)
+        # V-3: aggregate ENRICHED runs (full observations/scores), never light
+        # ones — light runs have no generations, so cost/tokens/calls were
+        # permanently $0.00 / 0 tok / 0 calls. get_run() is cached, so this
+        # shares fetches with the poller instead of adding another N+1.
+        runs = enriched_recent_runs(src, since=datetime.now() - timedelta(seconds=since), limit=TRACE_LIMIT)
         m = compute_metrics(runs, since=datetime.now() - timedelta(seconds=since))
         return {"source": "langfuse", **m.model_dump()}
 
@@ -94,8 +113,12 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
         raw = src.list_sessions(limit=limit)
         out = []
         for s in raw:
-            traces = src.get_session_traces(s.get("id", ""), limit=50)
-            runs = [interpret_trace(t) for t in traces]
+            # V-19: sessions are displayed as runs, and runs need their
+            # observations/scores — interpret_trace() without scores produced
+            # light runs with no verdicts/tokens/cost on every card.
+            # get_run() is cached; the per-session trace fetch is capped so a
+            # session with hundreds of traces can't stall the summary.
+            runs = _session_runs(src, s.get("id", ""), limit=20)
             out.append(
                 SessionSummary(
                     id=s.get("id", ""),
@@ -111,8 +134,7 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
 
     @app.get("/api/sessions/{session_id}")
     def session_detail(session_id: str):
-        traces = src.get_session_traces(session_id, limit=200)
-        runs = [interpret_trace(t) for t in traces]
+        runs = _session_runs(src, session_id, limit=200)
         return {
             "session_id": session_id,
             "count": len(runs),
@@ -122,7 +144,11 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
 
     @app.get("/api/review-queue")
     def review_queue(since: int = Query(86400 * 7, ge=0, le=86400 * 7)):
-        runs = [r for r in _recent(src, since, TRACE_LIMIT) if r.needs_human]
+        # V-20: enriched runs (verdicts/tokens/cost on the cards, not zeros);
+        # the queue can legitimately exceed the floor's 100-run limit, so use
+        # the wider 500 cap.
+        runs = [r for r in enriched_recent_runs(src, since=datetime.now() - timedelta(seconds=since), limit=500)
+                if r.needs_human]
         return {"count": len(runs), "source": "langfuse", "runs": [_serialize(r) for r in runs]}
 
     @app.get("/api/meta")
@@ -166,6 +192,33 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
 def _recent(src: LangfuseSource, since: int, limit: int) -> list[PipelineRun]:
     since_dt = datetime.now() - timedelta(seconds=since)
     return list_recent_runs(src, since=since_dt, limit=limit)
+
+
+def _session_runs(src: LangfuseSource, session_id: str, limit: int) -> list[PipelineRun]:
+    """Enriched runs for one session, newest first (V-19).
+
+    Uses the cached get_run() (observations+scores) with per-trace isolation:
+    one bad trace falls back to its light interpretation instead of failing
+    the whole session.
+    """
+    runs: list[PipelineRun] = []
+    try:
+        traces = src.get_session_traces(session_id, limit=limit)
+    except Exception as exc:
+        log.warning("session traces failed for %s: %s", session_id, exc)
+        return runs
+    for t in traces:
+        tid = t.get("id")
+        if not tid:
+            continue
+        try:
+            full = src.get_run(tid)
+            runs.append(full if full is not None else interpret_trace(t))
+        except Exception as exc:
+            log.warning("session run failed for %s: %s", tid, exc)
+            runs.append(interpret_trace(t))
+    runs.sort(key=lambda r: r.updated_at or datetime.min, reverse=True)
+    return runs
 
 
 def _serialize(run: PipelineRun, full: bool = False) -> dict:

@@ -82,14 +82,20 @@ class LangfuseSource:
         self,
         client: Any = None,
         *,
-        cache_ttl: float = 2.0,
-        poll_cache_ttl: float = 1.0,
+        cache_ttl: float = 15.0,
+        poll_cache_ttl: float = 15.0,
+        run_cache_ttl: float = 60.0,
     ) -> None:
+        # V-5: cache TTLs must be >= the poll interval (default 3 s) or every
+        # poll re-fetches the same data — the old 1-2 s TTLs caused ~102-302
+        # Langfuse API calls per poll. Defaults here are deliberately >= 3 s.
         self.client = client if client is not None else self._build_client()
         self.available = self.client is not None
         self.cache = TTLCache()
         self.cache_ttl = cache_ttl
         self.poll_cache_ttl = poll_cache_ttl
+        self.run_cache_ttl = run_cache_ttl
+        self._rate_hits = 0
 
     # ---------------------------------------------------------------- client
 
@@ -120,12 +126,24 @@ class LangfuseSource:
 
     def _guarded(self, label: str, fn: Callable[[], Any]) -> Any:
         """Any Langfuse API failure surfaces as LangfuseUnavailable — the
-        documented contract for callers (never stale, never fabricated)."""
+        documented contract for callers (never stale, never fabricated).
+
+        V-5: HTTP 429 (rate limit) gets exponential backoff so a burst of
+        polls doesn't compound into a sustained 429 storm.
+        """
         try:
-            return fn()
+            out = fn()
+            self._rate_hits = 0
+            return out
         except LangfuseUnavailable:
             raise
         except Exception as exc:
+            status = getattr(exc, "status", None) or getattr(exc, "status_code", None)
+            if status == 429:
+                backoff = min(0.5 * (2 ** min(self._rate_hits, 6)), 10.0)
+                self._rate_hits += 1
+                time.sleep(backoff)
+                raise LangfuseUnavailable(f"{label}: rate limited (429, backoff {backoff:.1f}s)") from exc
             raise LangfuseUnavailable(f"{label}: {str(exc)[:200]}") from exc
 
     # ----------------------------------------------------------------- traces
@@ -257,13 +275,24 @@ class LangfuseSource:
         return out
 
     def get_run(self, trace_id: str) -> Optional[PipelineRun]:
-        """Full interpreted pipeline run for one trace (sole source: Langfuse)."""
+        """Full interpreted pipeline run for one trace (sole source: Langfuse).
+
+        V-5: results are cached for `run_cache_ttl` (>= poll interval) so the
+        poller and the metrics/sessions/review endpoints all share one fetch
+        per run per TTL instead of re-reading observations+scores every poll.
+        """
+        key = f"run:{trace_id}"
+        cached = self.cache.get(key)
+        if cached is not None:
+            return cached
         trace = self.get_trace(trace_id)
         if trace is None:
             return None
         obs = self.get_observations(trace_id)
         scores = self.get_scores(trace_id)
-        return interpret_trace(trace, obs, scores, score_configs=self.get_score_configs())
+        run = interpret_trace(trace, obs, scores, score_configs=self.get_score_configs())
+        self.cache.set(key, run, self.run_cache_ttl)
+        return run
 
     # --------------------------------------------------------------- sessions
 
@@ -317,7 +346,13 @@ def list_recent_runs(
 
     Uses the trace-list response only (light runs) — cheap enough to poll.
     Fetches score configs so CATEGORICAL verdicts can be label-resolved.
-    Also fetches scores per trace so verdicts/qualities surface in light runs.
+
+    V-5: this deliberately does NOT fetch scores per trace — that was an N+1
+    (one Langfuse call per run per poll). Verdicts/qualities surface via the
+    embedded `observations`/`scores` arrays when the API includes them in the
+    list response (interpret_trace falls back to those), and via the poller's
+    per-run detail enrichment (get_run, cached) otherwise. Use
+    `enriched_recent_runs` when the caller needs tokens/cost/verdicts now.
 
     Honors the documented MAILROOM_TRACE_TAGS / MAILROOM_TRACE_ENVIRONMENTS
     knobs (V-8: they were documented but never read).
@@ -335,7 +370,36 @@ def list_recent_runs(
         tid = t.get("id")
         if not tid:
             continue
-        scores = source.get_scores(tid)
-        runs.append(interpret_trace(t, scores=scores, score_configs=score_configs))
+        runs.append(interpret_trace(t, score_configs=score_configs))
     runs.sort(key=lambda r: r.updated_at or datetime.min, reverse=True)
     return runs
+
+
+def enriched_recent_runs(
+    source: LangfuseSource,
+    *,
+    since: Optional[datetime] = None,
+    limit: int = 200,
+) -> list[PipelineRun]:
+    """Recent runs enriched with per-trace observations/scores (V-3).
+
+    Aggregations (cost, tokens, LLM calls, verdicts) need full runs, not the
+    list-level "light" ones — the old /api/metrics aggregated light runs and
+    permanently showed $0.00 / 0 tok / 0 calls. get_run() is cached for
+    `run_cache_ttl`, so repeated calls (metrics + review + sessions + poller)
+    share the same fetches. One bad trace degrades to its light run instead
+    of aborting the whole list (per-trace isolation).
+    """
+    import logging
+
+    log = logging.getLogger("mailroom.langfuse_source")
+    runs = list_recent_runs(source, since=since, limit=limit)
+    out = []
+    for r in runs:
+        try:
+            full = source.get_run(r.trace_id)
+        except Exception as exc:
+            log.warning("enrichment failed for %s: %s", r.trace_id, exc)
+            full = None
+        out.append(full if full is not None else r)
+    return out

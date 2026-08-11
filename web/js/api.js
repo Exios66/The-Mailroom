@@ -15,7 +15,16 @@ const Mailroom = (() => {
 
   async function get(path) {
     const res = await fetch(path, { headers: { "Accept": "application/json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${path}`);
+    if (!res.ok) {
+      // V-18: the server's 503/500 bodies carry a `detail` the SPA silently
+      // discarded before — surface it in the error so screens can show why.
+      let detail = "";
+      try {
+        const body = await res.json();
+        detail = body && body.detail ? ` — ${body.detail}` : "";
+      } catch (e) { /* non-JSON error body */ }
+      throw new Error(`HTTP ${res.status} ${path}${detail}`);
+    }
     return res.json();
   }
 
@@ -60,6 +69,29 @@ const Mailroom = (() => {
   let wsTimer = null;
   let wsRetry = 0;
   let connected = false;
+  let errTimer = null;
+
+  // V-18: one global error banner. Every silent `.catch(() => {})` across the
+  // SPA is routed here, plus window.onerror for unhandled exceptions.
+  function showError(msg) {
+    const el = document.getElementById("error-banner");
+    const text = msg && msg.message ? msg.message : String(msg || "unknown error");
+    if (!el) {
+      console.error(`[mailroom] ${text}`);
+      return;
+    }
+    el.textContent = `ERROR — ${text}`;
+    el.hidden = false;
+    clearTimeout(errTimer);
+    errTimer = setTimeout(() => { el.hidden = true; }, 8000);
+  }
+
+  window.addEventListener("error", (ev) => {
+    showError(ev.message || "unhandled script error");
+  });
+  window.addEventListener("unhandledrejection", (ev) => {
+    if (ev && ev.reason) showError(ev.reason);
+  });
 
   function wsURL() {
     const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -80,7 +112,11 @@ const Mailroom = (() => {
     ws.onmessage = (ev) => {
       try {
         onMessage(JSON.parse(ev.data));
-      } catch (e) { /* non-JSON frame ignored */ }
+      } catch (e) {
+        // V-18: non-JSON frames were dropped silently — log them so protocol
+        // drift from the server is visible instead of an unexplained stall.
+        console.error(`[mailroom] non-JSON WS frame dropped: ${String(ev.data).slice(0, 200)}`);
+      }
     };
     ws.onclose = () => {
       connected = false;
@@ -100,5 +136,5 @@ const Mailroom = (() => {
     return null;
   }
 
-  return { api, fmt, esc, connectWS, envFromTags, get wsConnected() { return connected; } };
+  return { api, fmt, esc, connectWS, envFromTags, showError, get wsConnected() { return connected; } };
 })();

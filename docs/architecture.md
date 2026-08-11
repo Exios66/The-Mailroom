@@ -83,10 +83,7 @@ must be updated in the same change — see the sync checklist in `AGENTS.md`.
 ## Web frontend
 
 Vanilla HTML/CSS/JS served from `web/` (no build step). The floor is a
-canvas-rendered conveyor with hand-authored pixel sprites (`web/js/sprites.js`):
-a palette derived from AgentLaboratory's artwork (warm paper/cream, charcoal
-ink, logo-red accent, amber/gold, dusty blue/teal/green), characters for every
-station (Sorter, six specialists, Boss, Reporter, Archivist), document
-envelopes tinted per doc class, stamps, bins, and conveyor rollers. The
-station roster and doc-class colors must stay aligned with
-`pipeline_schema.py` and the pipeline's `taxonomy.yaml`.
+canvas-rendered conveyor (pixel-art envelopes tinted per doc class, stations,
+rollers, review/failed sidings) — see `web/js/floor.js`. The station roster
+and doc-class colors must stay aligned with `pipeline_schema.py` and the
+pipeline's `taxonomy.yaml`.

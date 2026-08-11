@@ -9,7 +9,6 @@ The-Mailroom is the **visual engine** for the `llm-mailroom` multi-agent legal-d
 - **What we mirror from it, and must keep in sync (the #1 maintenance duty)** — when the pipeline changes, update all of these in one change:
   - `mailroom_ui/pipeline_schema.py` — mirrors `graph/routing.py` + `config/taxonomy.yaml`: node/span names (`SPAN_STAGE_MAP`), stage→phase map, agent roster, `DOC_CLASSES`, `SPECIALIST_BY_DOC_CLASS`, confidence thresholds.
   - `mailroom_ui/trace_interpreter.py` — maps its span names, trace metadata/input/output fields, and score names (`JUDGE_VERDICT_SCORES` = `mailroom-pipeline-judge`, `JUDGE_QUALITY_SCORES` = `mailroom-pipeline-quality`).
-  - `web/js/sprites.js` — `DOC_TYPE_COLORS` keys must match `doc_classes` keys.
   - Tests — `tests/fake_langfuse.py` fixtures mirror the trace contract.
   - CHANGELOG entry for the sync (see Release process).
 - **Live override**: `MAILROOM_TAXONOMY` env var → absolute path to llm-mailroom's `config/taxonomy.yaml`. When set, thresholds/doc classes are read from there instead of the bundled mirror (`PipelineSchema.load()`). Requires a restart — config is cached at process level.
@@ -43,8 +42,7 @@ python scripts/release.py --help     # semver release workflow (see below)
   - `main.py` — `/api/health`, `/api/traces[?since&limit&stage&environment]`, `/api/traces/{id}` (full), `/api/metrics`, `/api/sessions[/{id}]`, `/api/review-queue`, `/api/meta`, WebSocket `/ws`; mounts `web/` at `/static` and serves `index.html` at `/`. Browser never holds Langfuse keys — the backend proxies everything.
   - `poller.py` — `PollHub`: background poll loop → compact `floor_payload` snapshots broadcast to all WS clients; full detail cached per trace with `detail_ttl`.
 - `web/` — pixel-art SPA:
-  - `js/sprites.js` — hand-authored pixel matrices + `PALETTE` (derived from AgentLaboratory media analysis: warm paper/cream, charcoal ink, logo-red accent, amber/gold, dusty blue/teal/green). **This is the craft centerpiece** — keep the style coherent: ink outline (`k`), 3-value shading per material, consistent light source, symmetric faces. Validate any sprite edit (uniform row width, known palette keys).
-  - `js/floor.js` — canvas conveyor renderer (stations, rollers, envelope animation, review/failed sidings). `js/api.js` (fetch + WS with reconnect), `js/inspector.js`, `js/sessions.js`, `js/metrics.js`, `js/console.js`, `js/main.js` (app shell).
+  - `js/floor.js` — canvas conveyor renderer (stations, rollers, envelope animation, review/failed sidings, tombstones for archived/failed runs). `js/api.js` (fetch + WS with reconnect + global error banner), `js/inspector.js`, `js/sessions.js`, `js/history.js`, `js/metrics.js`, `js/review.js`, `js/console.js`, `js/main.js` (app shell).
 - `tui/` — planned rich-console (AgentLab-style `*** Beginning station: ... ***` banners, per-doc summary tables). Not yet built (M4).
 - `scripts/seed_demo.py` — planned (M5): generates demo traces **into Langfuse** (env `demo`), never served directly.
 
@@ -112,8 +110,8 @@ python scripts/release.py --help     # semver release workflow (see below)
 
 - **M1 — data core + API + tests**: DONE (mailroom_ui/, server/, tests/ green).
 - **M2 — pixel engine + static web**: DONE — `web/` SPA complete (`index.html`,
-  `theme.css`, `sprites.js`, `api.js`, `floor.js`, `inspector.js`,
-  `sessions.js`, `metrics.js`, `console.js`, `main.js`).
+  `theme.css`, `api.js`, `floor.js`, `inspector.js`,
+  `sessions.js`, `history.js`, `metrics.js`, `review.js`, `console.js`, `main.js`).
 - **M3 — live mode**: DONE — WS wiring with reconnect + polling fallback,
   envelope animation bound to real trace state, REVIEW queue tab.
 - **M4 — TUI console**: DONE — `tui/mailroom_console.py` (`mailroom-tui`),

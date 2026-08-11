@@ -76,6 +76,28 @@ All notable changes to The-Mailroom are documented here, following
   Langfuse stays well under rate limits.
 
 ### Fixed
+- **V-3**: metrics tiles were permanently `$0.00 / 0 tok / 0 calls` in live
+  mode — `/api/metrics` aggregated list-level "light" runs with no
+  observations. It (and `/api/review-queue`) now aggregate enriched runs via
+  the new cached `LangfuseSource.get_run()`; sessions likewise serve enriched
+  runs (V-19/V-20).
+- **V-5**: N+1 fetch storm — `list_recent_runs` issued one score fetch per
+  trace per poll and cache TTLs (1-2 s) were shorter than the 3 s poll
+  (~102-302 Langfuse calls per poll). Per-trace score fetches removed from
+  the list path; run-level cache (60 s) shared by poller/metrics/review/
+  sessions; cache TTL defaults raised to ≥ poll interval; HTTP 429 now backs
+  off exponentially.
+- **V-9**: archived/failed envelopes respawned on every 3 s snapshot after
+  sliding off — tombstones keyed by trace id + updated_at now suppress
+  re-creation (cleared by re-runs and manual replays).
+- **V-16**: replay ignored real span durations (fixed 600/700 ms pacing) and
+  dropped retry stages whenever timings existed — steps now follow the actual
+  span order incl. `retry_classify`/`retry_extract`, paced by each span's
+  real latency (clamped 250 ms-4 s).
+- **V-18**: silent catch blocks across the SPA — global error banner +
+  `window.onerror`/`unhandledrejection` hooks, non-JSON WS frames logged,
+  server 503/500 `detail` bodies propagated into error messages, generic
+  server errors return JSON with `detail` (were plain text 500s).
 - Cost extraction regressed during v4 tolerance work — observations were
   searched for cost at the wrong level, zeroing all run costs.
 - `server/main.py:_serialize` imported `floor_payload` only in the
@@ -93,6 +115,11 @@ All notable changes to The-Mailroom are documented here, following
   stamp.
 - `tests/test_metrics.py::test_p95_generation_latency` expected 9.4 but
   the fixture (two generations per trace) yields a nearest-rank p95 of 9.1.
+
+### Removed
+- **V-21**: `web/js/sprites.js` — 766 lines of dead sprite code, never
+  loaded by `index.html` nor referenced by `floor.js` (the floor renders
+  envelopes procedurally). AGENTS.md/docs/wiki references updated.
 
 ## [0.1.0] - 2026-08-10
 

@@ -150,11 +150,14 @@ const MetricsView = (() => {
         data = computeLocalMetrics(rawRuns);
       } else {
         data = await Mailroom.api.metrics(since);
-        // Also fetch raw runs for the trend chart
+        // Also fetch raw runs for the trend chart (optional — but V-18: a
+        // failure must be visible, not silently swallowed)
         try {
           const tdata = await Mailroom.api.traces(Math.max(since, 21600), 200);
           rawRuns = tdata.runs || [];
-        } catch (e) { /* trend optional */ }
+        } catch (e) {
+          console.warn("[mailroom] trend data unavailable:", e.message || e);
+        }
       }
       render(data, rawRuns);
       return data;

@@ -23,6 +23,12 @@ const Floor = (() => {
   const ENV_H = 22;        // envelope height in pixels
 
   const envs = new Map();
+  // V-9: tombstones — archived/failed runs stay in the 6 h WS payload, and
+  // without a tombstone the next 3 s snapshot re-creates the envelope right
+  // after it slid off, causing a perpetual pop-in/slide-off loop. Keyed by
+  // trace_id -> last updated_at seen; a genuinely NEW run on the same
+  // deterministic trace id (pilot re-run) clears the tombstone.
+  const gone = new Map();
   let hoveredId = null;
   let sourceState = "gold";
 
@@ -132,6 +138,16 @@ const Floor = (() => {
       if (!run || !run.trace_id) continue;
       seen.add(run.trace_id);
       const t = targetFor(run);
+      // V-9: tombstoned archived/failed runs must NOT respawn. Clear the
+      // tombstone only when the same trace id carries a NEW run (updated_at
+      // changed — deterministic trace ids are reused by re-runs).
+      const tomb = gone.get(run.trace_id);
+      if (t.remove && tomb !== undefined && tomb === run.updated_at) {
+        continue;
+      }
+      if (tomb !== undefined && tomb !== run.updated_at) {
+        gone.delete(run.trace_id);
+      }
       let e = envs.get(run.trace_id);
       if (!e) {
         e = {
@@ -159,6 +175,7 @@ const Floor = (() => {
 
   function reset() {
     envs.clear();
+    gone.clear();
   }
 
   function setSource(state) {
@@ -256,6 +273,11 @@ const Floor = (() => {
       } else {
         e.alpha -= 0.06;
         if (e.alpha <= 0) {
+          // V-9: record the tombstone when an archived/failed envelope is
+          // fully gone so the next snapshot can't respawn it.
+          if (e.remove && e.run && e.run.trace_id) {
+            gone.set(e.run.trace_id, e.run.updated_at);
+          }
           envs.delete(e.id);
           if (hoveredId === e.id) hoveredId = null;
         }
@@ -306,6 +328,8 @@ const Floor = (() => {
     clearReplayTimers();
     // Clear any current envelopes except the one being replayed
     const replayId = runData.trace_id;
+    // V-9: a manual replay must bypass the tombstone for this run.
+    gone.delete(replayId);
     for (const [id, e] of envs) {
       if (id !== replayId) e.dying = true;
     }
@@ -313,11 +337,12 @@ const Floor = (() => {
 
     // Build the stage sequence from routing_path (most accurate) or spans
     const routingPath = runData.routing_path || [];
-    const spans = runData.spans || [];
 
-    // Compute per-stage timing from spans
-    const stageOrder = ["ingest", "classify", "extract", "boss", "review", "report", "catalog", "archive", "archived"];
-    const stageTimes = {}; // stage -> first start_time
+    // V-16: build the stage sequence from the actual spans (chronological),
+    // keeping RETRY stages — the old code mapped only the 8 base span names,
+    // so whenever timings existed the retries vanished from the replay. Each
+    // step is paced by its real span latency (capped) instead of a fixed
+    // 600/700 ms.
     const spanToStage = {
       "ingest-document": "ingest",
       "classify-document": "classify",
@@ -328,24 +353,38 @@ const Floor = (() => {
       "write-catalog": "catalog",
       "archive-document": "archive",
     };
-    for (const s of spans) {
-      const st = spanToStage[s.name];
-      if (st && !stageTimes[st] && s.start_time) {
-        stageTimes[st] = new Date(s.start_time).getTime();
-      }
-    }
+    const spans = (runData.spans || [])
+      .filter((s) => s && spanToStage[s.name])
+      .slice()
+      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
 
-    // Compute the sequence: if we have timing data, use it; otherwise use routing_path
-    let sequence;
-    if (Object.keys(stageTimes).length > 0) {
-      sequence = Object.entries(stageTimes)
-        .sort((a, b) => a[1] - b[1])
-        .map(([st]) => st);
-    } else if (routingPath.length > 0) {
-      sequence = routingPath;
-    } else {
-      sequence = ["classify", "extract", "archived"];
+    const steps = [];
+    let prev = null;
+    for (const s of spans) {
+      let st = spanToStage[s.name];
+      if (prev && st === prev) {
+        st = st === "classify" ? "retry_classify" : st === "extract" ? "retry_extract" : st;
+      }
+      prev = st;
+      // Pace by the span's real latency, clamped to 250 ms..4 s so very fast
+      // or very slow runs stay watchable.
+      const d = s.latency != null && s.latency > 0
+        ? Math.min(Math.max(s.latency * 1000, 250), 4000)
+        : 600;
+      steps.push({ stage: st, delay: d });
     }
+    // Fall back to the routing path (already includes retries + final stages)
+    // when spans carry no timing, or a minimal sequence when neither exists.
+    let sequence = steps.map((x) => x.stage);
+    if (!sequence.length) {
+      sequence = (runData.routing_path && runData.routing_path.length)
+        ? runData.routing_path
+        : ["classify", "extract", "archived"];
+    }
+    const stageDelay = (st) => {
+      for (const x of steps) if (x.stage === st) return x.delay;
+      return 700;
+    };
 
     // Create the envelope at the start
     const stageToTarget = {
@@ -407,7 +446,7 @@ const Floor = (() => {
         ConsoleView.log(`REPLAY → ${stg}`, "c-blue");
       }, t);
       replayTimers.push(timer);
-      cumulativeDelay += 700;
+      cumulativeDelay += stageDelay(stg);
     }
 
     // After the sequence finishes, archive it (slide off the floor)
@@ -415,6 +454,9 @@ const Floor = (() => {
       const current = envs.get(replayId);
       if (!current) return;
       current.run.stage = "archived";
+      // V-9: carry the real updated_at so the tombstone written when this
+      // envelope dies matches the WS payload and it won't respawn.
+      current.run.updated_at = runData.updated_at;
       current.tx = 1500;
       current.ty = 440;
       current.remove = true;

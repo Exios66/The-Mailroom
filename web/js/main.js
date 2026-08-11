@@ -237,7 +237,9 @@ const Main = (() => {
         const data = await Mailroom.api.traces(1800, 200);
         applySnapshot(data.runs || []);
       } catch (err) {
-        ConsoleView.log(`poll fallback failed: ${err.message || err}`, "c-warn");
+        const msg = err.message || String(err);
+        ConsoleView.log(`poll fallback failed: ${msg}`, "c-warn");
+        Mailroom.showError(`fallback poll: ${msg}`);
       }
     }, 10000);
     ConsoleView.log("polling /api/traces as fallback", "c-dim");
@@ -247,18 +249,24 @@ const Main = (() => {
     activeTab = name;
     for (const t of tabEls) t.classList.toggle("active", t.dataset.view === name);
     for (const v of document.querySelectorAll(".view")) v.hidden = v.id !== `view-${name}`;
+    // V-18: these refreshes were silently swallowed — failures now surface on
+    // the error banner AND the console.
     if (name === "review") {
-      ReviewView.refresh().catch(() => {});
-      ConsoleView.log("review queue refreshed", "c-dim");
+      ReviewView.refresh()
+        .then(() => ConsoleView.log("review queue refreshed", "c-dim"))
+        .catch((e) => { Mailroom.showError(`review: ${e.message || e}`); ConsoleView.log(`review refresh failed: ${e.message || e}`, "c-bad"); });
     } else if (name === "sessions") {
-      SessionsView.refresh().catch(() => {});
-      ConsoleView.log("sessions refreshed", "c-dim");
+      SessionsView.refresh()
+        .then(() => ConsoleView.log("sessions refreshed", "c-dim"))
+        .catch((e) => { Mailroom.showError(`sessions: ${e.message || e}`); ConsoleView.log(`sessions refresh failed: ${e.message || e}`, "c-bad"); });
     } else if (name === "history") {
-      HistoryView.refresh().catch(() => {});
-      ConsoleView.log("history refreshed", "c-dim");
+      HistoryView.refresh()
+        .then(() => ConsoleView.log("history refreshed", "c-dim"))
+        .catch((e) => { Mailroom.showError(`history: ${e.message || e}`); ConsoleView.log(`history refresh failed: ${e.message || e}`, "c-bad"); });
     } else if (name === "metrics") {
-      MetricsView.refresh().catch(() => {});
-      ConsoleView.log("metrics refreshed", "c-dim");
+      MetricsView.refresh()
+        .then(() => ConsoleView.log("metrics refreshed", "c-dim"))
+        .catch((e) => { Mailroom.showError(`metrics: ${e.message || e}`); ConsoleView.log(`metrics refresh failed: ${e.message || e}`, "c-bad"); });
     }
   }
 
@@ -270,7 +278,7 @@ const Main = (() => {
 
     Mailroom.api.meta()
       .then((m) => { Mailroom.meta = m; })
-      .catch(() => {});
+      .catch((e) => { Mailroom.showError(`meta: ${e.message || e}`); });
 
     Floor.onSelect((traceId, run) => {
       ConsoleView.log(`INSPECT ${run && run.filename ? run.filename : traceId}`, "c-blue");
@@ -291,10 +299,18 @@ const Main = (() => {
       t.addEventListener("click", () => switchView(t.dataset.view));
     }
     setInterval(() => {
-      if (activeTab === "review") ReviewView.refresh().catch(() => {});
-      if (activeTab === "sessions") SessionsView.refresh().catch(() => {});
-      if (activeTab === "history") HistoryView.refresh().catch(() => {});
-      if (activeTab === "metrics") MetricsView.refresh().catch(() => {});
+      if (activeTab === "review") {
+        ReviewView.refresh().catch((e) => Mailroom.showError(`review: ${e.message || e}`));
+      }
+      if (activeTab === "sessions") {
+        SessionsView.refresh().catch((e) => Mailroom.showError(`sessions: ${e.message || e}`));
+      }
+      if (activeTab === "history") {
+        HistoryView.refresh().catch((e) => Mailroom.showError(`history: ${e.message || e}`));
+      }
+      if (activeTab === "metrics") {
+        MetricsView.refresh().catch((e) => Mailroom.showError(`metrics: ${e.message || e}`));
+      }
     }, 30000);
 
     document.getElementById("closed-retry").addEventListener("click", () => {

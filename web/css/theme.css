@@ -360,6 +360,24 @@ main { min-height: 520px; }
 .statusbar .st-good { color: var(--green-light); font-weight: 700; }
 .statusbar .st-warn { color: var(--gold); font-weight: 700; }
 
+/* V-18: global error banner — surfaced above the statusbar when any
+ * previously-silent catch fails. */
+.error-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: 86vw;
+  padding: 8px 14px;
+  border: 2px solid var(--red-light);
+  background: var(--ink);
+  color: var(--red-light);
+  font-size: 11px;
+  letter-spacing: 1px;
+  box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px var(--red-light);
+}
+
 /* ---- inspector overlay ---- */
 
 .overlay {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 
@@ -185,3 +186,97 @@ class TestPollerPartialFailure:
         hub = PollHub(src, interval=60, window=21600, limit=100)
         with patch("server.poller.list_recent_runs", return_value=[]):
             assert hub._fetch() == []
+
+
+class TestNoNPlusOneFetching:
+    """V-5: list_recent_runs must not issue per-trace score/observation calls
+    on every poll — that was an N+1 (~102-302 Langfuse calls per poll)."""
+
+    def test_list_recent_runs_does_not_call_scores_api(self):
+        from tests.fake_langfuse import make_trace
+
+        src = _source([make_trace("t1")])
+        calls = {"count": 0}
+
+        class ExplodingScores:
+            def get_many_v3(self, trace_id, limit=100):
+                calls["count"] += 1
+                raise AssertionError("N+1 score fetch in list_recent_runs")
+
+            def get_many(self, trace_id, limit=100):
+                calls["count"] += 1
+                raise AssertionError("N+1 score fetch in list_recent_runs")
+
+        src.client.api.scores_v3 = ExplodingScores()
+        runs = list_recent_runs(src, since=datetime(2025, 1, 1), limit=5)
+        assert calls["count"] == 0
+        # embedded list-level scores still resolve verdict/quality — no fetch
+        # needed, so nothing regressed for the floor.
+        assert runs[0].verdict == "CORRECT"
+
+    def test_get_run_shared_cache_single_fetch(self):
+        from tests.fake_langfuse import make_trace
+
+        # The run-level cache (60 s, > poll interval) means the poller +
+        # metrics + review + sessions all share ONE fetch per run per TTL
+        # instead of re-reading per call.
+        src = _source([make_trace("t1")], cache_ttl=15, poll_cache_ttl=15)
+        get_calls = []
+        orig_get = src.client.api.trace.get
+
+        def counting(trace_id):
+            get_calls.append(trace_id)
+            return orig_get(trace_id)
+
+        src.client.api.trace.get = counting
+        src.get_run("t1")
+        src.get_run("t1")
+        src.get_run("t1")
+        assert len(get_calls) == 1
+
+
+class TestEnrichedRecentRuns:
+    """V-3: aggregations need full runs, not list-level light ones."""
+
+    def test_enriched_runs_carry_tokens_cost_verdict(self):
+        from mailroom_ui.langfuse_source import enriched_recent_runs
+        from tests.fake_langfuse import make_trace
+
+        src = _source([make_trace("t1")], cache_ttl=-1, poll_cache_ttl=-1)
+        runs = enriched_recent_runs(src, since=datetime(2025, 1, 1), limit=5)
+        r = runs[0]
+        assert r.llm_call_count == 2
+        assert r.total_tokens == 4600
+        assert r.cost_usd > 0
+        assert r.verdict == "CORRECT"
+
+    def test_one_bad_trace_degrades_to_light_not_abort(self):
+        from mailroom_ui.langfuse_source import enriched_recent_runs
+        from tests.fake_langfuse import make_trace
+
+        src = _source([make_trace("t1"), make_trace("t2")], cache_ttl=-1, poll_cache_ttl=-1)
+        with patch.object(src, "get_run", side_effect=RuntimeError("langfuse exploded")):
+            runs = enriched_recent_runs(src, since=datetime(2025, 1, 1), limit=5)
+        assert len(runs) == 2  # both survive via light fallback
+
+
+class TestRateLimitBackoff:
+    """V-5: HTTP 429 gets exponential backoff instead of compounding."""
+
+    def test_429_backs_off_exponentially_and_raises(self):
+        src = _source([make_trace("t1")], cache_ttl=-1, poll_cache_ttl=-1)
+        sleeps = []
+
+        def boom():
+            err = RuntimeError("rate limit")
+            err.status = 429
+            raise err
+
+        with patch("time.sleep", side_effect=lambda s: sleeps.append(s)):
+            with pytest.raises(LangfuseUnavailable):
+                src._guarded("x", boom)
+            with pytest.raises(LangfuseUnavailable):
+                src._guarded("x", boom)
+            with pytest.raises(LangfuseUnavailable):
+                src._guarded("x", boom)
+        assert sleeps == [0.5, 1.0, 2.0]  # 0.5 * 2^n, capped at 10 s
