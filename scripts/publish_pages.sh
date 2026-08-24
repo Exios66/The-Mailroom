@@ -18,7 +18,7 @@
 #
 # Usage:
 #   scripts/publish_pages.sh [--source langfuse|phoenix|both] [--since-hours N]
-#                            [--limit N] [--skip-export] [--dry-run]
+#                            [--limit N] [--skip-export] [--allow-empty] [--dry-run]
 # Env overrides: PAGES_BRANCH (default gh-pages), PAGES_REMOTE (default origin).
 set -euo pipefail
 
@@ -28,6 +28,7 @@ SOURCE="auto"
 SINCE_HOURS="24"
 LIMIT="200"
 SKIP_EXPORT=0
+ALLOW_EMPTY=0
 DRY_RUN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -35,6 +36,7 @@ while [[ $# -gt 0 ]]; do
     --since-hours) SINCE_HOURS="$2"; shift 2 ;;
     --limit)       LIMIT="$2"; shift 2 ;;
     --skip-export) SKIP_EXPORT=1; shift ;;
+    --allow-empty) ALLOW_EMPTY=1; shift ;;
     --dry-run)     DRY_RUN=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -68,6 +70,18 @@ fi
 
 echo "== verifying snapshot =="
 python scripts/export_snapshot.py --check --out site/data
+
+# Guard: an empty export usually means unreachable/misconfigured source, not
+# "no runs". Never let it silently blank a populated live site.
+TRACE_COUNT=$(python3 -c "import json;print(json.load(open('site/data/traces.json'))['count'])")
+if [[ "$TRACE_COUNT" -eq 0 && "$ALLOW_EMPTY" -ne 1 ]]; then
+  echo "" >&2
+  echo "REFUSING to publish: the export contains 0 runs." >&2
+  echo "This is usually LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY missing from" >&2
+  echo ".env or an unreachable PHOENIX_ENDPOINT — check the WARN lines above." >&2
+  echo "Publish anyway with --allow-empty." >&2
+  exit 1
+fi
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "== dry run: site/ built, nothing pushed =="

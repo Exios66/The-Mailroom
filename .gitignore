@@ -7,3 +7,7 @@ dist/
 build/
 data/
 site/
+.DS_Store
+
+# GH Pages: site/ is the local staging dir scripts/publish_pages.sh builds;
+# only docs/ on the gh-pages branch is ever published.

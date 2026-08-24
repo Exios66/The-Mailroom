@@ -59,3 +59,25 @@ def test_schema_roster_consistency():
 
     for doc_class, specialist in SPECIALIST_BY_DOC_CLASS.items():
         assert specialist in PROMPT_TEMPLATES, f"{doc_class} -> {specialist} has no prompt"
+
+
+def test_docclass_registry_shape():
+    """KANBAN-090 mirror: 21 docclass prompts, all non-trivial strings."""
+    from mailroom_ui.docclass_prompts import DOCLASS_PROMPT_VERSIONS, load_docclass_templates
+
+    assert len(DOCLASS_PROMPT_VERSIONS) == 21
+    for key, template in DOCLASS_PROMPT_VERSIONS.items():
+        assert isinstance(template, str) and len(template) > 200, key
+    assert load_docclass_templates() == DOCLASS_PROMPT_VERSIONS
+
+
+def test_docclass_override_loader(tmp_path):
+    from mailroom_ui.docclass_prompts import load_docclass_templates
+
+    override = tmp_path / "docclass.json"
+    override.write_text(json.dumps({"sorter_docclass_v0": "CUSTOM"}))
+    assert load_docclass_templates(str(override)) == {"sorter_docclass_v0": "CUSTOM"}
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"sorter_docclass_v0": 42}))
+    with pytest.raises(ValueError):
+        load_docclass_templates(str(bad))

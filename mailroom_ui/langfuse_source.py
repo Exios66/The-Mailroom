@@ -104,6 +104,13 @@ class LangfuseSource:
 
     @staticmethod
     def _build_client() -> Any:
+        # Preflight: the v4 SDK constructs a DISABLED client (with only a
+        # console warning) when keys are missing, which later surfaces as a
+        # confusing "client.api unavailable" deep in a fetch. Fail here with
+        # the actual reason instead.
+        if not (os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY")):
+            log.warning("LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY not set — Langfuse source disabled")
+            return None
         try:
             import langfuse  # noqa: F401
         except ImportError:

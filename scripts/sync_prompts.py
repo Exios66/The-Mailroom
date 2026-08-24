@@ -33,7 +33,9 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.par
 
 from dotenv import load_dotenv  # noqa: E402
 
-load_dotenv()
+# V-27: explicit path — find_dotenv() silently missed .env in some invocation
+# contexts (frame-walking quirk), leaving creds unset.
+load_dotenv(__import__("pathlib").Path(__file__).resolve().parent.parent / ".env")
 
 
 def _client():
