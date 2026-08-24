@@ -6,6 +6,49 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- **GitHub Pages edition (static site, NO GitHub Actions):** the pixel-art
+  SPA now deploys to GitHub Pages via `scripts/publish_pages.sh` using Pages'
+  native "Deploy from a branch" mode (one-time Settings toggle; Actions is
+  deliberately not involved). The script stages `web/` with relative asset
+  paths, exports a JSON snapshot of the configured trace source
+  (`scripts/export_snapshot.py` → `data/*.json`, per-run detail files,
+  `debug/build-info.json` provenance for agents), verifies it (`--check`),
+  and pushes the `gh-pages` branch (`--dry-run` builds + verifies only;
+  `--skip-export` republishes the shell with existing data). Without a
+  reachable source the site still ships and honestly shows its CLOSED state.
+- **Static + live dual mode in the SPA** (`web/js/api.js`, `main.js`): the
+  site resolves its API endpoint as `?api=<url>` → `localStorage`
+  (`mailroom.api`) → same-origin; when no live API answers it falls back to
+  bundled snapshots (`SOURCE: SNAPSHOT`, gold lamp) instead of the closed
+  overlay. WS only starts after the first health probe succeeds.
+- **Agent debug console:** every fetch/WS frame/error/console line is
+  captured into a client ring buffer exposed at
+  `window.__MAILROOM_DEBUG__` (`dump()`, `export()` downloads
+  `mailroom-debug.json`, clipboard copy); `?debug=1` or the CONSOLE tab's
+  DEBUG toggle enables verbose capture + reveals low-level lines. Server
+  side: always-on request ring buffer at `GET /api/debug/logs?limit=`,
+  source/knob introspection at `GET /api/debug/source`, verbose stdout with
+  `MAILROOM_DEBUG=1`, and `/api/meta` now carries `mode`, `version`,
+  active `source`, plus a machine-readable endpoint index.
+- **Arize Phoenix trace source** (`mailroom_ui/phoenix_source.py`): reads a
+  locally running Phoenix (`PHOENIX_ENDPOINT`, default
+  `http://localhost:6006`) via `arize-phoenix-client` and maps
+  OpenTelemetry/OpenInference spans into the Langfuse-shaped dicts
+  `interpret_trace` already consumes — llm-mailroom span names route through
+  `SPAN_STAGE_MAP`, unmapped spans degrade to unknown staging (same breakage
+  map philosophy), LLM spans become generations (model/token counts/cost),
+  span annotations and `mailroom.score.*` attributes become scores.
+  Optional dependency; never fabricated data on unreachability.
+- **Source selector + multi-source facade:** `MAILROOM_SOURCE=langfuse |
+  phoenix | both` picks the backend (`mailroom_ui/multi_source.py` fans
+  reads out with per-trace isolation and aggregates health);
+  `TraceSourceUnavailable` base class shared by both adapters so the 503
+  handler covers everything; `health()` payloads gain a source-agnostic
+  `"ok"` key. CORS enabled via `MAILROOM_CORS_ORIGINS` (GET/OPTIONS) so the
+  Pages site can drive a locally running server next to Phoenix.
+
 ### Changed
 
 - **README overhaul — governed-constellation edition:** root README rebuilt from 102 to 177 lines around the family story while keeping every operational byte (quick start, screens, demo seeding, requirements, config, layout, tests, releases). Added: a factual static badge row (`version 0.2.0`, `python 3.11+`, `data source: Langfuse only` — deliberately NO release/license/CI badges: no v0.2.0 tag/release exists yet and the repo carries neither a LICENSE file nor workflows); a **"The governed constellation"** section with an ASCII YOU-ARE-HERE diagram and an at-a-glance table covering all seven family repos (llm-mailroom upstream · llm-entity-extraction prompt loop + shared board · llm-dojo-scoring engine · Enron-Evaluation-Environment + claims-data-eda corpus feeds · atticus-investigation eval sibling · both graphify sites) linking llm-mailroom's canonical `docs/sister-repos.md`; a new **"The trace contract & the mirror duty"** section documenting the #1 maintenance rule (mirror span names / roster / doc classes / thresholds / judge scores in the same change window) with the visible-by-design breakage map, deferring to `AGENTS.md` as authority; an `[!IMPORTANT]` alert on the schema-cache restart gotcha; dividers between major parts; honest "No license published yet" close. Docs-only; suite unchanged.

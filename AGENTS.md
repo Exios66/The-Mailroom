@@ -23,11 +23,14 @@ python -m server.main          # FastAPI web server on :8001 (also: mailroom-web
 mailroom-tui                   # TUI console (planned, M4)
 python scripts/seed_demo.py    # seed demo traces INTO Langfuse (planned, M5)
 python scripts/release.py --help     # semver release workflow (see below)
+scripts/publish_pages.sh       # build site/ + push gh-pages branch (NO Actions;
+                               # one-time UI toggle: Pages → Deploy from branch)
 ```
 
 - Tests: `pytest tests/ -v`; coverage via `--cov=. --cov-report=html`.
 - **No linter, formatter, or typechecker is configured — don't invent one.**
 - Frontend is **vanilla HTML/CSS/JS with no build step and no npm** — never introduce a Node toolchain.
+- **GitHub Pages is deploy-from-branch only** (`scripts/publish_pages.sh` → `gh-pages`) — never add an Actions workflow for it (account cannot rely on Actions).
 - Config lives in `.env` (see `.env.example`); copy `.env.example` → `.env` and add `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY`.
 
 ## Architecture (not obvious from filenames)
@@ -128,3 +131,11 @@ python scripts/release.py --help     # semver release workflow (see below)
   model registry (qwen/deepseek); in-flight runs now refine the generic
   `processing` marker with span progress instead of pinning to INGEST;
   metrics date-bomb test fixed.
+- **v0.3.0 — GH Pages edition (in flight)**: static Pages site via
+  `scripts/publish_pages.sh` → `gh-pages` branch (deploy-from-branch, NO
+  Actions); snapshot exporter (`scripts/export_snapshot.py`) bundles
+  `data/*.json`; SPA gained configurable API base (`?api=`), snapshot
+  fallback mode, and an agent debug layer (`window.__MAILROOM_DEBUG__`,
+  `/api/debug/logs`, `/api/debug/source`, DEBUG toggle); new Phoenix source
+  (`mailroom_ui/phoenix_source.py`, local Arize Phoenix via
+  `MAILROOM_SOURCE=phoenix|both`, CORS via `MAILROOM_CORS_ORIGINS`).

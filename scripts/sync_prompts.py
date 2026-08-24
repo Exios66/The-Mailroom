@@ -16,6 +16,11 @@ Usage:
     python scripts/sync_prompts.py --dry-run    # show what would change
     python scripts/sync_prompts.py --force      # always create a new version
     python scripts/sync_prompts.py --agent sorter
+    python scripts/sync_prompts.py --docclass   # sync the entity-repo docclass
+                                                # family instead (name = the
+                                                # version key verbatim, from
+                                                # llm-entity-extraction
+                                                # src/prompts_docclass.py)
 """
 
 from __future__ import annotations
@@ -57,10 +62,14 @@ def _current_production(client, name: str) -> str | None:
         return None
 
 
-def sync_one(client, agent_name: str, template: str, *, force: bool, dry_run: bool) -> str:
-    from mailroom_ui.prompt_registry import prompt_name
+def sync_one(client, agent_name: str, template: str, *, force: bool, dry_run: bool, docclass: bool = False) -> str:
+    if docclass:
+        # Entity-repo contract: prompt name = the version key verbatim.
+        name = agent_name
+    else:
+        from mailroom_ui.prompt_registry import prompt_name
 
-    name = prompt_name(agent_name)
+        name = prompt_name(agent_name)
     current = None if force else _current_production(client, name)
     if current == template:
         return f"unchanged  {name}"
@@ -76,11 +85,20 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Show what would change without creating anything.")
     parser.add_argument("--force", action="store_true", help="Always create a new prompt version.")
     parser.add_argument("--agent", help="Only sync one agent (e.g. sorter).")
+    parser.add_argument("--docclass", action="store_true",
+                        help="Sync the llm-entity-extraction docclass family "
+                             "(mailroom_ui/docclass_prompts.py) instead of the "
+                             "agent roster; prompt name = version key verbatim.")
     args = parser.parse_args()
 
-    from mailroom_ui.prompt_registry import load_prompt_templates
+    if args.docclass:
+        from mailroom_ui.docclass_prompts import load_docclass_templates
 
-    templates = load_prompt_templates()
+        templates = load_docclass_templates()
+    else:
+        from mailroom_ui.prompt_registry import load_prompt_templates
+
+        templates = load_prompt_templates()
     if args.agent:
         if args.agent not in templates:
             print(f"Unknown agent '{args.agent}'. Available: {', '.join(sorted(templates))}")
@@ -95,7 +113,8 @@ def main() -> int:
         pass
     statuses = []
     for agent_name, template in sorted(templates.items()):
-        status = sync_one(client, agent_name, template, force=args.force, dry_run=args.dry_run)
+        status = sync_one(client, agent_name, template, force=args.force, dry_run=args.dry_run,
+                          docclass=args.docclass)
         statuses.append(status)
         print(status)
 
@@ -104,7 +123,8 @@ def main() -> int:
         client.flush()
     print(f"\n{len(templates)} prompts checked, {changed} {'would change' if args.dry_run else 'synced'}.")
     host = os.environ.get("LANGFUSE_HOST", "https://us.cloud.langfuse.com").rstrip("/")
-    print(f"Prompts live at {host} (name prefix: mailroom-, label: production).")
+    prefix = "version keys" if args.docclass else "name prefix: mailroom-"
+    print(f"Prompts live at {host} ({prefix}, label: production).")
     return 0
 
 

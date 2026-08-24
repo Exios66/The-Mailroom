@@ -103,13 +103,70 @@ python scripts/seed_demo.py --check-logs <dir>    # verify against run logs save
   with project-scoped API keys in `.env`
 - The sister pipeline repo `../llm-mailroom` (optional — only needed to use
   the `MAILROOM_TAXONOMY` live-config override; see `AGENTS.md`)
+- `arize-phoenix-client` (optional — only for the Phoenix trace source)
+
+## GitHub Pages edition (static site + local Phoenix)
+
+The Mailroom also runs as a **static site on GitHub Pages** with three data
+modes:
+
+```bash
+# one-time: Settings → Pages → Source: "Deploy from a branch" → gh-pages /(root)
+scripts/publish_pages.sh                          # build site/ + push to gh-pages
+scripts/publish_pages.sh --source both            # Langfuse + Phoenix snapshot
+scripts/publish_pages.sh --dry-run                # build + verify, don't push
+```
+
+The publisher needs no GitHub Actions (deliberately — it uses Pages' native
+deploy-from-branch mode): it stages `web/` with relative asset paths, exports
+a JSON snapshot of the configured trace source, verifies it, and pushes the
+`gh-pages` branch. Re-run any time to refresh the snapshot.
+
+1. **Snapshot mode** — a build-time JSON export of the configured trace
+   source is bundled into the site (`data/*.json`). Works with zero backend,
+   zero secrets in the browser; the lamp shows `SOURCE: SNAPSHOT`. Published
+   locally by `scripts/publish_pages.sh` (no GitHub Actions required) from
+   Langfuse repo secrets or a local Phoenix — without a reachable source the
+   site ships empty and shows its honest CLOSED state.
+2. **Live mode** — point the static page at any reachable Mailroom API:
+   append `?api=http://localhost:8001` once (persisted to `localStorage`).
+   Run the server locally with CORS enabled (`MAILROOM_CORS_ORIGINS`) and
+   the Pages UI goes fully live, WS included. Note: Chrome/Firefox allow
+   HTTPS→`http://localhost` calls; Safari may block them.
+3. **Phoenix mode** — traces from a *locally running* Arize Phoenix
+   (default `http://localhost:6006`) can drive the console:
+
+   ```bash
+   pip install arize-phoenix-client
+   # start Phoenix (e.g. `phoenix serve`) and point your pipeline's OTLP
+   # exporter at it, then:
+   MAILROOM_SOURCE=phoenix mailroom-web     # or MAILROOM_SOURCE=both for Langfuse + Phoenix
+   ```
+
+   Phoenix spans are mapped into the llm-mailroom display contract:
+   verb-first span names route through the stage map, LLM spans become
+   generations (model/tokens/cost), annotations become scores. Unmapped
+   spans degrade to unknown staging — same visible-by-design breakage map.
+
+**Debug console for agents:** every fetch, WS frame, error, and console line
+lands in a client-side ring buffer at `window.__MAILROOM_DEBUG__`
+(`dump()`, clipboard copy, `export()` → `mailroom-debug.json`); `?debug=1`
+or the CONSOLE tab's DEBUG toggle enables verbose capture. Server side,
+`GET /api/debug/logs?limit=` serves an always-on request ring buffer,
+`GET /api/debug/source` reports configured sources/knobs, `MAILROOM_DEBUG=1`
+turns on verbose stdout logging, and `/api/meta` carries a machine-readable
+endpoint index plus active sources and version. Snapshot builds add
+`debug/build-info.json` (git SHA, counts, generation time).
 
 ## Configuration
 
 All knobs live in `.env` (see `.env.example`): Langfuse keys/host
 (`LANGFUSE_HOST`, default `https://us.cloud.langfuse.com`), poll cadence
 (`MAILROOM_POLL_INTERVAL`), recent window, trace limit, optional tag/env
-filters, `MAILROOM_PORT` (default `8001`), and `MAILROOM_TAXONOMY`.
+filters, `MAILROOM_PORT` (default `8001`), and `MAILROOM_TAXONOMY`. The GH
+Pages edition adds `MAILROOM_SOURCE` (`langfuse|phoenix|both`),
+`PHOENIX_ENDPOINT` / `PHOENIX_API_KEY` / `MAILROOM_PHOENIX_PROJECT`,
+`MAILROOM_CORS_ORIGINS`, and `MAILROOM_DEBUG`.
 
 > [!IMPORTANT]
 > `pipeline_schema.py` is cached at process level — editing `taxonomy.yaml`
@@ -140,14 +197,15 @@ pipeline internals alongside the pipeline's own `AGENTS.md`.
 ## Project layout
 
 ```
-mailroom_ui/   data core — Langfuse adapter, trace interpreter, topology
-               mirror, models, metrics (reads Langfuse only)
-server/        FastAPI, read-only: /api/* + WebSocket + serves web/
+mailroom_ui/   data core — Langfuse + Phoenix adapters, trace interpreter,
+               topology mirror, models, metrics (reads trace sources only)
+server/        FastAPI, read-only: /api/* + debug endpoints + WebSocket + serves web/
 web/           pixel-art SPA (vanilla HTML/CSS/JS, no build step)
 tui/           rich console — the pipeline in a terminal (mailroom-tui)
-scripts/       seed_demo (demo runs INTO Langfuse + verification) · release
+scripts/       seed_demo (demo runs INTO Langfuse) · export_snapshot (Pages
+               data) · publish_pages (gh-pages push, no Actions) · release
 docs/ + wiki/  mirrored documentation (wiki/sync-wiki.sh publishes the wiki)
-tests/         pytest suite against a fake Langfuse client — never the real API
+tests/         pytest suite against fake clients — never the real APIs
 ```
 
 ## Tests

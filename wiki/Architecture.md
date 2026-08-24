@@ -92,3 +92,36 @@ canvas-rendered conveyor (pixel-art envelopes tinted per doc class, stations,
 rollers, review/failed sidings) — see `web/js/floor.js`. The station roster
 and doc-class colors must stay aligned with `pipeline_schema.py` and the
 pipeline's `taxonomy.yaml`.
+
+## GH Pages edition (static site, no Actions)
+
+GitHub Pages hosts a static build of the SPA via **deploy-from-branch**
+(one-time UI toggle: Settings → Pages → `gh-pages` /(root)) — deliberately
+no GitHub Actions workflow. `scripts/publish_pages.sh` stages `web/`
+(relative asset paths: `index.html` + `static/css|js`), writes `.nojekyll`,
+runs `scripts/export_snapshot.py` to bundle `data/*.json` + per-run detail
+files + `debug/build-info.json`, verifies with `--check`, and pushes the
+`gh-pages` branch.
+
+Data modes (resolved in `web/js/api.js`):
+
+- **API base**: `?api=<url>` → `localStorage["mailroom.api"]` → same-origin.
+  A Pages visitor can drive a locally running `mailroom-web` (CORS via
+  `MAILROOM_CORS_ORIGINS`) including its WebSocket.
+- **Snapshot fallback**: when no live API answers, the site serves bundled
+  JSON (`SOURCE: SNAPSHOT`, gold lamp) — never the closed overlay unless
+  even snapshots are missing.
+
+Trace sources (server side): `MAILROOM_SOURCE=langfuse | phoenix | both`
+selects between `LangfuseSource`, `PhoenixSource` (local Arize Phoenix via
+`arize-phoenix-client`; OTel/OpenInference spans remapped into the
+Langfuse-shaped dicts `interpret_trace` consumes; unmapped spans degrade to
+unknown staging per the breakage map), and `MultiSource` (fan-out reads,
+per-trace isolation, aggregated health).
+
+Debug surfaces for agents: client ring buffer at
+`window.__MAILROOM_DEBUG__` (`dump()` / `export()`, enabled verbosely by
+`?debug=1` or the CONSOLE tab's DEBUG toggle); server request ring buffer
+at `/api/debug/logs?limit=`, source introspection at `/api/debug/source`,
+verbose stdout via `MAILROOM_DEBUG=1`, and a machine-readable endpoint index
+in `/api/meta`. Snapshot builds add `debug/build-info.json`.

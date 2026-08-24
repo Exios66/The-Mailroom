@@ -274,6 +274,15 @@ def _source_names(src: object) -> str:
 
 
 def _version() -> str:
+    # Dev checkout first: a stale site-packages install must not shadow the
+    # working tree's version.
+    try:
+        text = (Path(__file__).resolve().parent.parent / "pyproject.toml").read_text()
+        for line in text.splitlines():
+            if line.strip().startswith("version"):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
     try:
         from importlib.metadata import version
 
