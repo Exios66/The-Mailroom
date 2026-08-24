@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import WebSocket
@@ -127,7 +127,10 @@ class PollHub:
                 pass
 
     def _fetch(self) -> Optional[list[dict[str, Any]]]:
-        since = datetime.now() - timedelta(seconds=self.window)
+        # Langfuse timestamps are UTC: the window must be UTC-aware or a
+        # non-UTC server shifts it by the local offset (a UTC+9 box would
+        # query a window starting in the future and show an empty floor).
+        since = datetime.now(timezone.utc) - timedelta(seconds=self.window)
         try:
             runs = list_recent_runs(self.source, since=since, limit=self.limit)
         except Exception as exc:

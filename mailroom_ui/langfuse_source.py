@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
 
 from .models import PipelineRun
@@ -148,6 +148,13 @@ class LangfuseSource:
 
     # ----------------------------------------------------------------- traces
 
+    # The Langfuse list API hard-caps `limit` at 100 per page ("Too big:
+    # expected number to be <=100"); larger caller limits are satisfied by
+    # paginating. Without this the documented MAILROOM_TRACE_LIMIT=200 made
+    # every poller/review/metrics query fail with a 400 against the real API.
+    MAX_PAGE_LIMIT = 100
+    MAX_PAGES = 20
+
     def list_traces(
         self,
         *,
@@ -157,7 +164,7 @@ class LangfuseSource:
         environments: Optional[list[str]] = None,
         name: Optional[str] = None,
     ) -> list[dict[str, Any]]:
-        """Raw trace summaries (list page)."""
+        """Raw trace summaries (list page(s))."""
         key = f"traces:{since}:{limit}:{tags}:{environments}:{name}"
         cached = self.cache.get(key)
         if cached is not None:
@@ -165,7 +172,8 @@ class LangfuseSource:
         trace_api = self._api("trace")
         if trace_api is None:
             raise LangfuseUnavailable("trace API unavailable")
-        kw: dict[str, Any] = {"limit": limit}
+        page_limit = max(1, min(limit, self.MAX_PAGE_LIMIT))
+        kw: dict[str, Any] = {"limit": page_limit}
         if since is not None:
             kw["from_timestamp"] = since
         if tags:
@@ -174,8 +182,17 @@ class LangfuseSource:
             kw["environment"] = ",".join(environments)
         if name:
             kw["name"] = name
-        resp = self._guarded(f"trace.list", lambda: trace_api.list(**kw))
-        out = [_to_dict(t) for t in _page_data(resp)]
+        out: list[dict[str, Any]] = []
+        page = 1
+        while len(out) < limit and page <= self.MAX_PAGES:
+            resp = self._guarded(
+                "trace.list", lambda p=page: trace_api.list(page=p, **kw)
+            )
+            batch = [_to_dict(t) for t in _page_data(resp)]
+            out.extend(batch)
+            if len(batch) < page_limit:
+                break
+            page += 1
         self.cache.set(key, out, self.poll_cache_ttl)
         return out
 
@@ -305,7 +322,7 @@ class LangfuseSource:
         if sessions_api is None:
             return []
         resp = self._guarded("sessions.list",
-                             lambda: sessions_api.list(limit=limit))
+                             lambda: sessions_api.list(limit=min(limit, self.MAX_PAGE_LIMIT)))
         out = [_to_dict(s) for s in _page_data(resp)]
         self.cache.set(key, out, self.cache_ttl)
         return out
@@ -359,7 +376,7 @@ def list_recent_runs(
     """
     import os
 
-    since = since or (datetime.now() - timedelta(hours=6))
+    since = since or (datetime.now(timezone.utc) - timedelta(hours=6))
     tags = [t.strip() for t in os.environ.get("MAILROOM_TRACE_TAGS", "").split(",") if t.strip()] or None
     environments = [e.strip() for e in os.environ.get("MAILROOM_TRACE_ENVIRONMENTS", "").split(",") if e.strip()] or None
     traces = source.list_traces(since=since, limit=limit, name="document-pipeline",

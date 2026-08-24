@@ -29,7 +29,14 @@ const Mailroom = (() => {
   }
 
   const fmt = {
-    cost: (v) => (v == null ? "—" : `$${Number(v).toFixed(2)}`),
+    // Pipeline costs are sub-cent at qwen/deepseek pricing — 2 decimals
+    // rendered every run as "$0.00". Show 4 decimals below a cent.
+    cost: (v) => {
+      if (v == null) return "—";
+      const n = Number(v);
+      if (n !== 0 && Math.abs(n) < 0.01) return `$${n.toFixed(4)}`;
+      return `$${n.toFixed(2)}`;
+    },
     tokens: (v) => (v == null ? "—" : Number(v).toLocaleString("en-US")),
     latency: (v) => {
       if (v == null) return "—";

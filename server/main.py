@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -95,7 +95,9 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
     def trace_detail(trace_id: str):
         run = src.get_run(trace_id)
         if run is None:
-            return {"error": "trace not found"}, 404
+            # FastAPI has no Flask-style (body, status) tuple returns — the
+            # tuple was serialized as a 200 JSON array.
+            return JSONResponse(status_code=404, content={"error": "trace not found"})
         return _serialize(run, full=True)
 
     @app.get("/api/metrics")
@@ -104,8 +106,8 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
         # ones — light runs have no generations, so cost/tokens/calls were
         # permanently $0.00 / 0 tok / 0 calls. get_run() is cached, so this
         # shares fetches with the poller instead of adding another N+1.
-        runs = enriched_recent_runs(src, since=datetime.now() - timedelta(seconds=since), limit=TRACE_LIMIT)
-        m = compute_metrics(runs, since=datetime.now() - timedelta(seconds=since))
+        runs = enriched_recent_runs(src, since=_utcnow() - timedelta(seconds=since), limit=TRACE_LIMIT)
+        m = compute_metrics(runs, since=_utcnow() - timedelta(seconds=since))
         return {"source": "langfuse", **m.model_dump()}
 
     @app.get("/api/sessions")
@@ -147,7 +149,7 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
         # V-20: enriched runs (verdicts/tokens/cost on the cards, not zeros);
         # the queue can legitimately exceed the floor's 100-run limit, so use
         # the wider 500 cap.
-        runs = [r for r in enriched_recent_runs(src, since=datetime.now() - timedelta(seconds=since), limit=500)
+        runs = [r for r in enriched_recent_runs(src, since=_utcnow() - timedelta(seconds=since), limit=500)
                 if r.needs_human]
         return {"count": len(runs), "source": "langfuse", "runs": [_serialize(r) for r in runs]}
 
@@ -189,8 +191,14 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
     return app
 
 
+def _utcnow() -> datetime:
+    """Langfuse stores UTC — every query window must be UTC-aware (a naive
+    local now() shifts the window by the machine's UTC offset)."""
+    return datetime.now(timezone.utc)
+
+
 def _recent(src: LangfuseSource, since: int, limit: int) -> list[PipelineRun]:
-    since_dt = datetime.now() - timedelta(seconds=since)
+    since_dt = _utcnow() - timedelta(seconds=since)
     return list_recent_runs(src, since=since_dt, limit=limit)
 
 

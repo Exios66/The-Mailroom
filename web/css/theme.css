@@ -314,7 +314,9 @@ main { min-height: 520px; }
 
 .bar-row .bar-label { width: 130px; color: var(--paper-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar-row .bar-track { flex: 1; height: 10px; border: 1px solid var(--ink); background: #2a2a2e; }
-.bar-row .bar-fill  { height: 100%; background: var(--blue); }
+/* display:block is mandatory: a bare inline span ignores height, so every
+ * bar in metrics/history rendered as an empty track. */
+.bar-row .bar-fill  { display: block; height: 100%; background: var(--blue); }
 .bar-row .bar-num   { width: 48px; text-align: right; color: var(--gray); }
 
 /* ---- console ---- */
