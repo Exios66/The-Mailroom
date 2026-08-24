@@ -3,15 +3,18 @@
 #
 # GitHub Pages serves it via the native "Deploy from a branch" mode, which is
 # configured ONCE in the GitHub UI (Settings → Pages → Source: "Deploy from a
-# branch", branch: gh-pages, folder: / (root)) and never touches Actions.
+# branch", branch: gh-pages, folder: /docs) and never touches Actions.
 #
-# Site layout produced (site root == gh-pages tree root):
-#   index.html            SPA shell (relative asset paths)
-#   static/css, static/js pixel-engine assets
-#   .nojekyll             disable Jekyll processing
-#   data/*.json           snapshot exported from the trace source (Langfuse /
-#                         Phoenix / both) by scripts/export_snapshot.py
-#   debug/build-info.json provenance for agents (git sha, counts, timestamps)
+# Site layout produced (under docs/ on the gh-pages branch):
+#   docs/index.html       SPA shell (relative asset paths)
+#   docs/static/{css,js}  pixel-engine assets
+#   docs/.nojekyll        disable Jekyll processing
+#   docs/data/*.json      snapshot exported from the trace source
+#                         (Langfuse / Phoenix / both) by export_snapshot.py
+#   docs/debug/build-info.json  provenance for agents (git sha, counts)
+#
+# Anything else already on the branch root is left untouched; legacy root-
+# level site files from older publishes are cleaned up.
 #
 # Usage:
 #   scripts/publish_pages.sh [--source langfuse|phoenix|both] [--since-hours N]
@@ -77,7 +80,7 @@ trap 'rm -rf "$TMP"' EXIT
 CLONE="$TMP/pages"
 
 if git ls-remote --heads "$REMOTE" "refs/heads/$BRANCH" | grep -q .; then
-  echo "== publishing to existing $BRANCH =="
+  echo "== publishing to existing $BRANCH (docs/ folder) =="
   git clone --quiet --depth 1 --branch "$BRANCH" "$REPO_URL" "$CLONE"
 else
   echo "== creating orphan $BRANCH (first publish) =="
@@ -85,7 +88,14 @@ else
   (cd "$CLONE" && git checkout --orphan "$BRANCH" && git rm -rf --quiet .)
 fi
 
-rsync -a --delete --exclude '.git' site/ "$CLONE/"
+# Site root on the branch is docs/. Clean legacy root-level site files from
+# older publishes; leave anything else at the branch root untouched.
+for legacy in index.html .nojekyll static data debug; do
+  rm -rf "$CLONE/$legacy"
+done
+rm -rf "$CLONE/docs"
+mkdir -p "$CLONE/docs"
+rsync -a --exclude '.git' site/ "$CLONE/docs/"
 
 (
   cd "$CLONE"
@@ -94,7 +104,7 @@ rsync -a --delete --exclude '.git' site/ "$CLONE/"
     echo "no site changes to publish"
     exit 0
   fi
-  git commit --quiet -m "PUBLISH: pages snapshot $(date +%Y-%m-%d %H:%M %Z) (${HEAD_SHA})"
+  git commit --quiet -m "PUBLISH: pages snapshot $(date '+%Y-%m-%d %H:%M %Z') (${HEAD_SHA})"
   if git rev-parse --abbrev-ref HEAD | grep -q "^$BRANCH$"; then
     git push --quiet origin "$BRANCH"
   else
@@ -102,6 +112,5 @@ rsync -a --delete --exclude '.git' site/ "$CLONE/"
   fi
 )
 
-echo "published -> $REMOTE@$BRANCH"
-echo "if this is the first publish, enable once in GitHub UI:"
-echo "  Settings → Pages → Source: Deploy from a branch → $BRANCH / (root)"
+echo "published -> $REMOTE@$BRANCH:/docs"
+echo "Pages source must be: Deploy from a branch -> $BRANCH -> /docs"

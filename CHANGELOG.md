@@ -15,7 +15,9 @@ All notable changes to The-Mailroom are documented here, following
   paths, exports a JSON snapshot of the configured trace source
   (`scripts/export_snapshot.py` → `data/*.json`, per-run detail files,
   `debug/build-info.json` provenance for agents), verifies it (`--check`),
-  and pushes the `gh-pages` branch (`--dry-run` builds + verifies only;
+  and pushes the site into `docs/` on the `gh-pages` branch (Pages source:
+  Deploy from a branch → gh-pages /docs; legacy root-level site files are
+  cleaned up on publish) (`--dry-run` builds + verifies only;
   `--skip-export` republishes the shell with existing data). Without a
   reachable source the site still ships and honestly shows its CLOSED state.
 - **Static + live dual mode in the SPA** (`web/js/api.js`, `main.js`): the

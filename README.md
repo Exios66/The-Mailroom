@@ -111,8 +111,8 @@ The Mailroom also runs as a **static site on GitHub Pages** with three data
 modes:
 
 ```bash
-# one-time: Settings → Pages → Source: "Deploy from a branch" → gh-pages /(root)
-scripts/publish_pages.sh                          # build site/ + push to gh-pages
+# one-time: Settings → Pages → Source: "Deploy from a branch" → gh-pages /docs
+scripts/publish_pages.sh                          # build site/ + push gh-pages docs/
 scripts/publish_pages.sh --source both            # Langfuse + Phoenix snapshot
 scripts/publish_pages.sh --dry-run                # build + verify, don't push
 ```
@@ -120,7 +120,8 @@ scripts/publish_pages.sh --dry-run                # build + verify, don't push
 The publisher needs no GitHub Actions (deliberately — it uses Pages' native
 deploy-from-branch mode): it stages `web/` with relative asset paths, exports
 a JSON snapshot of the configured trace source, verifies it, and pushes the
-`gh-pages` branch. Re-run any time to refresh the snapshot.
+site into `docs/` on the `gh-pages` branch (anything else on that branch's
+root is left untouched). Re-run any time to refresh the snapshot.
 
 1. **Snapshot mode** — a build-time JSON export of the configured trace
    source is bundled into the site (`data/*.json`). Works with zero backend,

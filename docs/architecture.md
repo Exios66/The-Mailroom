@@ -96,7 +96,7 @@ pipeline's `taxonomy.yaml`.
 ## GH Pages edition (static site, no Actions)
 
 GitHub Pages hosts a static build of the SPA via **deploy-from-branch**
-(one-time UI toggle: Settings → Pages → `gh-pages` /(root)) — deliberately
+(one-time UI toggle: Settings → Pages → `gh-pages` `/docs`) — deliberately
 no GitHub Actions workflow. `scripts/publish_pages.sh` stages `web/`
 (relative asset paths: `index.html` + `static/css|js`), writes `.nojekyll`,
 runs `scripts/export_snapshot.py` to bundle `data/*.json` + per-run detail
