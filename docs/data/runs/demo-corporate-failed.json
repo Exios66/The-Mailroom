@@ -1,0 +1,121 @@
+{
+  "trace_id": "demo-corporate-failed",
+  "filename": "corporate_articles_of_incorporation_02.pdf",
+  "matter_id": "demo-matter-harbor",
+  "session_id": "demo-matter-harbor",
+  "environment": "demo",
+  "tags": [
+    "demo",
+    "mailroom",
+    "run-6",
+    "source-seed_demo"
+  ],
+  "attempt": 1,
+  "stage": "failed",
+  "phase": "terminal",
+  "doc_type": "corporate_record",
+  "classification_confidence": 0.91,
+  "extraction_confidence": null,
+  "review_decision": null,
+  "escalation_reason": null,
+  "error_message": "extraction failed: LLM output not valid JSON",
+  "verdict": null,
+  "quality": null,
+  "latency": 24.4,
+  "llm_call_count": 2,
+  "total_tokens": 0,
+  "cost_usd": 0.0,
+  "retried": false,
+  "needs_human": false,
+  "created_at": "2026-08-24T02:27:30.256000+00:00",
+  "updated_at": "2026-08-24T03:38:51.545000+00:00",
+  "routing_path": [
+    "ingest",
+    "classify",
+    "extract"
+  ],
+  "spans": [
+    {
+      "name": "document-pipeline",
+      "start_time": "2026-08-24T02:27:30.256000Z",
+      "end_time": null,
+      "latency": null,
+      "status": "SUCCESS",
+      "error_message": null,
+      "input": null,
+      "output": null
+    },
+    {
+      "name": "ingest-document",
+      "start_time": "2026-08-24T02:27:31.256000Z",
+      "end_time": "2026-08-24T02:27:34.456000Z",
+      "latency": 3.2,
+      "status": "SUCCESS",
+      "error_message": null,
+      "input": null,
+      "output": null
+    },
+    {
+      "name": "classify-document",
+      "start_time": "2026-08-24T02:27:34.456000Z",
+      "end_time": "2026-08-24T02:27:41.656000Z",
+      "latency": 7.2,
+      "status": "SUCCESS",
+      "error_message": null,
+      "input": null,
+      "output": null
+    },
+    {
+      "name": "extract-fields",
+      "start_time": "2026-08-24T02:27:41.656000Z",
+      "end_time": "2026-08-24T02:27:55.656000Z",
+      "latency": 14.0,
+      "status": "ERROR",
+      "error_message": null,
+      "input": null,
+      "output": null
+    }
+  ],
+  "generations": [
+    {
+      "name": "classify-document",
+      "agent": null,
+      "model": null,
+      "latency": 6.12,
+      "input": null,
+      "output": null,
+      "usage_total_tokens": null,
+      "usage_input_tokens": null,
+      "usage_output_tokens": null,
+      "cost_usd": null,
+      "prompt_version": null,
+      "start_time": "2026-08-24T02:27:34.456000Z",
+      "end_time": "2026-08-24T02:27:40.576000Z"
+    },
+    {
+      "name": "extract-fields",
+      "agent": null,
+      "model": null,
+      "latency": 11.9,
+      "input": null,
+      "output": null,
+      "usage_total_tokens": null,
+      "usage_input_tokens": null,
+      "usage_output_tokens": null,
+      "cost_usd": null,
+      "prompt_version": null,
+      "start_time": "2026-08-24T02:27:41.656000Z",
+      "end_time": "2026-08-24T02:27:53.556000Z"
+    }
+  ],
+  "scores": {
+    "stage_completed": true,
+    "run_duration_seconds": 15.7,
+    "extraction_attempts": 1.0,
+    "classification_attempts": 1.0,
+    "llm_call_count": 2.0,
+    "total_tokens": 4340.0,
+    "estimated_cost_usd": 0.00021,
+    "classification_confidence": 0.91
+  }
+}

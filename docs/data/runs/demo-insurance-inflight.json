@@ -1,0 +1,106 @@
+{
+  "trace_id": "demo-insurance-inflight",
+  "filename": "insurance_claim_fnol_package_01.pdf",
+  "matter_id": "demo-matter-harbor",
+  "session_id": "demo-matter-harbor",
+  "environment": "demo",
+  "tags": [
+    "demo",
+    "mailroom",
+    "run-7",
+    "source-seed_demo"
+  ],
+  "attempt": 1,
+  "stage": "extract",
+  "phase": "extraction",
+  "doc_type": "insurance_claim",
+  "classification_confidence": 0.96,
+  "extraction_confidence": null,
+  "review_decision": null,
+  "escalation_reason": null,
+  "error_message": null,
+  "verdict": null,
+  "quality": null,
+  "latency": 10.4,
+  "llm_call_count": 1,
+  "total_tokens": 0,
+  "cost_usd": 0.0,
+  "retried": false,
+  "needs_human": false,
+  "created_at": "2026-08-24T02:13:39.487000+00:00",
+  "updated_at": "2026-08-24T03:37:50.329000+00:00",
+  "routing_path": [
+    "ingest",
+    "classify",
+    "extract"
+  ],
+  "spans": [
+    {
+      "name": "document-pipeline",
+      "start_time": "2026-08-24T02:13:39.487000Z",
+      "end_time": null,
+      "latency": null,
+      "status": "SUCCESS",
+      "error_message": null,
+      "input": null,
+      "output": null
+    },
+    {
+      "name": "ingest-document",
+      "start_time": "2026-08-24T02:13:40.487000Z",
+      "end_time": "2026-08-24T02:13:43.687000Z",
+      "latency": 3.2,
+      "status": "SUCCESS",
+      "error_message": null,
+      "input": null,
+      "output": null
+    },
+    {
+      "name": "classify-document",
+      "start_time": "2026-08-24T02:13:43.687000Z",
+      "end_time": "2026-08-24T02:13:50.887000Z",
+      "latency": 7.2,
+      "status": "SUCCESS",
+      "error_message": null,
+      "input": null,
+      "output": null
+    },
+    {
+      "name": "extract-fields",
+      "start_time": "2026-08-24T02:13:50.887000Z",
+      "end_time": "2026-08-24T02:13:50.887000Z",
+      "latency": 0.0,
+      "status": "SUCCESS",
+      "error_message": null,
+      "input": null,
+      "output": null
+    }
+  ],
+  "generations": [
+    {
+      "name": "classify-document",
+      "agent": null,
+      "model": null,
+      "latency": 6.12,
+      "input": null,
+      "output": null,
+      "usage_total_tokens": null,
+      "usage_input_tokens": null,
+      "usage_output_tokens": null,
+      "cost_usd": null,
+      "prompt_version": null,
+      "start_time": "2026-08-24T02:13:43.687000Z",
+      "end_time": "2026-08-24T02:13:49.807000Z"
+    }
+  ],
+  "scores": {
+    "stage_completed": true,
+    "run_duration_seconds": 15.7,
+    "extraction_attempts": 1.0,
+    "classification_attempts": 1.0,
+    "llm_call_count": 1.0,
+    "total_tokens": 1320.0,
+    "estimated_cost_usd": 6e-05,
+    "classification_confidence": 0.96
+  }
+}

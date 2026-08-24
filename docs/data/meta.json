@@ -1,0 +1,39 @@
+{
+  "mode": "snapshot",
+  "generated_at": "2026-08-24T17:20:59.482639+00:00",
+  "source": "langfuse",
+  "doc_classes": {
+    "contract": "Contract / Agreement",
+    "merger_agreement": "Merger Agreement",
+    "corporate_record": "Corporate Record",
+    "correspondence": "Correspondence",
+    "insurance_claim": "Insurance Claim"
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "data/traces.json",
+      "desc": "floor runs; per-run at data/runs/{id}.json"
+    },
+    {
+      "method": "GET",
+      "path": "data/metrics.json",
+      "desc": "window aggregates"
+    },
+    {
+      "method": "GET",
+      "path": "data/sessions.json",
+      "desc": "session summaries"
+    },
+    {
+      "method": "GET",
+      "path": "data/review-queue.json",
+      "desc": "needs_human runs"
+    },
+    {
+      "method": "GET",
+      "path": "../debug/build-info.json",
+      "desc": "snapshot provenance for agents"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "source": "langfuse",
+  "total_docs": 13,
+  "archived": 10,
+  "review": 1,
+  "failed": 1,
+  "in_flight": 1,
+  "total_cost_usd": 0.0,
+  "total_tokens": 0,
+  "avg_cost_usd": 0.0,
+  "avg_latency_s": 34.79,
+  "p95_generation_latency_s": 11.9,
+  "verdict_counts": {
+    "CORRECT": 5,
+    "PARTIAL": 5,
+    "MISS": 1
+  },
+  "avg_quality": 0.7,
+  "per_doc_type": {
+    "contract": 4,
+    "corporate_record": 2,
+    "correspondence": 2,
+    "merger_agreement": 2,
+    "insurance_claim": 3
+  },
+  "llm_calls": 52,
+  "n_grounded_runs": 9,
+  "avg_extraction_field_score": 0.7689,
+  "avg_extraction_overall_score": 0.7833,
+  "avg_entity_list_precision": 0.7183,
+  "avg_entity_list_recall": 0.7333,
+  "avg_hallucination_rate": 0.0422,
+  "avg_expected_field_presence": 0.7889,
+  "avg_run_duration_s": 24.5231,
+  "avg_classification_attempts": 1.0769,
+  "avg_extraction_attempts": 1.0769
+}

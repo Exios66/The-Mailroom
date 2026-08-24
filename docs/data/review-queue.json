@@ -1,0 +1,43 @@
+{
+  "count": 1,
+  "runs": [
+    {
+      "trace_id": "demo-merger-review",
+      "filename": "maud_merger_agreement_all_stock_42.pdf",
+      "matter_id": "demo-matter-northwind",
+      "session_id": "demo-matter-northwind",
+      "environment": "demo",
+      "tags": [
+        "demo",
+        "mailroom",
+        "run-4",
+        "source-seed_demo"
+      ],
+      "attempt": 1,
+      "stage": "review",
+      "phase": "review",
+      "doc_type": "merger_agreement",
+      "classification_confidence": 0.93,
+      "extraction_confidence": 0.61,
+      "review_decision": "human review",
+      "escalation_reason": "low extraction confidence (0.61) on indemnification clause",
+      "error_message": null,
+      "verdict": "PARTIAL",
+      "quality": 0.44,
+      "latency": 28.5,
+      "llm_call_count": 3,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "retried": false,
+      "needs_human": true,
+      "created_at": "2026-08-24T02:55:11.794000+00:00",
+      "updated_at": "2026-08-24T03:37:49.655000+00:00",
+      "routing_path": [
+        "ingest",
+        "classify",
+        "extract",
+        "review"
+      ]
+    }
+  ]
+}
