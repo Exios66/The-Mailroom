@@ -4,6 +4,20 @@
 > `wiki/` directory is pushed to the GitHub wiki by `wiki/sync-wiki.sh`.
 > Architecture and process authority: `AGENTS.md` in the repo root.
 
+## The governed constellation
+
+The-Mailroom is one node of a governed family sharing one kanban board and one
+trace contract: **[llm-mailroom](https://github.com/Exios66/llm-mailroom)** is
+the upstream pipeline whose Langfuse project is this visualizer's sole data
+source; **[llm-entity-extraction](https://github.com/Exios66/llm-entity-extraction)**
+is the prompt-experiment loop that breeds its sorter/specialist prompts (and
+hosts the shared governance board); **[llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring)**
+is the pinned scoring engine behind both; **[Enron-Evaluation-Environment](https://github.com/Exios66/Enron-Evaluation-Environment)**
+and **[claims-data-eda](https://github.com/Exios66/claims-data-eda)** feed its
+corpus classes; **[atticus-investigation](https://github.com/Exios66/atticus-investigation)**
+is the LegalBench eval sibling. Full map:
+[`llm-mailroom/docs/sister-repos.md`](https://github.com/Exios66/llm-mailroom/blob/main/docs/sister-repos.md).
+
 ## Pages
 
 - [Home](Home) — overview, quick start, sister-repo pointer
