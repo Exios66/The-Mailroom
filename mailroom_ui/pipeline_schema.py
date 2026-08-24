@@ -67,15 +67,14 @@ NODE_ORDER: list[Stage] = [
 
 # Agent display roster: key -> (label, role). Mirrors src/agents/ of
 # llm-mailroom (+ langchain_agents/sorter_agent.py for sorter/sorter_reviewer).
+# The due-diligence / compliance / court-opinions specialists were REMOVED:
+# their doc classes no longer exist in the pilot universe (docclass-pilot).
 AGENTS: dict[str, dict[str, str]] = {
     "sorter": {"label": "Sorter", "role": "classify"},
     "sorter_reviewer": {"label": "Sorter Reviewer", "role": "review-classify"},
     "contracts_specialist": {"label": "Contracts", "role": "extract"},
     "corporate_records_specialist": {"label": "Corporate", "role": "extract"},
-    "due_diligence_specialist": {"label": "Due Diligence", "role": "extract"},
     "correspondence_specialist": {"label": "Correspondence", "role": "extract"},
-    "compliance_specialist": {"label": "Compliance", "role": "extract"},
-    "court_opinions_specialist": {"label": "Court Opinions", "role": "extract"},
     "insurance_claims_specialist": {"label": "Insurance Claims", "role": "extract"},
     "arbiter": {"label": "Arbiter", "role": "adjudicate"},
     "boss": {"label": "Boss", "role": "adjudicate"},
@@ -85,13 +84,13 @@ AGENTS: dict[str, dict[str, str]] = {
     "image_extractor": {"label": "Image Extractor", "role": "ingest"},
 }
 
+# The valid doc-class universe — mirrors the Lucius-Morningstar/docclass-pilot
+# HF dataset (configs `default` + `ground_truth`), the pilot-run default.
 DOC_CLASSES: dict[str, str] = {
     "contract": "Contract / Agreement",
+    "merger_agreement": "Merger Agreement",
     "corporate_record": "Corporate Record",
-    "due_diligence": "Due Diligence",
     "correspondence": "Correspondence",
-    "compliance_filing": "Compliance Filing",
-    "court_opinion": "Court Opinion",
     "insurance_claim": "Insurance Claim",
 }
 
@@ -99,11 +98,9 @@ DEFAULT_DOC_CLASSES: dict[str, str] = dict(DOC_CLASSES)
 
 SPECIALIST_BY_DOC_CLASS: dict[str, str] = {
     "contract": "contracts_specialist",
+    "merger_agreement": "contracts_specialist",
     "corporate_record": "corporate_records_specialist",
-    "due_diligence": "due_diligence_specialist",
     "correspondence": "correspondence_specialist",
-    "compliance_filing": "compliance_specialist",
-    "court_opinion": "court_opinions_specialist",
     "insurance_claim": "insurance_claims_specialist",
 }
 

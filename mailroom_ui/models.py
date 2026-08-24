@@ -153,3 +153,17 @@ class Metrics(BaseModel):
     avg_quality: Optional[float] = None
     per_doc_type: dict[str, int] = Field(default_factory=dict)
     llm_calls: int = 0
+    # Extraction-quality aggregates over the pilot's grounded runs — mined
+    # from trace scores (llm-mailroom SCORE_CONFIGS); None when no grounded
+    # run is in the window (never fabricated).
+    n_grounded_runs: int = 0
+    avg_extraction_field_score: Optional[float] = None
+    avg_extraction_overall_score: Optional[float] = None
+    avg_entity_list_precision: Optional[float] = None
+    avg_entity_list_recall: Optional[float] = None
+    avg_hallucination_rate: Optional[float] = None
+    avg_expected_field_presence: Optional[float] = None
+    # Ops aggregates mirroring the pipeline's core run metrics.
+    avg_run_duration_s: Optional[float] = None
+    avg_classification_attempts: Optional[float] = None
+    avg_extraction_attempts: Optional[float] = None

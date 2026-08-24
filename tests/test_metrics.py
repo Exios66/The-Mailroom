@@ -124,3 +124,48 @@ class TestTzNormalization:
         since = now_utc - timedelta(days=1)
         m = compute_metrics([naive_run, aware_run], since=since)
         assert m.total_docs == 2
+
+
+class TestGroundedScoreMining:
+    """compute_metrics mines the pilot's grounded extraction-quality scores
+    (llm-mailroom SCORE_CONFIGS) from PipelineRun.scores."""
+
+    def _run(self, scores: dict):
+        from mailroom_ui.models import PipelineRun
+
+        return PipelineRun(trace_id="t", stage="archived", scores=scores)
+
+    def test_grounded_aggregates(self):
+        from mailroom_ui.metrics import compute_metrics
+
+        runs = [
+            self._run({"extraction_field_score": 0.9,
+                       "extraction_overall_score": 0.95,
+                       "entity_list_precision": 0.8,
+                       "entity_list_recall": 0.7,
+                       "extraction_hallucination_rate": 0.02}),
+            self._run({"extraction_field_score": 0.6,
+                       "entity_list_precision": 0.6}),
+        ]
+        m = compute_metrics(runs)
+        assert m.n_grounded_runs == 2
+        assert m.avg_extraction_field_score == 0.75
+        assert m.avg_extraction_overall_score == 0.95
+        assert m.avg_entity_list_precision == 0.7
+        assert m.avg_entity_list_recall == 0.7
+        assert m.avg_hallucination_rate == 0.02
+        # absent score -> None (never fabricated)
+        assert m.avg_expected_field_presence is None
+
+    def test_no_grounded_runs(self):
+        from mailroom_ui.metrics import compute_metrics
+
+        m = compute_metrics([self._run({})])
+        assert m.n_grounded_runs == 0
+        assert m.avg_extraction_field_score is None
+
+    def test_non_numeric_scores_ignored(self):
+        from mailroom_ui.metrics import compute_metrics
+
+        m = compute_metrics([self._run({"extraction_field_score": "oops"})])
+        assert m.avg_extraction_field_score is None

@@ -69,10 +69,7 @@ const Floor = (() => {
       contract: "#7d97b5",
       merger_agreement: "#8aa3c0",
       corporate_record: "#659099",
-      due_diligence: "#d9a866",
       correspondence: "#e8b478",
-      compliance_filing: "#8fd0a0",
-      court_opinion: "#e26863",
       insurance_claim: "#b18ec2",
     };
     return colors[run.doc_type] || "#a09f9f";
@@ -303,25 +300,33 @@ const Floor = (() => {
   // and resume on visibilitychange so the floor stays live when visible.
   let rafId = null;
   let lastFrame = null;
+  let idleTimer = null;
   function loop(t) {
-    lastFrame = t;
-    if (!document.hidden && envs.size > 0) {
-      frame(t);
+    idleTimer = null;
+    if (document.hidden) {
+      rafId = null;
+      return;
+    }
+    frame(t);
+    if (envs.size > 0) {
       rafId = requestAnimationFrame(loop);
     } else {
-      rafId = null;
+      // V-27: an empty room must STILL render (stations, labels, belt) or the
+      // floor looks dead during boot and whenever the window empties out —
+      // but throttle to ~8fps so an idle floor doesn't burn 60fps like the
+      // pre-V-17 bug.
+      idleTimer = setTimeout(() => kickLoop(), 125);
     }
   }
   function kickLoop() {
-    if (rafId === null) {
-      requestAnimationFrame(loop);
+    if (rafId === null && idleTimer === null) {
+      rafId = requestAnimationFrame(loop);
     }
   }
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) kickLoop();
   });
-  // Resume whenever envelopes are added (update()/replay) and on first load.
-  const _origUpdate = typeof update === "function" ? update : null;
+  // Paint immediately on load — don't wait for the first snapshot.
   kickLoop();
 
   /* ---- replay ---- */

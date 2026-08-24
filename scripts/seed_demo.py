@@ -192,8 +192,10 @@ def build_run(spec, start):
                 "filename": spec["filename"],
                 "matter_id": spec["matter"],
                 "doc_type": doc,
+                # docclass-pilot subclasses ride along for display/eval joins
+                "subclass": spec.get("subclass"),
                 "attempt": spec.get("attempt", 1),
-                "source": "demo-corpus",
+                "source": "docclass-pilot",
             },
             output=spec["trace_output"],
             metadata={
@@ -242,106 +244,139 @@ def build_run(spec, start):
 
 
 SPECS = [
+    # The scenario catalog mirrors the Lucius-Morningstar/docclass-pilot HF
+    # dataset universe: 5 doc classes (contract / merger_agreement /
+    # corporate_record / correspondence / insurance_claim) with their
+    # subclasses. Filenames follow the dataset's naming style.
     {"slug": "contract-clean", "run": 1,
-     "filename": "contract_03_service_agreement.pdf", "doc_type": "contract",
-     "matter": "demo-matter-acme-services", "specialist": "contracts_specialist",
+     "filename": "contract_service_agreement_03.pdf", "doc_type": "contract",
+     "subclass": "Service", "matter": "demo-matter-acme-services",
+     "specialist": "contracts_specialist",
      "verdict": "CORRECT", "quality": 0.97, "conf_cls": 0.98, "conf_ext": 0.96,
+     "grounded": {"field": 0.95, "overall": 0.96, "list_p": 0.93, "list_r": 1.0, "halluc": 0.0},
      "trace_output": {"stage": "archived", "doc_type": "contract",
                       "classification_confidence": 0.98, "extraction_confidence": 0.96}},
     {"slug": "contract-partial", "run": 2,
-     "filename": "contract_05_master_services_agreement.pdf", "doc_type": "contract",
-     "matter": "demo-matter-acme-services", "specialist": "contracts_specialist",
+     "filename": "contract_master_services_agreement_05.pdf", "doc_type": "contract",
+     "subclass": "Consulting Agreements", "matter": "demo-matter-acme-services",
+     "specialist": "contracts_specialist",
      "verdict": "PARTIAL", "quality": 0.58, "conf_cls": 0.97, "conf_ext": 0.63,
+     "grounded": {"field": 0.55, "overall": 0.6, "list_p": 0.6, "list_r": 0.5, "halluc": 0.08},
      "trace_output": {"stage": "archived", "doc_type": "contract",
                       "classification_confidence": 0.97, "extraction_confidence": 0.63,
                       "error_message": "2 fields below confidence threshold"}},
     {"slug": "corporate-ok", "run": 3,
-     "filename": "corporate_04_bylaws_amendment.pdf", "doc_type": "corporate_record",
-     "matter": "demo-matter-northwind", "specialist": "corporate_records_specialist",
+     "filename": "corporate_bylaws_amendment_04.pdf", "doc_type": "corporate_record",
+     "subclass": "bylaws", "matter": "demo-matter-northwind",
+     "specialist": "corporate_records_specialist",
      "verdict": "CORRECT", "quality": 0.95, "conf_cls": 0.99, "conf_ext": 0.97,
+     "grounded": {"field": 0.98, "overall": 0.97, "list_p": None, "list_r": None, "halluc": 0.0},
      "trace_output": {"stage": "archived", "doc_type": "corporate_record",
                       "classification_confidence": 0.99, "extraction_confidence": 0.97}},
-    {"slug": "due-diligence-review", "run": 4,
-     "filename": "due_diligence_07_liability_checklist.pdf", "doc_type": "due_diligence",
-     "matter": "demo-matter-northwind", "specialist": "due_diligence_specialist",
+    # was due-diligence-review (class removed from the pilot universe):
+    # human-review siding coverage now rides a merger agreement.
+    {"slug": "merger-review", "run": 4,
+     "filename": "maud_merger_agreement_all_stock_42.pdf", "doc_type": "merger_agreement",
+     "subclass": "all_stock", "matter": "demo-matter-northwind",
+     "specialist": "contracts_specialist",
      "verdict": "PARTIAL", "quality": 0.44, "conf_cls": 0.93, "conf_ext": 0.61,
      "review": True, "escalation": "low extraction confidence (0.61) on indemnification clause",
-     "trace_output": {"stage": "review", "doc_type": "due_diligence",
+     "grounded": {"field": 0.48, "overall": 0.52, "list_p": 0.55, "list_r": 0.44, "halluc": 0.12},
+     "trace_output": {"stage": "review", "doc_type": "merger_agreement",
                       "classification_confidence": 0.93, "extraction_confidence": 0.61,
                       "review_decision": "human review",
                       "escalation_reason": "low extraction confidence (0.61) on indemnification clause"}},
     {"slug": "correspondence-miss", "run": 5,
-     "filename": "correspondence_09_demand_letter.pdf", "doc_type": "correspondence",
-     "matter": "demo-matter-harbor", "specialist": "correspondence_specialist",
+     "filename": "correspondence_demand_letter_09.pdf", "doc_type": "correspondence",
+     "subclass": "demand", "matter": "demo-matter-harbor",
+     "specialist": "correspondence_specialist",
      "verdict": "MISS", "quality": 0.31, "conf_cls": 0.93, "conf_ext": 0.88,
      "trace_output": {"stage": "archived", "doc_type": "correspondence",
                       "classification_confidence": 0.93, "extraction_confidence": 0.88,
                       "error_message": "judge: deadline field missed"}},
-    {"slug": "compliance-failed", "run": 6,
-     "filename": "compliance_02_regulatory_filing.pdf", "doc_type": "compliance_filing",
-     "matter": "demo-matter-harbor", "specialist": "compliance_specialist",
+    # was compliance-failed (class removed): failed-bin coverage now rides a
+    # corporate record whose extraction returned invalid JSON.
+    {"slug": "corporate-failed", "run": 6,
+     "filename": "corporate_articles_of_incorporation_02.pdf", "doc_type": "corporate_record",
+     "subclass": "articles_of_incorporation", "matter": "demo-matter-harbor",
+     "specialist": "corporate_records_specialist",
      "conf_cls": 0.91, "conf_ext": None,
      "extract_level": "ERROR", "extract_output": {"error": "extraction failed: LLM output not valid JSON"},
      "failed": True,
-     "trace_output": {"stage": "failed", "doc_type": "compliance_filing",
+     "trace_output": {"stage": "failed", "doc_type": "corporate_record",
                       "classification_confidence": 0.91,
                       "error_message": "extraction failed: LLM output not valid JSON",
                       "run_aborted": True}},
-    {"slug": "court-inflight", "run": 7,
-     "filename": "court_opinion_01_appeal_ruling.pdf", "doc_type": "court_opinion",
-     "matter": "demo-matter-harbor", "specialist": "court_opinions_specialist",
+    # was court-inflight (class removed): in-flight coverage now rides an
+    # insurance claim mid-extraction.
+    {"slug": "insurance-inflight", "run": 7,
+     "filename": "insurance_claim_fnol_package_01.pdf", "doc_type": "insurance_claim",
+     "subclass": "carrier", "matter": "demo-matter-harbor",
+     "specialist": "insurance_claims_specialist",
      "conf_cls": 0.96, "conf_ext": None, "inflight": True,
-     "trace_output": {"doc_type": "court_opinion",
+     "trace_output": {"doc_type": "insurance_claim",
                       "classification_confidence": 0.96}},
     {"slug": "contract-retry", "run": 8,
-     "filename": "contract_06_consulting_agreement.pdf", "doc_type": "contract",
-     "matter": "demo-matter-acme-services", "specialist": "contracts_specialist",
+     "filename": "contract_consulting_agreement_06.pdf", "doc_type": "contract",
+     "subclass": "Consulting Agreements", "matter": "demo-matter-acme-services",
+     "specialist": "contracts_specialist",
      "verdict": "CORRECT", "quality": 0.9, "conf_cls": 0.95, "conf_ext": 0.94,
      "retry_classify": True, "retry_extract": True,
+     "grounded": {"field": 0.91, "overall": 0.92, "list_p": 0.85, "list_r": 0.9, "halluc": 0.03},
      "trace_output": {"stage": "archived", "doc_type": "contract",
                       "classification_confidence": 0.95, "extraction_confidence": 0.94}},
     {"slug": "boss-conflict", "run": 9,
-     "filename": "contract_04_joint_venture_agreement.pdf", "doc_type": "contract",
-     "matter": "demo-matter-acme-services", "specialist": "contracts_specialist",
+     "filename": "contract_joint_venture_agreement_04.pdf", "doc_type": "contract",
+     "subclass": "Joint Venture", "matter": "demo-matter-acme-services",
+     "specialist": "contracts_specialist",
      "verdict": "PARTIAL", "quality": 0.66, "conf_cls": 0.94, "conf_ext": 0.72,
      "boss": True, "escalation": "conflicting specialist extraction on effective date",
      "extra_scores": {"conflict_detected": True, "conflict_threshold_breach": 0.41},
+     "grounded": {"field": 0.7, "overall": 0.68, "list_p": 0.66, "list_r": 0.75, "halluc": 0.05},
      "trace_output": {"stage": "archived", "doc_type": "contract",
                       "classification_confidence": 0.94, "extraction_confidence": 0.72,
                       "escalation_reason": "conflicting specialist extraction on effective date"}},
     {"slug": "low-confidence", "run": 10,
-     "filename": "correspondence_04_internal_memo.pdf", "doc_type": "correspondence",
-     "matter": "demo-matter-northwind", "specialist": "correspondence_specialist",
+     "filename": "correspondence_internal_memo_04.pdf", "doc_type": "correspondence",
+     "subclass": "meeting_request", "matter": "demo-matter-northwind",
+     "specialist": "correspondence_specialist",
      "verdict": "PARTIAL", "quality": 0.5, "conf_cls": 0.52, "conf_ext": 0.81,
      "trace_output": {"stage": "archived", "doc_type": "correspondence",
                       "classification_confidence": 0.52, "extraction_confidence": 0.81}},
     {"slug": "insurance-clean", "run": 11,
-     "filename": "insurance_claim_01_fnol_package.pdf", "doc_type": "insurance_claim",
-     "matter": "demo-matter-harbor", "specialist": "insurance_claims_specialist",
+     "filename": "insurance_claim_coverage_determination_07.pdf", "doc_type": "insurance_claim",
+     "subclass": "carrier", "matter": "demo-matter-harbor",
+     "specialist": "insurance_claims_specialist",
      "verdict": "CORRECT", "quality": 0.94, "conf_cls": 0.97, "conf_ext": 0.95,
+     "grounded": {"field": 0.93, "overall": 0.94, "list_p": None, "list_r": None, "halluc": 0.0},
      "trace_output": {"stage": "archived", "doc_type": "insurance_claim",
                       "classification_confidence": 0.97, "extraction_confidence": 0.95}},
     {"slug": "insurance-judge-gate", "run": 12,
-     "filename": "insurance_claim_02_coverage_determination.pdf", "doc_type": "insurance_claim",
-     "matter": "demo-matter-harbor", "specialist": "insurance_claims_specialist",
+     "filename": "insurance_claim_fnol_package_11.pdf", "doc_type": "insurance_claim",
+     "subclass": "carrier", "matter": "demo-matter-harbor",
+     "specialist": "insurance_claims_specialist",
      "verdict": "PARTIAL", "quality": 0.62, "conf_cls": 0.96, "conf_ext": 0.78,
      "judge_verify": True, "judge_outcome": "partial",
+     "grounded": {"field": 0.64, "overall": 0.66, "list_p": None, "list_r": None, "halluc": 0.06},
      "trace_output": {"stage": "archived", "doc_type": "insurance_claim",
                       "classification_confidence": 0.96, "extraction_confidence": 0.78}},
     {"slug": "merger-arbitrated", "run": 13,
-     "filename": "maud_merger_agreement_117.pdf", "doc_type": "contract",
-     "matter": "demo-matter-acme-services", "specialist": "contracts_specialist",
+     "filename": "maud_merger_agreement_mixed_cash_stock_117.pdf",
+     "doc_type": "merger_agreement",
+     "subclass": "mixed_cash_stock", "matter": "demo-matter-acme-services",
+     "specialist": "contracts_specialist",
      "verdict": "CORRECT", "quality": 0.83, "conf_cls": 0.98, "conf_ext": 0.74,
      "judge_verify": True, "judge_outcome": "partial", "arbiter": True,
      "extra_scores": {"arbiter_decision_score": 1},
-     "trace_output": {"stage": "archived", "doc_type": "contract",
+     "grounded": {"field": 0.78, "overall": 0.8, "list_p": 0.72, "list_r": 0.81, "halluc": 0.04},
+     "trace_output": {"stage": "archived", "doc_type": "merger_agreement",
                       "classification_confidence": 0.98, "extraction_confidence": 0.74}},
 ]
 
 SCENARIO_FLAGS = {
-    "due-diligence-review": ["review siding"],
-    "compliance-failed": ["failed"],
-    "court-inflight": ["in-flight"],
+    "merger-review": ["review siding"],
+    "corporate-failed": ["failed"],
+    "insurance-inflight": ["in-flight"],
     "contract-retry": ["retry"],
     "boss-conflict": ["boss adjudication"],
     "low-confidence": ["low confidence"],
@@ -361,12 +396,33 @@ def _as_dict(value):
 def attach_scores(run, spec, judge_config_id=None):
     total_tokens = sum(_as_dict(g.usage).get("total") or 0 for g in run.gens)
     total_cost = sum(_as_dict(g.cost_details).get("total") or 0.0 for g in run.gens)
+    # Core run metrics — mirror llm-mailroom observability/scores.py
+    # SCORE_CONFIGS "core run metrics" block (emitted for EVERY run).
     run.scores.append(_score(run.tid, "classification_confidence", round(spec["conf_cls"], 3)))
     if spec["conf_ext"] is not None:
         run.scores.append(_score(run.tid, "extraction_confidence", round(spec["conf_ext"], 3)))
     run.scores.append(_score(run.tid, "estimated_cost_usd", round(total_cost, 5)))
     run.scores.append(_score(run.tid, "total_tokens", total_tokens))
+    run.scores.append(_score(run.tid, "llm_call_count", len(run.gens)))
+    run.scores.append(
+        _score(run.tid, "classification_attempts", 2 if spec.get("retry_classify") else 1))
+    run.scores.append(
+        _score(run.tid, "extraction_attempts", 2 if spec.get("retry_extract") else 1))
+    duration_s = round(6.4 + len(run.spans) * 3.1, 1)
+    run.scores.append(_score(run.tid, "run_duration_seconds", duration_s))
     run.scores.append(_score(run.tid, "stage_completed", 1, "BOOLEAN"))
+    # Deterministic field-type-aware extraction scoring — emitted for grounded
+    # runs (mirrors the pilot's grounded docclass-pilot runs; see SCORE_CONFIGS).
+    g = spec.get("grounded")
+    if g:
+        run.scores.append(_score(run.tid, "extraction_field_score", g["field"]))
+        run.scores.append(_score(run.tid, "extraction_overall_score", g["overall"]))
+        run.scores.append(_score(run.tid, "extraction_hallucination_rate", g["halluc"]))
+        if g.get("list_p") is not None:
+            run.scores.append(_score(run.tid, "entity_list_precision", g["list_p"]))
+        if g.get("list_r") is not None:
+            run.scores.append(_score(run.tid, "entity_list_recall", g["list_r"]))
+        run.scores.append(_score(run.tid, "expected_field_presence", round(g["field"] + 0.02, 3)))
     if spec.get("verdict"):
         run.scores.append(_score(run.tid, JUDGE_CONFIG_NAME, spec["verdict"],
                                  "CATEGORICAL", comment="demo judge run",
@@ -457,40 +513,45 @@ def repair_missing_scores(client, runs, rounds=4, settle_s=25):
               f"{rounds} repair rounds", file=sys.stderr)
 
 
-def reset_demo_traces(client, specs, settle_s=15):
-    """Delete previously seeded demo traces and CONFIRM the deletes landed.
+def cleanup_stale_traces(client, keep_tids: set[str], settle_s=5):
+    """Delete demo traces that are no longer part of the scenario catalog.
 
-    Ingestion appends (re-seeding duplicates observations), so re-seeding
-    must start from a confirmed-gone state: a late delete wipes the fresh
-    traces, and an un-deleted trace accumulates duplicate observations.
-    With `max_retries: 0` a GET on a deleted trace is fast (~0.4s), so a
-    per-trace verify pass is cheap.
+    NEVER delete-then-recreate an id we are about to seed: Langfuse's async
+    pipeline propagates deletes lazily, and a late tombstone can wipe the
+    fresh re-seeded trace minutes later ("accepted" -> verified -> gone).
+    Ingestion events upsert by deterministic id anyway, so re-seeding the
+    SAME scenario needs no delete first.
     """
     trace_api = client.api.trace
-    tids = [f"demo-{spec['slug']}" for spec in specs]
-    for tid in tids:
+    stale = []
+    page = 1
+    try:
+        while True:
+            resp = trace_api.list(limit=100, name="document-pipeline", page=page,
+                                  request_options={"timeout_in_seconds": 20})
+            batch = getattr(resp, "data", None) or []
+            for t in batch:
+                tid = getattr(t, "id", None)
+                tags = getattr(t, "tags", None) or []
+                if tid and tid.startswith("demo-") and "mailroom" in tags \
+                        and tid not in keep_tids:
+                    stale.append(tid)
+            if len(batch) < 100 or page >= 20:
+                break
+            page += 1
+    except Exception as exc:
+        print(f"  WARNING: stale-trace scan failed ({str(exc)[:120]})", file=sys.stderr)
+        return False
+    for tid in stale:
         try:
-            trace_api.delete(tid, request_options={"timeout_in_seconds": 20, "max_retries": 0})
-            print(f"  cleared {tid}")
+            trace_api.delete(tid, request_options={"timeout_in_seconds": 20,
+                                                    "max_retries": 0})
+            print(f"  removed stale {tid}")
         except Exception:
             pass
-    time.sleep(settle_s)
-    deadline = time.monotonic() + 90
-    while time.monotonic() < deadline:
-        remaining = []
-        for tid in tids:
-            try:
-                trace_api.get(tid, request_options={"timeout_in_seconds": 10, "max_retries": 0})
-                remaining.append(tid)
-            except Exception:
-                pass
-        if not remaining:
-            print("  deletes confirmed gone")
-            return True
-        print(f"  waiting on deletes: {len(remaining)} still present", file=sys.stderr)
-        time.sleep(10)
-    print(f"  WARNING: deletes did not settle for {remaining}", file=sys.stderr)
-    return False
+    if stale:
+        time.sleep(settle_s)
+    return True
 
 
 def make_langfuse_client():
@@ -518,6 +579,90 @@ def make_langfuse_client():
     return client
 
 
+def _ingest_chunked(client, batch, *, chunk_size=25, max_retries=3):
+    """Ingest events in small chunks WITH retries.
+
+    A single large `max_retries: 0` POST is accepted (202) but its events can
+    be silently dropped by Langfuse's async validation — 141 events "accepted",
+    zero persisted. Small chunks + SDK retries make delivery observable, and
+    the caller's verify pass catches whatever still slips through.
+    """
+    accepted = errors = 0
+    for i in range(0, len(batch), chunk_size):
+        chunk = batch[i : i + chunk_size]
+        resp = client.api.ingestion.batch(
+            batch=chunk,
+            request_options={"timeout_in_seconds": 60, "max_retries": max_retries},
+        )
+        n_err = len(getattr(resp, "errors", None) or [])
+        accepted += len(chunk) - n_err
+        errors += n_err
+        for err in (getattr(resp, "errors", None) or [])[:5]:
+            print(f"  ingestion error: {err}", file=sys.stderr)
+    return accepted, errors
+
+
+def verify_seeded(client, runs, timeout_s=150):
+    """Poll until every seeded trace is readable; re-ingest stragglers once.
+
+    Returns the list of trace ids that never appeared. This closes the loop on
+    delivery: 'accepted' is not 'persisted' with async ingestion.
+    """
+    trace_api = client.api.trace
+    deadline = time.monotonic() + timeout_s
+    pending = {r.tid for r in runs}
+    reingested = False
+    while pending and time.monotonic() < deadline:
+        for tid in sorted(pending):
+            try:
+                trace_api.get(tid, request_options={"timeout_in_seconds": 15,
+                                                     "max_retries": 1})
+                pending.discard(tid)
+            except Exception:
+                pass
+        if not pending:
+            break
+        if not reingested and deadline - time.monotonic() < timeout_s * 0.6:
+            missing = [r for r in runs if r.tid in pending]
+            print(f"  re-ingesting {len(missing)} unverified run(s)", file=sys.stderr)
+            retry_batch = []
+            for run in missing:
+                retry_batch.extend(make_events(run))
+            _ingest_chunked(client, retry_batch)
+            reingested = True
+        time.sleep(8)
+    if pending:
+        return sorted(pending)
+    # Stability pass: a late-propagating delete tombstone can still wipe a
+    # freshly seeded trace AFTER it was verified readable. Wait one quiet
+    # period and confirm everything is STILL there; re-ingest survivors.
+    time.sleep(20)
+    unstable = []
+    for run in runs:
+        try:
+            trace_api.get(run.tid, request_options={"timeout_in_seconds": 15,
+                                                     "max_retries": 1})
+        except Exception:
+            unstable.append(run)
+    if not unstable:
+        return []
+    print(f"  {len(unstable)} trace(s) vanished after verify — re-ingesting",
+          file=sys.stderr)
+    retry_batch = []
+    for run in unstable:
+        retry_batch.extend(make_events(run))
+    _ingest_chunked(client, retry_batch)
+    still = []
+    for run in unstable:
+        try:
+            trace_api.get(run.tid, request_options={"timeout_in_seconds": 15,
+                                                     "max_retries": 1})
+        except Exception:
+            still.append(run.tid)
+        time.sleep(1)
+    return still
+
+
 def seed(client, specs, start_base, window, judge_config_id=None):
     batch = []
     runs = []
@@ -527,15 +672,16 @@ def seed(client, specs, start_base, window, judge_config_id=None):
         attach_scores(run, spec, judge_config_id)
         runs.append(run)
         batch.extend(make_events(run))
-    resp = client.api.ingestion.batch(batch=batch,
-                                      request_options={"timeout_in_seconds": 90,
-                                                       "max_retries": 0})
-    for err in (getattr(resp, "errors", None) or [])[:10]:
-        print(f"  ingestion error: {err}", file=sys.stderr)
+    accepted, errors = _ingest_chunked(client, batch)
+    print(f"ingestion accepted: {accepted} event(s), {errors} error(s)")
+    never_landed = verify_seeded(client, runs)
+    if never_landed:
+        print(f"  WARNING: {len(never_landed)} trace(s) not readable after "
+              f"verify window: {never_landed}", file=sys.stderr)
     for run in runs:
         attach_scores_via_sdk(client, run)
     repair_missing_scores(client, runs)
-    return resp
+    return runs
 
 
 _SKIP = object()  # expectation sentinel: field not verifiable from this source
@@ -828,15 +974,15 @@ def main():
 
     client = make_langfuse_client()
     judge_config_id = ensure_score_configs(client)
+    keep = {f"demo-{spec['slug']}" for spec in specs}
     if not args.keep:
-        reset_demo_traces(client, specs)
+        cleanup_stale_traces(client, keep)
     start_base = datetime.now(timezone.utc) - timedelta(minutes=1)
     print(f"seeding {len(specs)} demo run(s) into Langfuse (env={args.env}) ...")
-    resp = seed(client, specs, start_base, timedelta(hours=args.window_hours),
+    runs = seed(client, specs, start_base, timedelta(hours=args.window_hours),
                 judge_config_id)
-    success = len(getattr(resp, "successes", None) or [])
-    errors = len(getattr(resp, "errors", None) or [])
-    print(f"ingestion accepted: {success} event(s), {errors} error(s)")
+    verified = len(runs)
+    print(f"seeded + readback-verified: {verified}/{len(specs)} run(s)")
     for spec in specs:
         tid = f"demo-{spec['slug']}"
         host = os.environ.get("LANGFUSE_HOST", "https://us.cloud.langfuse.com").rstrip("/")

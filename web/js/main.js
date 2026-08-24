@@ -113,19 +113,19 @@ const Main = (() => {
 
   function generateDemoRuns() {
     const stages = [
-      { stage: "archived", phase: "terminal", doc_type: "contract", filename: "contract_acme_nda.pdf", verdict: "CORRECT", quality: 0.96, classification_confidence: 0.98, extraction_confidence: 0.94 },
-      { stage: "archived", phase: "terminal", doc_type: "contract", filename: "contract_acme_msa.pdf", verdict: "CORRECT", quality: 0.93, classification_confidence: 0.97, extraction_confidence: 0.91 },
-      { stage: "archived", phase: "terminal", doc_type: "corporate_record", filename: "corp_bylaws_v2.pdf", verdict: "CORRECT", quality: 0.95, classification_confidence: 0.99, extraction_confidence: 0.97 },
-      { stage: "archived", phase: "terminal", doc_type: "due_diligence", filename: "dd_checklist_q3.pdf", verdict: "PARTIAL", quality: 0.72, classification_confidence: 0.93, extraction_confidence: 0.68 },
-      { stage: "archived", phase: "terminal", doc_type: "correspondence", filename: "letter_demand_001.pdf", verdict: "CORRECT", quality: 0.88, classification_confidence: 0.95, extraction_confidence: 0.84 },
-      { stage: "archived", phase: "terminal", doc_type: "insurance_claim", filename: "claim_fnol_2026_0413.pdf", verdict: "CORRECT", quality: 0.94, classification_confidence: 0.97, extraction_confidence: 0.95 },
-      { stage: "judge_verify", phase: "extraction", doc_type: "insurance_claim", filename: "claim_determination_denial.pdf", classification_confidence: 0.96, extraction_confidence: 0.78 },
-      { stage: "arbiter", phase: "extraction", doc_type: "contract", filename: "merger_agreement_maud_117.pdf", verdict: "PARTIAL", quality: 0.66, classification_confidence: 0.97, extraction_confidence: 0.74 },
-      { stage: "review", phase: "review", doc_type: "compliance_filing", filename: "compliance_form_10k.pdf", review_decision: "human review", escalation_reason: "low extraction confidence on indemnification clause" },
-      { stage: "failed", phase: "terminal", doc_type: "court_opinion", filename: "court_ruling_2026.pdf", error_message: "extraction failed: LLM output not valid JSON" },
-      { stage: "classify", phase: "intake_sort", doc_type: "contract", filename: "contract_new_consulting.pdf", classification_confidence: 0.91 },
-      { stage: "extract", phase: "extraction", doc_type: "corporate_record", filename: "corp_board_minutes.pdf", extraction_confidence: 0.82 },
-      { stage: "report", phase: "reporting", doc_type: "due_diligence", filename: "dd_summary_report.pdf" },
+      { stage: "archived", phase: "terminal", doc_type: "contract", filename: "contract_service_agreement_03.pdf", verdict: "CORRECT", quality: 0.96, classification_confidence: 0.98, extraction_confidence: 0.94 },
+      { stage: "archived", phase: "terminal", doc_type: "merger_agreement", filename: "maud_merger_agreement_all_stock_42.pdf", verdict: "CORRECT", quality: 0.93, classification_confidence: 0.97, extraction_confidence: 0.91 },
+      { stage: "archived", phase: "terminal", doc_type: "corporate_record", filename: "corporate_bylaws_amendment_04.pdf", verdict: "CORRECT", quality: 0.95, classification_confidence: 0.99, extraction_confidence: 0.97 },
+      { stage: "archived", phase: "terminal", doc_type: "contract", filename: "contract_master_services_agreement_05.pdf", verdict: "PARTIAL", quality: 0.72, classification_confidence: 0.93, extraction_confidence: 0.68 },
+      { stage: "archived", phase: "terminal", doc_type: "correspondence", filename: "correspondence_demand_letter_09.pdf", verdict: "CORRECT", quality: 0.88, classification_confidence: 0.95, extraction_confidence: 0.84 },
+      { stage: "archived", phase: "terminal", doc_type: "insurance_claim", filename: "insurance_claim_fnol_package_01.pdf", verdict: "CORRECT", quality: 0.94, classification_confidence: 0.97, extraction_confidence: 0.95 },
+      { stage: "judge_verify", phase: "extraction", doc_type: "insurance_claim", filename: "insurance_claim_coverage_determination_07.pdf", classification_confidence: 0.96, extraction_confidence: 0.78 },
+      { stage: "arbiter", phase: "extraction", doc_type: "merger_agreement", filename: "maud_merger_agreement_mixed_cash_stock_117.pdf", verdict: "PARTIAL", quality: 0.66, classification_confidence: 0.97, extraction_confidence: 0.74 },
+      { stage: "review", phase: "review", doc_type: "correspondence", filename: "correspondence_internal_memo_04.pdf", review_decision: "human review", escalation_reason: "low extraction confidence on meeting request" },
+      { stage: "failed", phase: "terminal", doc_type: "corporate_record", filename: "corporate_articles_of_incorporation_02.pdf", error_message: "extraction failed: LLM output not valid JSON" },
+      { stage: "classify", phase: "intake_sort", doc_type: "contract", filename: "contract_consulting_agreement_06.pdf", classification_confidence: 0.91 },
+      { stage: "extract", phase: "extraction", doc_type: "corporate_record", filename: "corporate_rights_instrument_08.pdf", extraction_confidence: 0.82 },
+      { stage: "report", phase: "reporting", doc_type: "insurance_claim", filename: "insurance_claim_fnol_package_11.pdf" },
     ];
     return stages.map((s, i) => ({
       trace_id: `demo-run-${i}`,
@@ -158,6 +158,10 @@ const Main = (() => {
   }
 
   function applySnapshot(runs) {
+    // V-27: a non-empty snapshot proves the backend is serving even when the
+    // async health check hasn't resolved yet — dropping it left a blank floor
+    // until the next poll tick. Health checks keep correcting the flag after.
+    if (runs && runs.length) langfuseOk = true;
     if (!langfuseOk && !demoMode) return;
     lastSnapshot = runs;
     const ids = new Set(runs.map((r) => r.trace_id));

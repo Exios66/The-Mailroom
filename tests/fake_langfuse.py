@@ -226,7 +226,7 @@ class FakeTraceApi:
             out = [t for t in out if tags.issubset(set(t.get("tags") or []))]
         return FakeList(data=out)
 
-    def get(self, trace_id: str):
+    def get(self, trace_id: str, **kw):  # kw: request_options (real SDK contract)
         for t in self.traces:
             if t["id"] == trace_id:
                 return Obj(**t)

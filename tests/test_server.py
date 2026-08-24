@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -12,12 +12,12 @@ from tests.fake_langfuse import FakeClient, make_trace
 
 
 def _fresh_traces():
-    now = datetime.now() - timedelta(hours=1)
+    now = datetime.now(timezone.utc) - timedelta(hours=1)
     return [
         make_trace("t1", base_time=now),
-        make_trace("t2", stage="review", doc_type="compliance_filing",
+        make_trace("t2", stage="review", doc_type="correspondence",
                    base_time=now - timedelta(minutes=5)),
-        make_trace("t3", stage="failed", doc_type="court_opinion",
+        make_trace("t3", stage="failed", doc_type="corporate_record",
                    base_time=now - timedelta(minutes=9)),
     ]
 

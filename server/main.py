@@ -112,27 +112,31 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
 
     @app.get("/api/sessions")
     def sessions(limit: int = Query(50, ge=1, le=200)):
-        raw = src.list_sessions(limit=limit)
+        # V-24: group enriched runs by session in ONE list pass. The old
+        # N+1 (per-session × per-trace get_run) fired up to ~1000 live
+        # Langfuse calls and timed out against the real cloud.
+        runs = [r for r in enriched_recent_runs(
+            src, since=_utcnow() - timedelta(days=7), limit=500)
+            if r.session_id or r.matter_id]
+        grouped: dict[str, list[PipelineRun]] = {}
+        for r in runs:
+            grouped.setdefault(r.session_id or r.matter_id or "(no session)", []).append(r)
         out = []
-        for s in raw:
-            # V-19: sessions are displayed as runs, and runs need their
-            # observations/scores — interpret_trace() without scores produced
-            # light runs with no verdicts/tokens/cost on every card.
-            # get_run() is cached; the per-session trace fetch is capped so a
-            # session with hundreds of traces can't stall the summary.
-            runs = _session_runs(src, s.get("id", ""), limit=20)
-            out.append(
-                SessionSummary(
-                    id=s.get("id", ""),
-                    name=s.get("name"),
-                    created_at=_dt(s.get("created_at")),
-                    updated_at=_dt(s.get("updated_at")),
-                    trace_count=len(runs),
-                    runs=runs,
-                )
-            )
+        for sid, rs in grouped.items():
+            rs.sort(key=lambda r: (r.updated_at or r.created_at or datetime.min), reverse=True)
+            stamps_c = [r.created_at for r in rs if r.created_at]
+            stamps_u = [r.updated_at or r.created_at for r in rs
+                        if (r.updated_at or r.created_at) is not None]
+            out.append(SessionSummary(
+                id=sid,
+                created_at=min(stamps_c) if stamps_c else None,
+                updated_at=max(stamps_u) if stamps_u else None,
+                trace_count=len(rs),
+                runs=rs[:20],
+            ))
         out.sort(key=lambda s: s.updated_at or datetime.min, reverse=True)
-        return {"count": len(out), "source": "langfuse", "sessions": [s.model_dump() for s in out]}
+        return {"count": len(out[:limit]), "source": "langfuse",
+                "sessions": [s.model_dump() for s in out[:limit]]}
 
     @app.get("/api/sessions/{session_id}")
     def session_detail(session_id: str):

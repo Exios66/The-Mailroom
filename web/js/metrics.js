@@ -26,6 +26,11 @@ const MetricsView = (() => {
     </div>`;
   }
 
+  function scoreValue(run, name) {
+    const hit = (run.scores || []).find((s) => s.name === name && s.value != null);
+    return hit ? Number(hit.value) : null;
+  }
+
   function computeLocalMetrics(runs) {
     const m = {
       total_docs: 0,
@@ -42,9 +47,30 @@ const MetricsView = (() => {
       verdict_counts: {},
       per_doc_type: {},
       avg_quality: null,
+      n_grounded_runs: 0,
+      avg_extraction_field_score: null,
+      avg_extraction_overall_score: null,
+      avg_entity_list_precision: null,
+      avg_entity_list_recall: null,
+      avg_hallucination_rate: null,
+      avg_expected_field_presence: null,
+      avg_run_duration_s: null,
+      avg_classification_attempts: null,
+      avg_extraction_attempts: null,
     };
     const latencies = [];
     const qualities = [];
+    const buckets = {
+      extraction_field_score: [],
+      extraction_overall_score: [],
+      entity_list_precision: [],
+      entity_list_recall: [],
+      extraction_hallucination_rate: [],
+      expected_field_presence: [],
+      run_duration_seconds: [],
+      classification_attempts: [],
+      extraction_attempts: [],
+    };
     for (const r of runs) {
       m.total_docs++;
       if (r.stage === "archived") m.archived++;
@@ -62,6 +88,12 @@ const MetricsView = (() => {
       if (r.doc_type) {
         m.per_doc_type[r.doc_type] = (m.per_doc_type[r.doc_type] || 0) + 1;
       }
+      const fs = scoreValue(r, "extraction_field_score");
+      if (fs != null) m.n_grounded_runs++;
+      for (const key of Object.keys(buckets)) {
+        const v = scoreValue(r, key);
+        if (v != null) buckets[key].push(v);
+      }
     }
     if (m.total_docs > 0) m.avg_cost_usd = m.total_cost_usd / m.total_docs;
     if (latencies.length > 0) {
@@ -69,6 +101,22 @@ const MetricsView = (() => {
     }
     if (qualities.length > 0) {
       m.avg_quality = qualities.reduce((a, b) => a + b, 0) / qualities.length;
+    }
+    const attrMap = {
+      extraction_field_score: "avg_extraction_field_score",
+      extraction_overall_score: "avg_extraction_overall_score",
+      entity_list_precision: "avg_entity_list_precision",
+      entity_list_recall: "avg_entity_list_recall",
+      extraction_hallucination_rate: "avg_hallucination_rate",
+      expected_field_presence: "avg_expected_field_presence",
+      run_duration_seconds: "avg_run_duration_s",
+      classification_attempts: "avg_classification_attempts",
+      extraction_attempts: "avg_extraction_attempts",
+    };
+    for (const [key, attr] of Object.entries(attrMap)) {
+      if (buckets[key].length) {
+        m[attr] = buckets[key].reduce((a, b) => a + b, 0) / buckets[key].length;
+      }
     }
     return m;
   }
@@ -122,6 +170,8 @@ const MetricsView = (() => {
     const quality = m.avg_quality == null ? "—" : Number(m.avg_quality).toFixed(2);
     const qcls = m.avg_quality != null ? (m.avg_quality >= 0.8 ? "good" : "warn") : "";
 
+    const pct = (v) => (v == null ? "—" : `${(Number(v) * 100).toFixed(1)}%`);
+
     let html = "";
     html += tile("TOTAL DOCS", m.total_docs ?? "—");
     html += tile("ARCHIVED", m.archived ?? "—", "good");
@@ -135,13 +185,38 @@ const MetricsView = (() => {
     html += tile("AVG LATENCY", Mailroom.fmt.latency(m.avg_latency_s));
     html += tile("P95 GEN LATENCY", m.p95_generation_latency_s != null ? Mailroom.fmt.latency(m.p95_generation_latency_s) : "—");
     html += tile("AVG QUALITY", quality, qcls);
+    if (m.n_grounded_runs) {
+      // Grounded-run extraction quality — mirrors llm-mailroom SCORE_CONFIGS
+      // deterministic scoring + the entity-extraction diagnostics.
+      html += tile("GROUNDED RUNS", m.n_grounded_runs, "good");
+      html += tile("FIELD SCORE", pct(m.avg_extraction_field_score),
+        m.avg_extraction_field_score >= 0.8 ? "good" : "warn");
+      html += tile("OVERALL SCORE", pct(m.avg_extraction_overall_score),
+        m.avg_extraction_overall_score >= 0.8 ? "good" : "warn");
+      html += tile("LIST PRECISION", pct(m.avg_entity_list_precision));
+      html += tile("LIST RECALL", pct(m.avg_entity_list_recall));
+      html += tile("HALLUCINATION", pct(m.avg_hallucination_rate),
+        m.avg_hallucination_rate <= 0.05 ? "good" : "bad");
+      html += tile("FIELD PRESENCE", pct(m.avg_expected_field_presence));
+    }
+    if (m.avg_run_duration_s != null) {
+      html += tile("AVG RUN DURATION", Mailroom.fmt.latency(m.avg_run_duration_s));
+    }
+    if (m.avg_classification_attempts != null && m.avg_classification_attempts > 1) {
+      html += tile("AVG CLASSIFY RETRIES", Number(m.avg_classification_attempts - 1).toFixed(2), "warn");
+    }
+    if (m.avg_extraction_attempts != null && m.avg_extraction_attempts > 1) {
+      html += tile("AVG EXTRACT RETRIES", Number(m.avg_extraction_attempts - 1).toFixed(2), "warn");
+    }
     if (vBars.length) html += bars("JUDGE VERDICTS", vBars, "#5f9e6e");
     if (docBars.length) html += bars("DOC TYPES", docBars, "#d9a866");
     if (rawRuns && rawRuns.length) html += trendBars(rawRuns);
     gridEl.innerHTML = html || `<div class="hint mono">NO METRICS YET</div>`;
   }
 
-  async function refresh(since = 3600) {
+  // V-27: default window matches the floor's MAILROOM_RECENT_WINDOW (7d) —
+  // the old 1h default showed zeros whenever no runs happened in the hour.
+  async function refresh(since = 604800) {
     try {
       let data;
       let rawRuns = [];

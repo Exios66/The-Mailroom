@@ -196,16 +196,56 @@ class LangfuseSource:
         self.cache.set(key, out, self.poll_cache_ttl)
         return out
 
+    def _light_traces_from_list(self) -> dict[str, dict[str, Any]]:
+        """Trace records harvested from list pages (cheap, un-rate-limited).
+
+        The v4 cloud rate-limits GET /traces/{traceId} hard — its own error
+        says to use the observations index instead — so drill-down first
+        reuses the list payloads we already fetch every poll.
+        """
+        key = "list-harvest"
+        cached = self.cache.get(key)
+        if isinstance(cached, dict):
+            return cached
+        trace_api = self._api("trace")
+        out: dict[str, dict[str, Any]] = {}
+        if trace_api is not None:
+            for page in (1, 2):
+                try:
+                    resp = self._guarded(
+                        "trace.list", lambda p=page: trace_api.list(limit=100, page=p)
+                    )
+                except LangfuseUnavailable:
+                    break
+                batch = [_to_dict(t) for t in _page_data(resp)]
+                for t in batch:
+                    tid = t.get("id")
+                    if tid:
+                        out[tid] = t
+                        self.cache.set(f"trace:{tid}", t, self.cache_ttl)
+                if len(batch) < 100:
+                    break
+        self.cache.set(key, out, self.cache_ttl)
+        return out
+
     def get_trace(self, trace_id: str) -> Optional[dict[str, Any]]:
         key = f"trace:{trace_id}"
         cached = self.cache.get(key)
         if cached is not None:
             return cached
+        # Preferred: the list harvest (V-26) — avoids the rate-limited
+        # detail endpoint entirely for anything seen in a recent poll.
+        harvested = self._light_traces_from_list().get(trace_id)
+        if harvested is not None:
+            return harvested
         trace_api = self._api("trace")
         if trace_api is None:
             raise LangfuseUnavailable("trace API unavailable")
         try:
-            resp = trace_api.get(trace_id)
+            # Fast-fail: retrying the detail endpoint just burns ~30s in
+            # backoff before returning the same rate-limit error.
+            resp = trace_api.get(trace_id, request_options={
+                "timeout_in_seconds": 10, "max_retries": 0})
         except Exception:
             return None
         if resp is None:
@@ -219,19 +259,26 @@ class LangfuseSource:
         cached = self.cache.get(key)
         if cached is not None:
             return cached
-        # The trace record embeds its own authoritative observation set
-        # (complete: usage, cost, model, io) — one API call instead of two.
-        embedded = (self.get_trace(trace_id) or {}).get("observations")
-        if isinstance(embedded, list) and embedded:
-            out = [_to_dict(o) for o in embedded]
-        else:
-            # Fallback: the v2 observations index (eventually consistent).
-            obs_api = self._api("observations")
-            if obs_api is None:
-                return []
-            resp = self._guarded("observations.get_many",
-                                 lambda: obs_api.get_many(trace_id=trace_id, limit=100))
-            out = [_to_dict(o) for o in _page_data(resp)]
+        # V-26: the observations INDEX (documented alternative to the
+        # rate-limited trace-detail endpoint) is now the primary path;
+        # the embedded set from trace.get is only a fallback.
+        obs_api = self._api("observations")
+        out: list[dict[str, Any]] = []
+        fetched = False
+        if obs_api is not None:
+            try:
+                resp = self._guarded("observations.get_many",
+                                     lambda: obs_api.get_many(trace_id=trace_id, limit=100))
+                out = [_to_dict(o) for o in _page_data(resp)]
+                fetched = True
+            except LangfuseUnavailable:
+                out = []
+        if not fetched or not out:
+            # Fallback: the trace record embeds its own authoritative
+            # observation set (complete: usage, cost, model, io).
+            embedded = (self.get_trace(trace_id) or {}).get("observations")
+            if isinstance(embedded, list) and embedded:
+                out = [_to_dict(o) for o in embedded]
         self.cache.set(key, out, self.cache_ttl)
         return out
 
@@ -406,6 +453,10 @@ def enriched_recent_runs(
     `run_cache_ttl`, so repeated calls (metrics + review + sessions + poller)
     share the same fetches. One bad trace degrades to its light run instead
     of aborting the whole list (per-trace isolation).
+
+    V-26 note: deliberately SEQUENTIAL — enrichment now rides the un-rate-
+    limited observations index + list harvest, and parallelism on Langfuse's
+    read endpoints just trips the per-endpoint rate limiter faster.
     """
     import logging
 

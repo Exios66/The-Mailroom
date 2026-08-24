@@ -217,9 +217,10 @@ class TestNoNPlusOneFetching:
     def test_get_run_shared_cache_single_fetch(self):
         from tests.fake_langfuse import make_trace
 
-        # The run-level cache (60 s, > poll interval) means the poller +
-        # metrics + review + sessions all share ONE fetch per run per TTL
-        # instead of re-reading per call.
+        # V-26: drill-down prefers the LIST harvest — the rate-limited
+        # detail endpoint is never touched when the trace was seen in a
+        # recent list page. The run-level cache then makes the poller +
+        # metrics + review + sessions share one fetch per TTL.
         src = _source([make_trace("t1")], cache_ttl=15, poll_cache_ttl=15)
         get_calls = []
         orig_get = src.client.api.trace.get
@@ -232,7 +233,49 @@ class TestNoNPlusOneFetching:
         src.get_run("t1")
         src.get_run("t1")
         src.get_run("t1")
+        assert len(get_calls) == 0  # harvest hit: detail endpoint avoided
+
+    def test_get_run_detail_fallback_when_harvest_misses(self):
+        from tests.fake_langfuse import make_trace
+
+        # A trace NOT present in list pages still resolves via the detail
+        # endpoint (fast-fail, no retry storms) exactly once per TTL.
+        src = _source([make_trace("t1")], cache_ttl=15, poll_cache_ttl=15)
+        # poison the harvest so the fallback path is exercised
+        src.cache.set("list-harvest", {}, 30)
+        get_calls = []
+        orig_get = src.client.api.trace.get
+
+        def counting(trace_id, **kw):
+            get_calls.append(trace_id)
+            return orig_get(trace_id)
+
+        src.client.api.trace.get = counting
+        run = src.get_run("t1")
+        assert run is not None
         assert len(get_calls) == 1
+
+    def test_observations_index_is_primary_path(self):
+        from tests.fake_langfuse import make_trace, Obj
+
+        # V-26: observations come from the v2 index (the documented
+        # alternative to the rate-limited detail endpoint); the embedded
+        # set on the trace record is only a fallback.
+        embedded_used = []
+        tr = make_trace("t1")
+        src = _source([tr], cache_ttl=15, poll_cache_ttl=15)
+        obs_api = src.client.api.observations
+
+        real_get_many = obs_api.get_many
+
+        def counting(**kw):
+            embedded_used.append(kw.get("trace_id"))
+            return real_get_many(**kw)
+
+        obs_api.get_many = counting
+        obs = src.get_observations("t1")
+        assert obs, "observations should resolve from the index"
+        assert "t1" in embedded_used
 
 
 class TestEnrichedRecentRuns:
