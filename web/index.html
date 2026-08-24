@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>THE MAILROOM</title>
-<link rel="stylesheet" href="/static/css/theme.css">
+<link rel="stylesheet" href="static/css/theme.css">
 </head>
 <body>
 <div class="bezel">
@@ -63,6 +63,10 @@
 
       <section id="view-console" class="view" hidden>
         <div class="panel-head mono">LIVE CONSOLE</div>
+        <div id="console-tools" style="display:flex;gap:8px;margin-bottom:8px">
+          <button id="debug-toggle" class="px-btn mono">DEBUG OFF</button>
+          <span class="mono" style="color:var(--gray-dim);align-self:center">DEBUG reveals low-level lines · verbose capture to __MAILROOM_DEBUG__ (dump/export)</span>
+        </div>
         <pre id="console-log" class="console mono"></pre>
       </section>
     </main>
@@ -101,14 +105,14 @@
   </div>
 </div>
 
-<script src="/static/js/api.js?v=0.2.0"></script>
-<script src="/static/js/floor.js?v=0.2.0"></script>
-<script src="/static/js/inspector.js?v=0.2.0"></script>
-<script src="/static/js/sessions.js?v=0.2.0"></script>
-<script src="/static/js/history.js?v=0.2.0"></script>
-<script src="/static/js/metrics.js?v=0.2.0"></script>
-<script src="/static/js/review.js?v=0.2.0"></script>
-<script src="/static/js/console.js?v=0.2.0"></script>
-<script src="/static/js/main.js?v=0.2.0"></script>
+<script src="static/js/api.js?v=0.3.0"></script>
+<script src="static/js/floor.js?v=0.3.0"></script>
+<script src="static/js/inspector.js?v=0.3.0"></script>
+<script src="static/js/sessions.js?v=0.3.0"></script>
+<script src="static/js/history.js?v=0.3.0"></script>
+<script src="static/js/metrics.js?v=0.3.0"></script>
+<script src="static/js/review.js?v=0.3.0"></script>
+<script src="static/js/console.js?v=0.3.0"></script>
+<script src="static/js/main.js?v=0.3.0"></script>
 </body>
 </html>

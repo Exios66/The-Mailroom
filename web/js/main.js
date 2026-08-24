@@ -42,6 +42,17 @@ const Main = (() => {
   }
 
   function applySource() {
+    if (Mailroom.staticMode) {
+      setLamp("gold");
+      sourceLabelEl.textContent = "SOURCE: SNAPSHOT";
+      sourceLabelEl.className = "st-warn mono";
+      statusLeftEl.textContent = "MAILROOM SNAPSHOT — BUNDLED DATA (NO LIVE API)";
+      statusLeftEl.className = "st-warn mono";
+      closedEl.hidden = true;
+      Floor.setSource("gold");
+      stopDemo();
+      return;
+    }
     if (!langfuseOk && !demoMode) {
       setLamp("red");
       sourceLabelEl.textContent = "SOURCE: OFFLINE";
@@ -200,14 +211,32 @@ const Main = (() => {
   }
 
   async function checkHealth() {
+    if (Mailroom.staticMode) { applySource(); return true; }
     try {
       const h = await Mailroom.api.health();
-      langfuseOk = !!h.langfuse;
+      // Source-agnostic "ok" (multi/phoenix sources) with langfuse fallback.
+      langfuseOk = !!(h.ok ?? h.langfuse);
     } catch (err) {
-      langfuseOk = false;
       ConsoleView.log(`health check failed: ${err.message || err}`, "c-bad");
+      // GH Pages: no live API reachable — fall back to bundled snapshots.
+      const enabled = await Mailroom.enableStaticMode();
+      if (enabled) {
+        langfuseOk = true;
+        ConsoleView.banner("SNAPSHOT MODE — SERVING BUNDLED DATA");
+        try {
+          const m = await Mailroom.api.meta();
+          Mailroom.meta = m;
+          applySnapshot((await Mailroom.api.traces(1800, 200)).runs || []);
+        } catch (e2) {
+          Mailroom.showError(`snapshot load: ${e2.message || e2}`);
+        }
+        applySource();
+        return true;
+      }
+      langfuseOk = false;
     }
     applySource();
+    return langfuseOk;
   }
 
   function onMessage(msg) {
@@ -338,17 +367,20 @@ const Main = (() => {
     });
 
     setInterval(checkHealth, 5000);
-    checkHealth();
-
-    setTimeout(() => {
-      if (!wsOk) startFallbackPolling();
-    }, 8000);
+    // WS starts only once the first health probe resolves: in snapshot mode
+    // there is no /ws endpoint to hold open (GH Pages), so don't spin a
+    // reconnect loop against static hosting.
+    checkHealth().then((ok) => {
+      if (!ok) return;
+      setTimeout(() => {
+        if (!wsOk && !Mailroom.staticMode) startFallbackPolling();
+      }, 8000);
+      if (!Mailroom.staticMode) Mailroom.connectWS(onMessage);
+    });
 
     if (requestedView && tabEls.some((t) => t.dataset.view === requestedView)) {
       switchView(requestedView);
     }
-
-    Mailroom.connectWS(onMessage);
   }
 
   document.addEventListener("DOMContentLoaded", boot);

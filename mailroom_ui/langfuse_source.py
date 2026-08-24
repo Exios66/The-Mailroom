@@ -17,11 +17,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
 
 from .models import PipelineRun
+from .sources import TraceSourceUnavailable
 from .trace_interpreter import interpret_trace
 
 
-class LangfuseUnavailable(RuntimeError):
-    pass
+class LangfuseUnavailable(TraceSourceUnavailable):
+    """Back-compat alias: the shared TraceSourceUnavailable base is what the
+    server's 503 handler registers; this subclass keeps every existing
+    except-clause working."""
 
 
 class TTLCache:
@@ -108,11 +111,27 @@ class LangfuseSource:
         from langfuse import Langfuse
 
         try:
+            # V-27: cap SDK-internal retries — v4 cloud rate-limits bursty
+            # read paths and the default retry/backoff turned a contended
+            # list call into a 40s hang (observed). One fast retry is plenty
+            # for a UI that polls every few seconds anyway.
             return Langfuse(
                 public_key=os.environ.get("LANGFUSE_PUBLIC_KEY"),
                 secret_key=os.environ.get("LANGFUSE_SECRET_KEY"),
                 host=os.environ.get("LANGFUSE_HOST", "https://us.cloud.langfuse.com"),
+                timeout=15,
+                max_retries=1,
             )
+        except TypeError:
+            # Older SDKs without these kwargs
+            try:
+                return Langfuse(
+                    public_key=os.environ.get("LANGFUSE_PUBLIC_KEY"),
+                    secret_key=os.environ.get("LANGFUSE_SECRET_KEY"),
+                    host=os.environ.get("LANGFUSE_HOST", "https://us.cloud.langfuse.com"),
+                )
+            except Exception:
+                return None
         except Exception:
             return None
 
@@ -165,7 +184,12 @@ class LangfuseSource:
         name: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """Raw trace summaries (list page(s))."""
-        key = f"traces:{since}:{limit}:{tags}:{environments}:{name}"
+        # V-27: bucket the window to 30s for the cache key — the caller passes
+        # a fresh now()-delta every request, so the raw datetime key never hit
+        # and every poll re-struck Langfuse (compounding v4 rate limits).
+        since = since or (datetime.now(timezone.utc) - timedelta(hours=6))
+        bucket = int(since.timestamp()) // 30
+        key = f"traces:{bucket}:{limit}:{tags}:{environments}:{name}"
         cached = self.cache.get(key)
         if cached is not None:
             return cached
@@ -397,7 +421,9 @@ class LangfuseSource:
             ok = True
         except Exception:
             ok = False
-        return {"langfuse": ok, "source": "langfuse", "cached_trace_count": None}
+        # "ok" is the source-agnostic key the SPA checks (Phoenix/multi
+        # sources return their own keys; "langfuse" stays for back-compat).
+        return {"ok": ok, "langfuse": ok, "source": "langfuse", "cached_trace_count": None}
 
 
 def list_recent_runs(

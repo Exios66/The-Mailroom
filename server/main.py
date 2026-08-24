@@ -22,14 +22,17 @@ load_dotenv()
 
 from mailroom_ui.langfuse_source import (
     LangfuseSource,
-    LangfuseUnavailable,
     enriched_recent_runs,
     list_recent_runs,
 )
 from mailroom_ui.metrics import compute_metrics
 from mailroom_ui.models import PipelineRun, SessionSummary
+from mailroom_ui.multi_source import MultiSource
 from mailroom_ui.pipeline_schema import DOC_CLASSES
+from mailroom_ui.phoenix_source import PhoenixSource
+from mailroom_ui.sources import TraceSourceUnavailable
 from mailroom_ui.trace_interpreter import interpret_trace
+from server.debug_log import DebugLog, DebugLogMiddleware
 from server.poller import PollHub, floor_payload
 
 log = logging.getLogger("mailroom.server")
@@ -39,9 +42,33 @@ RECENT_WINDOW = float(os.environ.get("MAILROOM_RECENT_WINDOW", 6 * 3600))
 POLL_INTERVAL = float(os.environ.get("MAILROOM_POLL_INTERVAL", "3"))
 TRACE_LIMIT = int(os.environ.get("MAILROOM_TRACE_LIMIT", "100"))
 
+API_ENDPOINTS = [
+    {"method": "GET", "path": "/api/health", "desc": "source reachability"},
+    {"method": "GET", "path": "/api/traces", "desc": "recent runs (light); ?since=&limit=&stage=&environment="},
+    {"method": "GET", "path": "/api/traces/{trace_id}", "desc": "full run detail (spans/generations/scores)"},
+    {"method": "GET", "path": "/api/metrics", "desc": "window aggregates; ?since="},
+    {"method": "GET", "path": "/api/sessions", "desc": "sessions / matters; /api/sessions/{session_id} for one"},
+    {"method": "GET", "path": "/api/review-queue", "desc": "runs flagged for human review; ?since="},
+    {"method": "GET", "path": "/api/meta", "desc": "doc classes, active sources, this endpoint index"},
+    {"method": "GET", "path": "/api/debug/logs", "desc": "request ring buffer for agents; ?limit="},
+    {"method": "GET", "path": "/api/debug/source", "desc": "configured sources + knobs"},
+    {"method": "WS", "path": "/ws", "desc": "floor snapshots (live mode only)"},
+]
 
-def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
-    src = source or LangfuseSource()
+
+def _build_default_source() -> object:
+    """MAILROOM_SOURCE selector: langfuse (default) | phoenix | both."""
+    which = os.environ.get("MAILROOM_SOURCE", "langfuse").strip().lower()
+    if which == "phoenix":
+        return PhoenixSource()
+    if which in ("both", "multi", "all"):
+        return MultiSource([LangfuseSource(), PhoenixSource()])
+    return LangfuseSource()
+
+
+def create_app(source: Optional[object] = None) -> FastAPI:
+    src = source or _build_default_source()
+    debug_log = DebugLog()
     hub = PollHub(src, interval=POLL_INTERVAL, window=RECENT_WINDOW, limit=TRACE_LIMIT)
 
     @asynccontextmanager
@@ -50,9 +77,23 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
         yield
         await hub.stop()
 
-    app = FastAPI(title="The-Mailroom", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="The-Mailroom", version="0.3.0", lifespan=lifespan)
 
-    @app.exception_handler(LangfuseUnavailable)
+    # GH Pages edition: the static site (https://<user>.github.io/<repo>/) must
+    # be able to call this API when it runs locally next to Phoenix — CORS for
+    # browser fetches, read-only GETs only.
+    from fastapi.middleware.cors import CORSMiddleware
+
+    origins = [o.strip() for o in os.environ.get("MAILROOM_CORS_ORIGINS", "*").split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins or ["*"],
+        allow_methods=["GET", "OPTIONS"],
+        allow_headers=["*"],
+    )
+    app.add_middleware(DebugLogMiddleware, recorder=debug_log)
+
+    @app.exception_handler(TraceSourceUnavailable)
     async def langfuse_down_handler(request, exc):
         return JSONResponse(
             status_code=503,
@@ -87,7 +128,7 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
             runs = [r for r in runs if r.environment == environment]
         return {
             "count": len(runs),
-            "source": "langfuse",
+            "source": _source_names(src),
             "runs": [_serialize(r) for r in runs],
         }
 
@@ -108,7 +149,7 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
         # shares fetches with the poller instead of adding another N+1.
         runs = enriched_recent_runs(src, since=_utcnow() - timedelta(seconds=since), limit=TRACE_LIMIT)
         m = compute_metrics(runs, since=_utcnow() - timedelta(seconds=since))
-        return {"source": "langfuse", **m.model_dump()}
+        return {"source": _source_names(src), **m.model_dump()}
 
     @app.get("/api/sessions")
     def sessions(limit: int = Query(50, ge=1, le=200)):
@@ -135,7 +176,7 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
                 runs=rs[:20],
             ))
         out.sort(key=lambda s: s.updated_at or datetime.min, reverse=True)
-        return {"count": len(out[:limit]), "source": "langfuse",
+        return {"count": len(out[:limit]), "source": _source_names(src),
                 "sessions": [s.model_dump() for s in out[:limit]]}
 
     @app.get("/api/sessions/{session_id}")
@@ -155,7 +196,7 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
         # the wider 500 cap.
         runs = [r for r in enriched_recent_runs(src, since=_utcnow() - timedelta(seconds=since), limit=500)
                 if r.needs_human]
-        return {"count": len(runs), "source": "langfuse", "runs": [_serialize(r) for r in runs]}
+        return {"count": len(runs), "source": _source_names(src), "runs": [_serialize(r) for r in runs]}
 
     @app.get("/api/meta")
     def meta():
@@ -168,7 +209,32 @@ def create_app(source: Optional[LangfuseSource] = None) -> FastAPI:
             classes = schema.doc_classes if hasattr(schema, "doc_classes") else DOC_CLASSES
         except Exception:
             classes = DOC_CLASSES
-        return {"doc_classes": classes, "source": "langfuse"}
+        return {
+            "doc_classes": classes,
+            "source": _source_names(src),
+            "mode": "api",
+            "version": _version(),
+            "endpoints": API_ENDPOINTS,
+        }
+
+    @app.get("/api/debug/logs")
+    def debug_logs(limit: int = Query(200, ge=1, le=500)):
+        return {"count_limit": limit, "events": debug_log.snapshot(limit)}
+
+    @app.get("/api/debug/source")
+    def debug_source():
+        info: dict = {
+            "selector": os.environ.get("MAILROOM_SOURCE", "langfuse"),
+            "sources": _source_names(src).split("+"),
+            "debug_stdout": debug_log.verbose,
+            "poll_interval_s": POLL_INTERVAL,
+            "recent_window_s": RECENT_WINDOW,
+            "trace_limit": TRACE_LIMIT,
+        }
+        for attr in ("project",):
+            if hasattr(src, attr):
+                info["phoenix_project"] = getattr(src, attr)
+        return info
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
@@ -199,6 +265,21 @@ def _utcnow() -> datetime:
     """Langfuse stores UTC — every query window must be UTC-aware (a naive
     local now() shifts the window by the machine's UTC offset)."""
     return datetime.now(timezone.utc)
+
+
+def _source_names(src: object) -> str:
+    if isinstance(src, MultiSource):
+        return "+".join(type(s).__name__.replace("Source", "").lower() for s in src.sources)
+    return type(src).__name__.replace("Source", "").lower()
+
+
+def _version() -> str:
+    try:
+        from importlib.metadata import version
+
+        return version("the-mailroom")
+    except Exception:
+        return "dev"
 
 
 def _recent(src: LangfuseSource, since: int, limit: int) -> list[PipelineRun]:

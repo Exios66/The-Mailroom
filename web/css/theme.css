@@ -339,6 +339,9 @@ main { min-height: 520px; }
 .console .line.c-warn { color: var(--gold); }
 .console .line.c-bad  { color: var(--red-light); }
 .console .line.c-blue { color: var(--blue-light); }
+
+/* GH Pages edition: DEBUG toggle hides low-level c-dim chatter until asked. */
+.console.hide-dim .line.c-dim { display: none; }
 .console .banner {
   color: var(--gold);
   font-weight: 700;

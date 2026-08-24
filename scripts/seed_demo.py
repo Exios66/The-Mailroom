@@ -191,11 +191,13 @@ def build_run(spec, start):
             input={
                 "filename": spec["filename"],
                 "matter_id": spec["matter"],
-                "doc_type": doc,
-                # docclass-pilot subclasses ride along for display/eval joins
-                "subclass": spec.get("subclass"),
                 "attempt": spec.get("attempt", 1),
                 "source": "docclass-pilot",
+                # V-27: ground-truth labels (doc_type/subclass) are NEVER in
+                # the trace input — the sorter and specialists are evaluated
+                # AGAINST them, so agents must not see them. The pipeline's
+                # own predicted class lives in trace output; the ground truth
+                # itself only surfaces as evaluation scores (grounded block).
             },
             output=spec["trace_output"],
             metadata={
