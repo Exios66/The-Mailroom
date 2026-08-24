@@ -242,6 +242,7 @@ main { min-height: 520px; }
 
 .chip.stage-intake   { background: #2c2c30; color: var(--blue-light); }
 .chip.stage-extract  { background: #2c2c30; color: var(--amber); }
+.chip.stage-judge    { background: #2a2436; color: #b9a3dc; }
 .chip.stage-report   { background: #2c2c30; color: var(--green-light); }
 .chip.stage-review   { background: #3a2f1e; color: var(--gold); }
 .chip.stage-archived { background: #22301f; color: var(--green-light); }

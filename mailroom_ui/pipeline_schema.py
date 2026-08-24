@@ -19,6 +19,8 @@ SPAN_STAGE_MAP: dict[str, Stage] = {
     "transcribe-pdf": Stage.INGEST,
     "extract-image-text": Stage.INGEST,
     "classify-document": Stage.CLASSIFY,
+    "judge-verify": Stage.JUDGE_VERIFY,
+    "arbitrate-verdict": Stage.ARBITER,
     "extract-fields": Stage.EXTRACT,
     "route-for-review": Stage.HUMAN_REVIEW,
     "adjudicate-conflict": Stage.BOSS,
@@ -34,6 +36,8 @@ STAGE_PHASE: dict[Stage, Phase] = {
     Stage.RETRY_CLASSIFY: Phase.INTAKE_SORT,
     Stage.EXTRACT: Phase.EXTRACTION_ADJUDICATION,
     Stage.RETRY_EXTRACT: Phase.EXTRACTION_ADJUDICATION,
+    Stage.JUDGE_VERIFY: Phase.EXTRACTION_ADJUDICATION,
+    Stage.ARBITER: Phase.EXTRACTION_ADJUDICATION,
     Stage.BOSS: Phase.EXTRACTION_ADJUDICATION,
     Stage.COMPILE_REPORT: Phase.REPORTING_ARCHIVE,
     Stage.CATALOG: Phase.REPORTING_ARCHIVE,
@@ -44,13 +48,16 @@ STAGE_PHASE: dict[Stage, Phase] = {
     Stage.UNKNOWN: Phase.INTAKE_SORT,
 }
 
-# Node traversal order used to order spans into a routing path.
+# Node traversal order used to order spans into a routing path (mirrors the
+# add_node wiring order in llm-mailroom graph/build_graph.py).
 NODE_ORDER: list[Stage] = [
     Stage.INGEST,
     Stage.CLASSIFY,
     Stage.RETRY_CLASSIFY,
     Stage.EXTRACT,
     Stage.RETRY_EXTRACT,
+    Stage.JUDGE_VERIFY,
+    Stage.ARBITER,
     Stage.BOSS,
     Stage.HUMAN_REVIEW,
     Stage.COMPILE_REPORT,
@@ -58,20 +65,24 @@ NODE_ORDER: list[Stage] = [
     Stage.ARCHIVE,
 ]
 
-# Agent display roster: key -> (label, doc classes it serves)
+# Agent display roster: key -> (label, role). Mirrors src/agents/ of
+# llm-mailroom (+ langchain_agents/sorter_agent.py for sorter/sorter_reviewer).
 AGENTS: dict[str, dict[str, str]] = {
     "sorter": {"label": "Sorter", "role": "classify"},
+    "sorter_reviewer": {"label": "Sorter Reviewer", "role": "review-classify"},
     "contracts_specialist": {"label": "Contracts", "role": "extract"},
     "corporate_records_specialist": {"label": "Corporate", "role": "extract"},
     "due_diligence_specialist": {"label": "Due Diligence", "role": "extract"},
     "correspondence_specialist": {"label": "Correspondence", "role": "extract"},
     "compliance_specialist": {"label": "Compliance", "role": "extract"},
     "court_opinions_specialist": {"label": "Court Opinions", "role": "extract"},
+    "insurance_claims_specialist": {"label": "Insurance Claims", "role": "extract"},
+    "arbiter": {"label": "Arbiter", "role": "adjudicate"},
     "boss": {"label": "Boss", "role": "adjudicate"},
     "reporter": {"label": "Reporter", "role": "report"},
     "judge": {"label": "Judge", "role": "evaluate"},
     "pdf_transcriber": {"label": "Transcriber", "role": "ingest"},
-    "image-extractor": {"label": "Image Extractor", "role": "ingest"},
+    "image_extractor": {"label": "Image Extractor", "role": "ingest"},
 }
 
 DOC_CLASSES: dict[str, str] = {
@@ -81,6 +92,7 @@ DOC_CLASSES: dict[str, str] = {
     "correspondence": "Correspondence",
     "compliance_filing": "Compliance Filing",
     "court_opinion": "Court Opinion",
+    "insurance_claim": "Insurance Claim",
 }
 
 DEFAULT_DOC_CLASSES: dict[str, str] = dict(DOC_CLASSES)
@@ -92,6 +104,7 @@ SPECIALIST_BY_DOC_CLASS: dict[str, str] = {
     "correspondence": "correspondence_specialist",
     "compliance_filing": "compliance_specialist",
     "court_opinion": "court_opinions_specialist",
+    "insurance_claim": "insurance_claims_specialist",
 }
 
 
@@ -103,6 +116,7 @@ class PipelineSchema:
     confidence_low: float = 0.70
     retry_max: int = 1
     conflict_threshold: float = 0.3
+    judge_band_high: float = 0.85   # routing.py judge_gate default
     doc_classes: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_DOC_CLASSES))
 
     @classmethod
@@ -125,6 +139,7 @@ class PipelineSchema:
         schema.confidence_low = float(conf.get("low", schema.confidence_low))
         schema.retry_max = int(conf.get("retry_max", schema.retry_max))
         schema.conflict_threshold = float(conf.get("conflict_threshold", schema.conflict_threshold))
+        schema.judge_band_high = float(conf.get("judge_band_high", schema.judge_band_high))
         classes = {}
         for dc in cfg.get("doc_classes", []) or []:
             if isinstance(dc, dict) and dc.get("key"):

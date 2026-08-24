@@ -39,14 +39,16 @@ API_BASE = os.environ.get("MAILROOM_API_URL", "http://127.0.0.1:8001").rstrip("/
 POLL_INTERVAL = float(os.environ.get("MAILROOM_TUI_POLL", "5"))
 
 STAGE_ORDER = [
-    "inbox", "ingest", "classify", "retry_classify", "extract", "retry_extract",
+    "inbox", "ingest", "classify", "retry_classify",
+    "extract", "retry_extract", "judge_verify", "arbiter",
     "boss", "review", "report", "catalog", "archive", "archived", "failed",
 ]
 
 STAGE_STYLE = {
     "inbox": "grey50", "ingest": "grey70", "classify": "cyan",
     "retry_classify": "cyan", "extract": "yellow", "retry_extract": "yellow",
-    "boss": "magenta", "review": "bright_yellow", "report": "green",
+    "judge_verify": "magenta", "arbiter": "magenta",
+    "boss": "red", "review": "bright_yellow", "report": "green",
     "catalog": "green", "archive": "green", "archived": "bright_green",
     "failed": "bright_red", "unknown": "grey50",
 }
@@ -54,6 +56,7 @@ STAGE_STYLE = {
 STATION_BY_STAGE = {
     "inbox": "INBOX", "ingest": "Sorter", "classify": "Sorter",
     "retry_classify": "Sorter", "extract": "Specialist", "retry_extract": "Specialist",
+    "judge_verify": "Judge", "arbiter": "Arbiter",
     "boss": "Boss", "review": "Review siding", "report": "Reporter",
     "catalog": "Archivist", "archive": "Archivist", "archived": "Archive",
     "failed": "Failed bin", "unknown": "?",

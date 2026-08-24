@@ -108,14 +108,19 @@ class TestTzNormalization:
         from mailroom_ui.metrics import compute_metrics
         from mailroom_ui.models import PipelineRun
 
+        # Timestamps are RELATIVE to now so the 24 h window can never go
+        # stale (the original fixed 2026-08-10 dates silently broke the
+        # moment real time passed them — a date bomb). The naive/aware mix
+        # is preserved: naive == the same UTC instant with tzinfo stripped.
+        now_utc = datetime.now(timezone.utc)
         naive_run = PipelineRun(
             trace_id="t1", filename="a.pdf", stage="archived",
-            updated_at=datetime(2026, 8, 10, 12, 0, 0),  # naive
+            updated_at=now_utc.replace(tzinfo=None, microsecond=0),  # naive
         )
         aware_run = PipelineRun(
             trace_id="t2", filename="b.pdf", stage="failed",
-            updated_at=datetime(2026, 8, 10, 12, 0, 0, tzinfo=timezone(timedelta(hours=-5))),
+            updated_at=now_utc.astimezone(timezone(timedelta(hours=-5))),
         )
-        since = datetime.now(timezone.utc) - timedelta(days=1)
+        since = now_utc - timedelta(days=1)
         m = compute_metrics([naive_run, aware_run], since=since)
         assert m.total_docs == 2

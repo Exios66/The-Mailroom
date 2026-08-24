@@ -7,7 +7,7 @@ The-Mailroom is the **visual engine** for the `llm-mailroom` multi-agent legal-d
 - **Expected location**: a sibling of this repo, i.e. `../llm-mailroom` from this checkout (e.g. `/Users/luciusjmorningstar/Downloads/llm-mailroom`). It is **not currently present on this machine** — clone it before relying on `MAILROOM_TAXONOMY`.
 - It is the **upstream**: The-Mailroom reads *its* Langfuse project (US cloud, project `llm-mailroom`). Its `AGENTS.md` is authoritative for pipeline internals; consult it whenever the pipeline's tracing contract is in doubt.
 - **What we mirror from it, and must keep in sync (the #1 maintenance duty)** — when the pipeline changes, update all of these in one change:
-  - `mailroom_ui/pipeline_schema.py` — mirrors `graph/routing.py` + `config/taxonomy.yaml`: node/span names (`SPAN_STAGE_MAP`), stage→phase map, agent roster, `DOC_CLASSES`, `SPECIALIST_BY_DOC_CLASS`, confidence thresholds.
+  - `mailroom_ui/pipeline_schema.py` — mirrors `src/graph/routing.py` + `src/config/taxonomy.yaml`: node/span names (`SPAN_STAGE_MAP`), stage→phase map, node order, agent roster (15 agents incl. `sorter_reviewer`, `arbiter`, `judge`, `insurance_claims_specialist`), `DOC_CLASSES` (7 classes incl. `court_opinion`, `insurance_claim`), `SPECIALIST_BY_DOC_CLASS`, confidence thresholds (+ `judge_band_high`).
   - `mailroom_ui/trace_interpreter.py` — maps its span names, trace metadata/input/output fields, and score names (`JUDGE_VERDICT_SCORES` = `mailroom-pipeline-judge`, `JUDGE_QUALITY_SCORES` = `mailroom-pipeline-quality`).
   - Tests — `tests/fake_langfuse.py` fixtures mirror the trace contract.
   - CHANGELOG entry for the sync (see Release process).
@@ -61,9 +61,9 @@ python scripts/release.py --help     # semver release workflow (see below)
 ## Trace structure we interpret (the contract with llm-mailroom)
 
 - One `document-pipeline` trace per document; **deterministic trace id seeded from the filename**; re-runs reuse it (hence the cluster logic above).
-- Verb-first node spans: `ingest-document`, `classify-document`, `extract-fields`, `route-for-review`, `adjudicate-conflict`, `compile-report`, `write-catalog`, `archive-document` (+ ingest variants `transcribe-pdf`, `extract-image-text`).
+- Verb-first node spans (13-node graph, `src/graph/build_graph.py`): `ingest-document`, `classify-document` (classify / retry_classify / review_classify nodes), `judge-verify`, `arbitrate-verdict`, `extract-fields` (extract / retry_extract), `route-for-review`, `adjudicate-conflict`, `compile-report`, `write-catalog`, `archive-document` (+ ingest variants `transcribe-pdf`, `extract-image-text`). The KANBAN-063 quality gate: `judge_verify` fires on the ambiguous extraction band (`judge_band_high`, default 0.85) and a partial verdict detours through the arbiter before reporting.
 - `session_id = matter_id` (pilot runs use run-scoped sessions); tags `[mailroom, <env>, run-<n>, source-<corpus>?]`; metadata `{attempt, run_id, run_deadline}`; curated `input` (file metadata) / `output` (stage, doc_type, confidences, error).
-- Scores: confidences (`classification_confidence`, `extraction_confidence`), run metrics (`estimated_cost_usd`, `total_tokens`, `stage_completed`, ...), judge verdict (`mailroom-pipeline-judge` = CORRECT/PARTIAL/MISS), quality (`mailroom-pipeline-quality` = 0–1).
+- Scores: confidences (`classification_confidence`, `extraction_confidence`), run metrics (`estimated_cost_usd`, `total_tokens`, `stage_completed`, ...), judge verdict (`mailroom-pipeline-judge` = CORRECT/PARTIAL/MISS), quality (`mailroom-pipeline-quality` = 0–1). Grounded pilot runs also carry deterministic field scores (`extraction_field_score`, `extraction_overall_score`, `extraction_needs_judge_review`, `entity_list_precision/recall`).
 
 ## Config gotchas
 
@@ -119,7 +119,12 @@ python scripts/release.py --help     # semver release workflow (see below)
   snapshots (`--once` for scripting).
 - **M5 — polish**: DONE — `scripts/seed_demo.py` seeds demo runs INTO
   Langfuse (env `demo`) with `--check` / `--check-api` / `--check-logs`
-  verification modes (asserted 10/10 stored + 10/10 display against live
-  Langfuse); sprite layout verified programmatically (pixel-sampled PNG
-  checks). Remaining: acceptance sweep of new doc classes/live traces,
-  sprite expansions.
+  verification modes; sprite layout verified programmatically. Remaining:
+  acceptance sweep of new doc classes/live traces, sprite expansions.
+- **v0.2.0 — upstream sync (2026-08-23)**: mirror updated to the current
+  llm-mailroom graph — `judge_verify`/`arbiter` stages + spans, 15-agent
+  roster, 7 doc classes, `judge_band_high`; floor gained the JUDGE station
+  (7 stations); seed_demo grew judge-gate/arbiter scenarios on the real
+  model registry (qwen/deepseek); in-flight runs now refine the generic
+  `processing` marker with span progress instead of pinning to INGEST;
+  metrics date-bomb test fixed.

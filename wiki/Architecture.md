@@ -25,9 +25,9 @@ keys).
 │               pipeline_schema.py ← topology mirror (taxonomy.yaml)        │
 │               metrics.py · models.py                                       │
 │ server/  FastAPI :8001 → /api/* + /ws → serves web/                        │
-│ web/     pixel-art SPA: Floor (conveyor) · Inspector · Sessions ·          │
-│          Metrics · Console                                                 │
-│ tui/     rich-based console (planned)                                      │
+│ web/     pixel-art SPA: Floor (conveyor, 7 stations incl. JUDGE) ·        │
+│          Inspector · Sessions · History · Metrics · Review · Console      │
+│ tui/     rich-based console (mailroom-tui)                                 │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -55,8 +55,11 @@ A `document-pipeline` trace carries:
   `metadata` (`{attempt, run_id, run_deadline}`), curated `input`/`output`.
 - **Node spans**: verb-first names mapped to stages by
   `pipeline_schema.SPAN_STAGE_MAP` (`ingest-document`, `classify-document`,
-  `extract-fields`, `route-for-review`, `adjudicate-conflict`,
-  `compile-report`, `write-catalog`, `archive-document`, …).
+  `judge-verify`, `arbitrate-verdict`, `extract-fields`, `route-for-review`,
+  `adjudicate-conflict`, `compile-report`, `write-catalog`,
+  `archive-document`, …). The KANBAN-063 quality gate: `judge-verify` runs on
+  the ambiguous extraction band and a partial verdict detours through the
+  arbiter before reporting.
 - **Generations**: auto-traced LLM calls (model, usage, latency,
   `cost_details`).
 - **Scores**: confidences, run metrics, judge verdict
@@ -71,9 +74,11 @@ trace, showing the latest run.
 ## Pipeline topology mirror
 
 `pipeline_schema.py` bundles a mirror of the pipeline's graph
-(`graph/routing.py` + `config/taxonomy.yaml`): node/span names, stage→phase
-mapping, agent roster, doc classes, specialist dispatch, and confidence
-thresholds. The `MAILROOM_TAXONOMY` env var can point at the live
+(`src/graph/routing.py` + `src/config/taxonomy.yaml`): node/span names,
+stage→phase mapping, node order, agent roster (15 agents), doc classes
+(7, incl. `court_opinion` and `insurance_claim`), specialist dispatch, and
+confidence thresholds (incl. `judge_band_high`). The `MAILROOM_TAXONOMY` env
+var can point at the live
 `taxonomy.yaml` so thresholds/doc classes come straight from the pipeline
 config instead of the mirror (cached at process level — restart to reload).
 

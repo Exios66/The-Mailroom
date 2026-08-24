@@ -100,3 +100,32 @@ def test_index_served_no_cache():
         r = c.get("/")
     assert r.status_code == 200
     assert "no-store" in r.headers.get("cache-control", "")
+
+
+def test_judge_gate_run_flows_through_display_api():
+    """A run sitting in the KANBAN-063 quality gate (judge-verify span, no
+    output stage yet) must surface as stage=judge_verify with the new span in
+    its routing path — not fall back to the sorter station."""
+    now = datetime.now() - timedelta(hours=1)
+    traces = [
+        make_trace(
+            "t-judge-gate",
+            base_time=now,
+            stage="processing",
+            doc_type="insurance_claim",
+            verdict=None,
+            quality=None,
+            span_names=["ingest-document", "classify-document",
+                        "extract-fields", "judge-verify"],
+        ),
+    ]
+    src = LangfuseSource(client=FakeClient(traces))
+    with TestClient(create_app(src)) as c:
+        listing = c.get("/api/traces?since=3600").json()
+        detail = c.get("/api/traces/t-judge-gate").json()
+    run = listing["runs"][0]
+    assert run["stage"] == "judge_verify"
+    assert run["phase"] == "extraction"
+    assert run["doc_type"] == "insurance_claim"
+    assert "judge_verify" in run["routing_path"]
+    assert any(s["name"] == "judge-verify" for s in detail["spans"])

@@ -255,6 +255,19 @@ class FakeScoresApi:
         return FakeList(data=[])
 
 
+class FakeScoresV3Api:
+    """v3 scores endpoint (label-resolved CATEGORICAL values, trace filter)."""
+
+    def __init__(self, traces: list[dict]):
+        self.traces = traces
+
+    def get_many_v3(self, trace_id: str, **kw):
+        for t in self.traces:
+            if t["id"] == trace_id:
+                return FakeList(data=t.get("scores", []))
+        return FakeList(data=[])
+
+
 class FakeSessionsApi:
     def __init__(self, traces: list[dict]):
         self.traces = traces
@@ -279,5 +292,6 @@ class FakeClient:
             trace=FakeTraceApi(self.traces),
             observations=FakeObservationsApi(self.traces),
             scores=FakeScoresApi(self.traces),
+            scores_v3=FakeScoresV3Api(self.traces),
             sessions=FakeSessionsApi(self.traces),
         )

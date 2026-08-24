@@ -118,6 +118,9 @@ const Main = (() => {
       { stage: "archived", phase: "terminal", doc_type: "corporate_record", filename: "corp_bylaws_v2.pdf", verdict: "CORRECT", quality: 0.95, classification_confidence: 0.99, extraction_confidence: 0.97 },
       { stage: "archived", phase: "terminal", doc_type: "due_diligence", filename: "dd_checklist_q3.pdf", verdict: "PARTIAL", quality: 0.72, classification_confidence: 0.93, extraction_confidence: 0.68 },
       { stage: "archived", phase: "terminal", doc_type: "correspondence", filename: "letter_demand_001.pdf", verdict: "CORRECT", quality: 0.88, classification_confidence: 0.95, extraction_confidence: 0.84 },
+      { stage: "archived", phase: "terminal", doc_type: "insurance_claim", filename: "claim_fnol_2026_0413.pdf", verdict: "CORRECT", quality: 0.94, classification_confidence: 0.97, extraction_confidence: 0.95 },
+      { stage: "judge_verify", phase: "extraction", doc_type: "insurance_claim", filename: "claim_determination_denial.pdf", classification_confidence: 0.96, extraction_confidence: 0.78 },
+      { stage: "arbiter", phase: "extraction", doc_type: "contract", filename: "merger_agreement_maud_117.pdf", verdict: "PARTIAL", quality: 0.66, classification_confidence: 0.97, extraction_confidence: 0.74 },
       { stage: "review", phase: "review", doc_type: "compliance_filing", filename: "compliance_form_10k.pdf", review_decision: "human review", escalation_reason: "low extraction confidence on indemnification clause" },
       { stage: "failed", phase: "terminal", doc_type: "court_opinion", filename: "court_ruling_2026.pdf", error_message: "extraction failed: LLM output not valid JSON" },
       { stage: "classify", phase: "intake_sort", doc_type: "contract", filename: "contract_new_consulting.pdf", classification_confidence: 0.91 },
@@ -280,6 +283,9 @@ const Main = (() => {
       .then((m) => { Mailroom.meta = m; })
       .catch((e) => { Mailroom.showError(`meta: ${e.message || e}`); });
 
+    // Deep-linkable tab state: ?view=review|sessions|history|metrics|console
+    const requestedView = new URLSearchParams(location.search).get("view");
+
     Floor.onSelect((traceId, run) => {
       ConsoleView.log(`INSPECT ${run && run.filename ? run.filename : traceId}`, "c-blue");
       Inspector.open(traceId);
@@ -333,6 +339,10 @@ const Main = (() => {
     setTimeout(() => {
       if (!wsOk) startFallbackPolling();
     }, 8000);
+
+    if (requestedView && tabEls.some((t) => t.dataset.view === requestedView)) {
+      switchView(requestedView);
+    }
 
     Mailroom.connectWS(onMessage);
   }

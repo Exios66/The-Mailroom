@@ -296,3 +296,106 @@ def test_quality_and_verdict_absent_without_scores():
     assert run.verdict is None
     assert run.quality is None
     assert run.scores == {}
+
+
+# ---- KANBAN-062/063 sync: judge gate + arbiter + reviewer pass ----
+
+
+def test_judge_and_arbiter_spans_route_and_order():
+    trace = make_trace(
+        "t-judge-arbiter",
+        span_names=[
+            "ingest-document",
+            "classify-document",
+            "extract-fields",
+            "judge-verify",
+            "arbitrate-verdict",
+            "compile-report",
+            "write-catalog",
+            "archive-document",
+        ],
+    )
+    run = _run(trace)
+    assert run.stage == Stage.ARCHIVED
+    assert run.routing_path == [
+        "ingest",
+        "classify",
+        "extract",
+        "judge_verify",
+        "arbiter",
+        "report",
+        "catalog",
+        "archive",
+    ]
+
+
+def test_judge_verify_inflight_derives_from_last_span():
+    trace = make_trace(
+        "t-judge-inflight",
+        stage="processing",
+        span_names=["ingest-document", "classify-document", "extract-fields", "judge-verify"],
+        verdict=None,
+    )
+    run = _run(trace)
+    assert run.stage == Stage.JUDGE_VERIFY
+    assert run.phase == Phase.EXTRACTION_ADJUDICATION
+
+
+def test_arbiter_inflight_derives_from_last_span():
+    trace = make_trace(
+        "t-arbiter-inflight",
+        stage="processing",
+        span_names=["ingest-document", "classify-document", "extract-fields",
+                    "judge-verify", "arbitrate-verdict"],
+        verdict=None,
+    )
+    run = _run(trace)
+    assert run.stage == Stage.ARBITER
+
+
+def test_reviewer_pass_does_not_stack_retry_classify():
+    """KANBAN-062 Lane A emits a THIRD classify-document span; the displayed
+    path must contain retry_classify exactly once."""
+    trace = make_trace(
+        "t-reviewer-pass",
+        span_names=[
+            "ingest-document",
+            "classify-document",
+            "classify-document",
+            "classify-document",
+            "route-for-review",
+        ],
+        verdict=None,
+    )
+    run = _run(trace)
+    assert run.routing_path.count("classify") == 1
+    assert run.routing_path.count("retry_classify") == 1
+
+
+def test_insurance_claim_doc_class_roundtrip():
+    trace = make_trace(
+        "t-insurance",
+        doc_type="insurance_claim",
+        span_names=["ingest-document", "classify-document", "extract-fields",
+                    "compile-report", "write-catalog", "archive-document"],
+    )
+    run = _run(trace)
+    assert run.doc_type == "insurance_claim"
+    assert run.stage == Stage.ARCHIVED
+
+
+def test_schema_mirror_covers_upstream_contract():
+    """The mirror must know every upstream agent/doc class/span (the #1
+    maintenance duty per AGENTS.md)."""
+    from mailroom_ui import pipeline_schema as ps
+
+    for span in ("judge-verify", "arbitrate-verdict"):
+        assert span in ps.SPAN_STAGE_MAP
+    for agent in ("sorter_reviewer", "arbiter", "insurance_claims_specialist",
+                  "image_extractor"):
+        assert agent in ps.AGENTS
+    assert "image-extractor" not in ps.AGENTS
+    assert ps.DOC_CLASSES["insurance_claim"] == "Insurance Claim"
+    assert ps.SPECIALIST_BY_DOC_CLASS["insurance_claim"] == "insurance_claims_specialist"
+    schema = ps.PipelineSchema.load()
+    assert schema.judge_band_high == 0.85

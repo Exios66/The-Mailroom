@@ -18,9 +18,11 @@ mailroom-tui              # AgentLab-style live console (same data, in a termina
 ## What you see
 
 - **FLOOR** — the mailroom: a conveyor belt carrying document envelopes
-  through three rooms (Intake & Sort · Extraction & Adjudication · Reporting
-  & Archive), with a blinking human-review siding and a failed bin. Click an
-  envelope for its full run.
+  through the pipeline's seven stations (SORTER · EXTRACT · JUDGE · BOSS ·
+  REPORT · ARCHIVE, plus the human-review siding) grouped into three rooms
+  (Intake & Sort · Extraction & Adjudication · Reporting & Archive). The
+  JUDGE station is the KANBAN-063 quality gate (`judge_verify` +
+  `arbitrate-verdict`). Click an envelope for its full run.
 - **REVIEW** — the review siding as a queue: every run waiting on a human,
   with its escalation reason and confidence, one click from its inspector.
 - **INSPECTOR** — drill-down into any trace: node-span timeline, LLM
@@ -41,7 +43,8 @@ Demo runs are seeded **into** Langfuse (env `demo`) — the visualizer still
 reads Langfuse only, so nothing on screen is ever canned data:
 
 ```bash
-python scripts/seed_demo.py                       # seed 10 demo runs
+python scripts/seed_demo.py                       # seed 13 demo runs (incl.
+                                                  # judge-gate + arbiter paths)
 python scripts/seed_demo.py --list-scenarios      # what the demo set covers
 python scripts/seed_demo.py --check --check-api   # verify seeded runs against
                                                   # stored Langfuse logs AND the
@@ -73,7 +76,7 @@ mailroom_ui/   data core — Langfuse adapter, trace interpreter, topology
                mirror, models, metrics (reads Langfuse only)
 server/        FastAPI, read-only: /api/* + WebSocket + serves web/
 web/           pixel-art SPA (vanilla HTML/CSS/JS, no build step)
-tui/           rich console (planned)
+tui/           rich console — the pipeline in a terminal (mailroom-tui)
 scripts/       seed_demo (demo runs INTO Langfuse + verification) · release
 docs/ + wiki/  mirrored documentation (wiki/sync-wiki.sh publishes the wiki)
 tests/         pytest suite against a fake Langfuse client — never the real API

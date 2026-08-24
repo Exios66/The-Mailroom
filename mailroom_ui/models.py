@@ -20,6 +20,8 @@ class Stage(str, Enum):
     RETRY_CLASSIFY = "retry_classify"
     EXTRACT = "extract"
     RETRY_EXTRACT = "retry_extract"
+    JUDGE_VERIFY = "judge_verify"   # KANBAN-063: ambiguous-band judge gate
+    ARBITER = "arbiter"             # KANBAN-063: judgment arbitration
     BOSS = "boss"
     HUMAN_REVIEW = "review"
     COMPILE_REPORT = "report"

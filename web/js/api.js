@@ -136,5 +136,10 @@ const Mailroom = (() => {
     return null;
   }
 
-  return { api, fmt, esc, connectWS, envFromTags, showError, get wsConnected() { return connected; } };
+  const exports = { api, fmt, esc, connectWS, envFromTags, showError, get wsConnected() { return connected; } };
+  // Publish to window explicitly: a top-level `const` does NOT attach to
+  // window, so window.Mailroom stayed undefined and any code touching it
+  // (metrics.js demo-mode flag set by main.js) crashed in live mode.
+  window.Mailroom = exports;
+  return exports;
 })();

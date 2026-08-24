@@ -37,18 +37,26 @@ from langfuse.api.ingestion.types import (
     TraceBody,
 )
 
+# Models mirror llm-mailroom config/taxonomy.yaml `agents:` mapping:
+# qwen/qwen3.7-flash everywhere except the offline judge (deepseek-v4-flash).
 GEN_MODELS = {
-    "classify": ("gpt-4o-mini", 400, 700),
-    "extract": ("gpt-4o", 1800, 2600),
-    "adjudicate": ("gpt-4o", 1200, 900),
-    "route": ("gpt-4o", 900, 300),
-    "report": ("gpt-4o-mini", 700, 1100),
-    "catalog": ("gpt-4o-mini", 350, 500),
+    "classify": ("qwen/qwen3.7-flash", 1100, 220),
+    "review_classify": ("qwen/qwen3.7-flash", 1300, 260),
+    "extract": ("qwen/qwen3.7-flash", 2400, 620),
+    "adjudicate": ("qwen/qwen3.7-flash", 1500, 480),
+    "route": ("qwen/qwen3.7-flash", 900, 300),
+    "report": ("qwen/qwen3.7-flash", 2100, 760),
+    "catalog": ("qwen/qwen3.7-flash", 350, 500),
+    # KANBAN-063 quality gate: judge is deepseek-v4-flash, arbiter is qwen.
+    "judge": ("deepseek/deepseek-v4-flash", 1800, 240),
+    "arbiter": ("qwen/qwen3.7-flash", 2600, 380),
 }
 
 SPAN_MS = {
     "ingest-document": 3200,
     "classify-document": 7200,
+    "judge-verify": 6400,
+    "arbitrate-verdict": 7700,
     "extract-fields": 14000,
     "route-for-review": 4100,
     "adjudicate-conflict": 8300,
@@ -57,7 +65,11 @@ SPAN_MS = {
     "archive-document": 1500,
 }
 
-MODEL_RATES = {"gpt-4o": (5.0, 15.0), "gpt-4o-mini": (0.15, 0.60)}
+# Prices mirror taxonomy.yaml cost_models (USD per 1M tokens).
+MODEL_RATES = {
+    "qwen/qwen3.7-flash": (0.03, 0.13),
+    "deepseek/deepseek-v4-flash": (0.05, 0.25),
+}
 
 
 def gen_cost(model: str, inp: int, out: int) -> float:
@@ -206,6 +218,14 @@ def build_run(spec, start):
         cursor = add_node(run, cursor, "extract-fields", gen="extract", agent=spec["specialist"])
     if spec.get("failed"):
         return run
+    # KANBAN-063 quality gate: judge-verify fires on the ambiguous extraction
+    # band; a partial verdict detours through arbitrate-verdict before report.
+    if spec.get("judge_verify"):
+        cursor = add_node(run, cursor, "judge-verify", gen="judge", agent="judge",
+                          output={"verdict": spec.get("judge_outcome", "partial")})
+    if spec.get("arbiter"):
+        cursor = add_node(run, cursor, "arbitrate-verdict", gen="arbiter", agent="arbiter",
+                          output={"decision": "accept_with_caveats"})
     if spec.get("review"):
         cursor = add_node(run, cursor, "route-for-review", gen="route", agent=spec["specialist"],
                           output={"decision": "review", "reason": spec.get("escalation")})
@@ -295,6 +315,27 @@ SPECS = [
      "verdict": "PARTIAL", "quality": 0.5, "conf_cls": 0.52, "conf_ext": 0.81,
      "trace_output": {"stage": "archived", "doc_type": "correspondence",
                       "classification_confidence": 0.52, "extraction_confidence": 0.81}},
+    {"slug": "insurance-clean", "run": 11,
+     "filename": "insurance_claim_01_fnol_package.pdf", "doc_type": "insurance_claim",
+     "matter": "demo-matter-harbor", "specialist": "insurance_claims_specialist",
+     "verdict": "CORRECT", "quality": 0.94, "conf_cls": 0.97, "conf_ext": 0.95,
+     "trace_output": {"stage": "archived", "doc_type": "insurance_claim",
+                      "classification_confidence": 0.97, "extraction_confidence": 0.95}},
+    {"slug": "insurance-judge-gate", "run": 12,
+     "filename": "insurance_claim_02_coverage_determination.pdf", "doc_type": "insurance_claim",
+     "matter": "demo-matter-harbor", "specialist": "insurance_claims_specialist",
+     "verdict": "PARTIAL", "quality": 0.62, "conf_cls": 0.96, "conf_ext": 0.78,
+     "judge_verify": True, "judge_outcome": "partial",
+     "trace_output": {"stage": "archived", "doc_type": "insurance_claim",
+                      "classification_confidence": 0.96, "extraction_confidence": 0.78}},
+    {"slug": "merger-arbitrated", "run": 13,
+     "filename": "maud_merger_agreement_117.pdf", "doc_type": "contract",
+     "matter": "demo-matter-acme-services", "specialist": "contracts_specialist",
+     "verdict": "CORRECT", "quality": 0.83, "conf_cls": 0.98, "conf_ext": 0.74,
+     "judge_verify": True, "judge_outcome": "partial", "arbiter": True,
+     "extra_scores": {"arbiter_decision_score": 1},
+     "trace_output": {"stage": "archived", "doc_type": "contract",
+                      "classification_confidence": 0.98, "extraction_confidence": 0.74}},
 ]
 
 SCENARIO_FLAGS = {
@@ -304,6 +345,8 @@ SCENARIO_FLAGS = {
     "contract-retry": ["retry"],
     "boss-conflict": ["boss adjudication"],
     "low-confidence": ["low confidence"],
+    "insurance-judge-gate": ["judge gate"],
+    "merger-arbitrated": ["judge gate", "arbiter"],
 }
 
 
@@ -769,8 +812,8 @@ def main():
     if args.list_scenarios:
         for spec in SPECS:
             flags = ", ".join(SCENARIO_FLAGS.get(spec["slug"], [])) or "-"
-            stage = spec["trace_output"]["stage"]
-            print(f"{spec['slug']:24} {spec['filename']:48} {stage:10} {flags}")
+            stage = spec["trace_output"].get("stage", "(in flight)")
+            print(f"{spec['slug']:24} {spec['filename']:48} {stage:12} {flags}")
         return
 
     specs = [dict(s) for s in SPECS]

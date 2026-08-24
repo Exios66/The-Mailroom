@@ -6,6 +6,8 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-23
+
 ### Added
 - Langfuse v4 SDK tolerance: camelCase observation fields (`startTime`,
   `endTime`, `modelId`, `totalTokens`, `inputTokens`, `outputTokens`,
@@ -17,7 +19,7 @@ All notable changes to The-Mailroom are documented here, following
   scanlines, titlebar, tabs, statusbar, overlay panels, metric tiles);
   `web/js/api.js` (fetch client + WebSocket with exponential-backoff
   reconnect + format helpers); `web/js/floor.js` canvas conveyor renderer
-  (10 stations, rollers, bins, terminals, source lamp, envelopes animated
+  (stations, rollers, bins, terminals, source lamp, envelopes animated
   to their stage target with per-doc-type tint + verdict/review/failed
   stamps, click/hover inspection); `web/js/inspector.js` (spans timeline,
   LLM generations, scores); `web/js/sessions.js`; `web/js/metrics.js`;
@@ -35,7 +37,7 @@ All notable changes to The-Mailroom are documented here, following
   snapshots (full payloads) with an HTTP fallback; `--once` one-shot mode
   for scripting/CI. Keybindings: f/r/m/i/c/q.
 - `tests/test_tui.py` — TUI banner/table rendering tests (no live server).
-- `scripts/seed_demo.py` — seeds hardcoded demo scenarios INTO Langfuse
+- `scripts/seed_demo.py` — seeds demo scenarios INTO Langfuse
   (env `demo`, deterministic `demo-<slug>` trace ids, verb-first spans,
   generations with usage/cost, judge verdict/quality scores via a
   CATEGORICAL `mailroom-pipeline-judge` score config) — never served
@@ -45,6 +47,23 @@ All notable changes to The-Mailroom are documented here, following
   saved by llm-mailroom's `sync_langfuse_logs.py`). Explicit request
   timeouts on every API call; credential preflight; delete-then-reseed
   with settle (ingestion appends, so re-seeding must start clean).
+- **Upstream sync (llm-mailroom KANBAN-062/063)**: `judge_verify`
+  (`judge-verify` span) and `arbiter` (`arbitrate-verdict` span) stages in
+  the Stage enum, `SPAN_STAGE_MAP`, `STAGE_PHASE`, and `NODE_ORDER`;
+  `sorter_reviewer`, `arbiter`, and `insurance_claims_specialist` joined the
+  agent roster; `insurance_claim` doc class + specialist mapping;
+  `judge_band_high` (0.85) mirrored from `graph/routing.py:judge_gate`.
+- Floor gains a seventh station — **JUDGE** (between EXTRACT and BOSS),
+  shared by `judge_verify`/`arbiter`; replay animates runs through the gate;
+  `insurance_claim` envelopes tint violet (plus a `merger_agreement` tint for
+  docclass-merged corpus rows classified as contracts).
+- seed_demo: `judge-verify`/`arbitrate-verdict` span emission, three new
+  scenarios (`insurance-clean`, `insurance-judge-gate`, `merger-arbitrated`;
+  13 total), and generation models/prices moved onto the pipeline's real
+  registry (qwen/qwen3.7-flash everywhere, deepseek/deepseek-v4-flash judge)
+  with taxonomy.yaml cost_models rates.
+- Fake Langfuse client exposes the v3 scores endpoint (`scores_v3`) so the
+  source adapter's primary score path is exercised by every test.
 
 ### Changed
 - Generation cost is read from `cost_details` (v2/v3) or top-level
@@ -74,6 +93,12 @@ All notable changes to The-Mailroom are documented here, following
   unavailable"}` instead of a raw 500.
 - Poller `detail_ttl` raised 15s → 60s so full-detail fetch load on
   Langfuse stays well under rate limits.
+- In-flight display: the generic `processing` output marker no longer pins a
+  run to INGEST — `derive_stage` refines it with the deepest node span, so
+  extract/retry/judge/arbiter/boss progress is visible live.
+- Retry clustering is idempotent: the KANBAN-062 reviewer pass emits a third
+  consecutive `classify-document` span without stacking duplicate
+  `retry_classify` entries into routing paths (Python + floor replay agree).
 
 ### Fixed
 - **V-3**: metrics tiles were permanently `$0.00 / 0 tok / 0 calls` in live
@@ -115,6 +140,12 @@ All notable changes to The-Mailroom are documented here, following
   stamp.
 - `tests/test_metrics.py::test_p95_generation_latency` expected 9.4 but
   the fixture (two generations per trace) yields a nearest-rank p95 of 9.1.
+- Date bomb in `TestTzNormalization.test_compute_metrics_mixed_tz_no_crash`:
+  fixed 2026-08-10 run timestamps silently fell out of the `now - 1d` window
+  on Aug 11, zeroing `total_docs`. Timestamps are now relative to the clock.
+- Mirror drift: `"image-extractor"` agent key corrected to `image_extractor`
+  (upstream module name); `.env.example` `MAILROOM_TAXONOMY` example path
+  updated to the post-restructure `src/config/taxonomy.yaml`.
 
 ### Removed
 - **V-21**: `web/js/sprites.js` — 766 lines of dead sprite code, never

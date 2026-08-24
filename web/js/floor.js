@@ -8,14 +8,17 @@ const Floor = (() => {
   const W = 1440;
   const H = 480;
 
-  // 6 stations: x positions evenly distributed
+  // 7 stations: sorter → extract → JUDGE (judge_verify/arbiter) → boss →
+  // report → archive, plus the review siding. Evenly distributed across the
+  // 1440px canvas; desks extend x-20..x+100, labels sit at x+40.
   const STATIONS = [
     { key: "sorter", x: 80, label: "SORTER", color: "#7d97b5" },
-    { key: "extract", x: 320, label: "EXTRACT", color: "#d9a866" },
-    { key: "boss", x: 560, label: "BOSS", color: "#95272e" },
-    { key: "report", x: 800, label: "REPORT", color: "#659099" },
-    { key: "archive", x: 1040, label: "ARCHIVE", color: "#5f9e6e" },
-    { key: "review", x: 1280, label: "REVIEW", color: "#f7d156" },
+    { key: "extract", x: 285, label: "EXTRACT", color: "#d9a866" },
+    { key: "judge", x: 490, label: "JUDGE", color: "#9b7fb8" },
+    { key: "boss", x: 695, label: "BOSS", color: "#95272e" },
+    { key: "report", x: 900, label: "REPORT", color: "#659099" },
+    { key: "archive", x: 1105, label: "ARCHIVE", color: "#5f9e6e" },
+    { key: "review", x: 1310, label: "REVIEW", color: "#f7d156" },
   ];
 
   const ENV_Y = 240;       // y position for envelopes on conveyor
@@ -39,19 +42,24 @@ const Floor = (() => {
       return { x: 1500, y: 440, remove: true };
     }
     if (st === "review" || run.needs_human) {
-      return { x: STATIONS[5].x, y: ENV_Y };
+      return { x: STATIONS[6].x, y: ENV_Y };
     }
-    if (st === "classify" || st === "retry_classify" || st === "ingest" || st === "inbox" || st === "unknown") {
+    if (st === "classify" || st === "retry_classify" || st === "review_classify"
+        || st === "ingest" || st === "inbox" || st === "unknown") {
       return { x: STATIONS[0].x, y: ENV_Y };
     }
     if (st === "extract" || st === "retry_extract") {
       return { x: STATIONS[1].x, y: ENV_Y };
     }
-    if (st === "boss") {
+    // KANBAN-063 quality gate: judge_verify + arbiter share the JUDGE station
+    if (st === "judge_verify" || st === "arbiter") {
       return { x: STATIONS[2].x, y: ENV_Y };
     }
-    if (st === "report" || st === "catalog" || st === "archive") {
+    if (st === "boss") {
       return { x: STATIONS[3].x, y: ENV_Y };
+    }
+    if (st === "report" || st === "catalog" || st === "archive") {
+      return { x: STATIONS[4].x, y: ENV_Y };
     }
     return { x: STATIONS[0].x, y: ENV_Y };
   }
@@ -59,11 +67,13 @@ const Floor = (() => {
   function tintFor(run) {
     const colors = {
       contract: "#7d97b5",
+      merger_agreement: "#8aa3c0",
       corporate_record: "#659099",
       due_diligence: "#d9a866",
       correspondence: "#e8b478",
       compliance_filing: "#8fd0a0",
       court_opinion: "#e26863",
+      insurance_claim: "#b18ec2",
     };
     return colors[run.doc_type] || "#a09f9f";
   }
@@ -122,14 +132,14 @@ const Floor = (() => {
   function drawBackground() {
     ctx.fillStyle = "#141416";
     ctx.fillRect(0, 0, W, H);
-    // Room labels
+    // Room labels (phase bands over the stations beneath them)
     ctx.font = "bold 9px 'Courier New', monospace";
     ctx.fillStyle = "#7d97b5";
     ctx.textAlign = "center";
     ctx.fillText("INTAKE & SORT", 160, 30);
-    ctx.fillText("EXTRACTION & ADJUDICATION", 560, 30);
-    ctx.fillText("REPORTING & ARCHIVE", 1040, 30);
-    ctx.fillText("REVIEW SIDING", 1280, 30);
+    ctx.fillText("EXTRACTION & ADJUDICATION", 600, 30);
+    ctx.fillText("REPORTING & ARCHIVE", 1072, 30);
+    ctx.fillText("REVIEW SIDING", 1350, 30);
   }
 
   function update(runs) {
@@ -346,6 +356,8 @@ const Floor = (() => {
     const spanToStage = {
       "ingest-document": "ingest",
       "classify-document": "classify",
+      "judge-verify": "judge_verify",
+      "arbitrate-verdict": "arbiter",
       "extract-fields": "extract",
       "adjudicate-conflict": "boss",
       "route-for-review": "review",
@@ -363,9 +375,13 @@ const Floor = (() => {
     for (const s of spans) {
       let st = spanToStage[s.name];
       if (prev && st === prev) {
-        st = st === "classify" ? "retry_classify" : st === "extract" ? "retry_extract" : st;
+        // Repeat pass -> retry variant, once per base stage (a third
+        // classify-document from the reviewer pass must not re-add it).
+        if (st === "classify") st = "retry_classify";
+        else if (st === "extract") st = "retry_extract";
+        if (steps.length && steps[steps.length - 1].stage === st) continue;
       }
-      prev = st;
+      prev = spanToStage[s.name];
       // Pace by the span's real latency, clamped to 250 ms..4 s so very fast
       // or very slow runs stay watchable.
       const d = s.latency != null && s.latency > 0
@@ -388,10 +404,12 @@ const Floor = (() => {
 
     // Create the envelope at the start
     const stageToTarget = {
-      inbox: 0, ingest: 0, classify: 0, retry_classify: 0, unknown: 0,
-      extract: 1, retry_extract: 1, boss: 2,
-      report: 3, catalog: 3, archive: 3, archived: 4,
-      review: 5, failed: 5,
+      inbox: 0, ingest: 0, classify: 0, retry_classify: 0, review_classify: 0, unknown: 0,
+      extract: 1, retry_extract: 1,
+      judge_verify: 2, arbiter: 2,
+      boss: 3,
+      report: 4, catalog: 4, archive: 4, archived: 4,
+      review: 6, failed: 6,
     };
     const stationIdx = (st) => {
       const idx = stageToTarget[st];

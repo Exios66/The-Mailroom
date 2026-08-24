@@ -146,11 +146,22 @@ def derive_stage(
     *,
     schema: PipelineSchema = DEFAULT_SCHEMA,
 ) -> Stage:
-    """Primary: trace output `stage`; fallback: last node span; else INBOX."""
+    """Primary: trace output `stage`; fallback: last node span; else INBOX.
+
+    The pipeline's generic in-flight marker ("processing") carries no node
+    detail, so when it appears we refine with real span progress — otherwise
+    a run sitting in the judge gate or arbiter displays as "ingest" until it
+    reaches a terminal stage.
+    """
     raw = _clean(output.get("stage"))
     if raw:
         mapped = _OUTPUT_STAGE_MAP.get(raw.lower(), None)
         if mapped is not None:
+            if mapped is Stage.INGEST and spans:
+                for span in reversed(spans):
+                    st = SPAN_STAGE_MAP.get(span.name)
+                    if st is not None and st is not Stage.INGEST:
+                        return st
             return mapped
         if raw.lower() in _LIVE_STAGE_NAMES:
             return Stage(raw.lower())
@@ -161,7 +172,13 @@ def derive_stage(
 
 
 def build_routing_path(spans: list[NodeSpan]) -> list[str]:
-    """Stable node sequence incl. retries (consecutive repeats)."""
+    """Stable node sequence incl. retries (consecutive repeats).
+
+    Repeats are idempotent: the retry variant is appended once per base
+    stage, so the KANBAN-062 second-opinion pass (a third consecutive
+    `classify-document` span from review_classify) cannot stack duplicate
+    retry_classify entries into the displayed path.
+    """
     staged: list[Stage] = []
     prev: Optional[Stage] = None
     for span in spans:
@@ -169,10 +186,13 @@ def build_routing_path(spans: list[NodeSpan]) -> list[str]:
         if stage is None:
             continue
         if prev is not None and stage == prev:
+            retry = None
             if stage == Stage.CLASSIFY:
-                staged.append(Stage.RETRY_CLASSIFY)
+                retry = Stage.RETRY_CLASSIFY
             elif stage == Stage.EXTRACT:
-                staged.append(Stage.RETRY_EXTRACT)
+                retry = Stage.RETRY_EXTRACT
+            if retry is not None and retry not in staged:
+                staged.append(retry)
             continue
         staged.append(stage)
         prev = stage
