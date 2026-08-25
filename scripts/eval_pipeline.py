@@ -256,11 +256,16 @@ def enrich_intake(rows: list[dict]) -> list[dict]:
         if row.get("extracted_data") is None:
             row["extracted_data"] = out.get("extracted_data")
         scores = _score_map(detail.get("scores") or [])
-        row["cost_usd"] = row.get("cost_usd") or scores.get("estimated_cost_usd")
-        row["total_tokens"] = row.get("total_tokens") or scores.get("total_tokens")
-        row["seconds"] = scores.get("run_duration_seconds") or row.get("seconds")
-        row["verdict"] = row.get("verdict") or scores.get("mailroom-pipeline-judge")
-        row["quality"] = row.get("quality") or scores.get("mailroom-pipeline-quality")
+        if scores.get("estimated_cost_usd") is not None:
+            row["cost_usd"] = scores["estimated_cost_usd"]
+        if scores.get("total_tokens") is not None:
+            row["total_tokens"] = scores["total_tokens"]
+        if scores.get("run_duration_seconds") is not None:
+            row["seconds"] = scores["run_duration_seconds"]
+        if scores.get("mailroom-pipeline-judge") is not None:
+            row["verdict"] = scores["mailroom-pipeline-judge"]
+        if scores.get("mailroom-pipeline-quality") is not None:
+            row["quality"] = scores["mailroom-pipeline-quality"]
     return rows
 
 
