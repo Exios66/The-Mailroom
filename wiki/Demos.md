@@ -20,11 +20,22 @@ Matters → Metrics → Debug.
 - [Stills directory](https://github.com/Exios66/The-Mailroom/tree/main/docs/screenshots)
 - [Markdown twin](https://github.com/Exios66/The-Mailroom/blob/main/docs/demos.md)
 
+## Pilot run — documents moving through the pipeline
+
+~25 seconds. Envelopes travel the conveyor (contract + claim archive, merger
+agreement peels to REVIEW, a corporate record fails).
+
+- [Pilot video](https://github.com/Exios66/The-Mailroom/blob/main/docs/demos/pilot-run-documents-through-pipeline.mp4)
+- [Poster](https://github.com/Exios66/The-Mailroom/blob/main/docs/demos/pilot-run-poster.png)
+- [Still](https://github.com/Exios66/The-Mailroom/blob/main/docs/screenshots/pilot-floor.png)
+- Re-record: `PYTHONPATH=. python scripts/demo_pilot_run.py --port 8005`
+
 ## Pixel-art console (`mailroom-web`)
 
 | Still | Desk |
 |---|---|
 | [floor.png](https://github.com/Exios66/The-Mailroom/blob/main/docs/screenshots/floor.png) | FLOOR conveyor |
+| [pilot-floor.png](https://github.com/Exios66/The-Mailroom/blob/main/docs/screenshots/pilot-floor.png) | PILOT RUN — envelopes in motion |
 | [inspector.png](https://github.com/Exios66/The-Mailroom/blob/main/docs/screenshots/inspector.png) | INSPECTOR |
 | [review.png](https://github.com/Exios66/The-Mailroom/blob/main/docs/screenshots/review.png) | REVIEW siding |
 | [sessions.png](https://github.com/Exios66/The-Mailroom/blob/main/docs/screenshots/sessions.png) | SESSIONS / matters |

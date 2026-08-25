@@ -117,6 +117,13 @@ and [`docs/demos.md`](docs/demos.md).
 
 [![Desk walkthrough poster](docs/demos/walkthrough-poster.png)](docs/demos/tui-server-observatory-desk-walkthrough.mp4)
 
+**Pilot run — documents moving through the pipeline** (~25s): five envelopes
+slide SORTER → EXTRACT → JUDGE → REPORT → ARCHIVE; the merger agreement
+peels onto REVIEW; a corporate record fails. Re-record with
+`python scripts/demo_pilot_run.py --port 8005`.
+
+[![Pilot run — envelopes on the conveyor](docs/demos/pilot-run-poster.png)](docs/demos/pilot-run-documents-through-pipeline.mp4)
+
 Open a section below to expand the stills.
 
 <details open>
@@ -126,6 +133,8 @@ Open a section below to expand the stills.
 |---|---|
 | ![The Mailroom floor — conveyor, stations, envelopes](docs/screenshots/floor.png) |
 | **FLOOR** — seven stations, per-doc-type envelope tints, review siding and failed bin. Click an envelope to inspect. |
+| ![Pilot run — four envelopes in motion](docs/screenshots/pilot-floor.png) |
+| **PILOT RUN** — live envelopes mid-flight (ACTIVE: 4). Full motion: [pilot-run-documents-through-pipeline.mp4](docs/demos/pilot-run-documents-through-pipeline.mp4). |
 | ![Inspector overlay on the floor](docs/screenshots/inspector.png) |
 | **INSPECTOR** — node spans, LLM generations, classification / extraction / judge scores. |
 | ![REVIEW siding — human-review queue](docs/screenshots/review.png) |
@@ -368,12 +377,13 @@ server/        FastAPI, read-only: /api/* + debug endpoints + WebSocket + serves
 web/           pixel-art SPA (vanilla HTML/CSS/JS, no build step)
 hosted/        Observatory — public modern accessible desk
 tui/           rich console — the pipeline in a terminal (mailroom-tui)
-scripts/       seed_demo (demo runs INTO Langfuse) · export_snapshot (Pages
+scripts/       seed_demo (demo runs INTO Langfuse) · demo_pilot_run
+               (staggered floor recording) · export_snapshot (Pages
                data) · publish_pages (gh-pages push, no Actions) · release
                · render_tui_shots (README TUI SVGs)
 docs/ + wiki/  mirrored documentation (wiki/sync-wiki.sh publishes the wiki)
 docs/screenshots/  stills of every pixel / Observatory / TUI desk
-docs/demos/        walkthrough mp4 + The-Mailroom-Demos.ipynb gallery
+docs/demos/        walkthrough mp4 + pilot-run mp4 + The-Mailroom-Demos.ipynb
 tests/         pytest suite against fake clients — never the real APIs
 ```
 

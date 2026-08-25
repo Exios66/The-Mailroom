@@ -1,8 +1,9 @@
 # Demos
 
-- **Notebook:** [The-Mailroom-Demos.ipynb](The-Mailroom-Demos.ipynb) — stills of every desk plus the PR walkthrough, playable locally.
-- **Walkthrough:** [tui-server-observatory-desk-walkthrough.mp4](tui-server-observatory-desk-walkthrough.mp4) (~56s). Click the file on GitHub to play it.
-- **Poster:** [walkthrough-poster.png](walkthrough-poster.png)
+- **Notebook:** [The-Mailroom-Demos.ipynb](The-Mailroom-Demos.ipynb) — stills of every desk plus the recordings, playable locally.
+- **Pilot run:** [pilot-run-documents-through-pipeline.mp4](pilot-run-documents-through-pipeline.mp4) (~25s, envelopes sliding the conveyor). Re-record with `scripts/demo_pilot_run.py`.
+- **Desk walkthrough:** [tui-server-observatory-desk-walkthrough.mp4](tui-server-observatory-desk-walkthrough.mp4) (~56s). Click the file on GitHub to play it.
+- **Posters:** [pilot-run-poster.png](pilot-run-poster.png) · [walkthrough-poster.png](walkthrough-poster.png)
 - **Stills:** [../screenshots/](../screenshots/)
 - **Index:** [../demos.md](../demos.md)
 

@@ -19,11 +19,30 @@ Matters → Metrics → Debug.
   (click the file on GitHub to play it)
 - Notebook gallery: [`docs/demos/The-Mailroom-Demos.ipynb`](demos/The-Mailroom-Demos.ipynb)
 
+## Pilot run — documents moving through the pipeline
+
+~25 seconds, 1920×1200. A staggered FakeClient pilot (`scripts/demo_pilot_run.py`)
+feeds `/api` + `/ws` so envelopes actually travel the conveyor: contract and
+claim archive, the merger agreement peels to REVIEW, correspondence goes
+through JUDGE/ARBITER, a corporate record fails.
+
+[![Pilot run poster](demos/pilot-run-poster.png)](demos/pilot-run-documents-through-pipeline.mp4)
+
+- Video: [`docs/demos/pilot-run-documents-through-pipeline.mp4`](demos/pilot-run-documents-through-pipeline.mp4)
+- Still: [`docs/screenshots/pilot-floor.png`](screenshots/pilot-floor.png)
+- Re-record:
+
+```bash
+PYTHONPATH=. python scripts/demo_pilot_run.py --port 8005 --delay 8
+# then open http://127.0.0.1:8005/?api=
+```
+
 ## Pixel-art console (`mailroom-web`)
 
 | Still | Desk |
 |---|---|
 | [floor.png](screenshots/floor.png) | FLOOR conveyor |
+| [pilot-floor.png](screenshots/pilot-floor.png) | PILOT RUN — envelopes in motion |
 | [inspector.png](screenshots/inspector.png) | INSPECTOR |
 | [review.png](screenshots/review.png) | REVIEW siding |
 | [sessions.png](screenshots/sessions.png) | SESSIONS / matters |

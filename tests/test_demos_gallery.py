@@ -13,6 +13,8 @@ INDEX = ROOT / "docs" / "demos.md"
 WIKI = ROOT / "wiki" / "Demos.md"
 README = ROOT / "README.md"
 VIDEO = "tui-server-observatory-desk-walkthrough.mp4"
+PILOT_VIDEO = "pilot-run-documents-through-pipeline.mp4"
+VIDEOS = (VIDEO, PILOT_VIDEO)
 
 
 def _notebook_text() -> str:
@@ -24,10 +26,12 @@ def _notebook_text() -> str:
 
 
 def test_walkthrough_video_is_in_demos():
-    path = DEMOS / VIDEO
-    assert path.is_file(), path
-    assert path.stat().st_size > 1_000_000
+    for name in VIDEOS:
+        path = DEMOS / name
+        assert path.is_file(), path
+        assert path.stat().st_size > 1_000_000, name
     assert (DEMOS / "walkthrough-poster.png").is_file()
+    assert (DEMOS / "pilot-run-poster.png").is_file()
 
 
 def test_notebook_and_indexes_cover_every_png():
@@ -43,6 +47,8 @@ def test_notebook_and_indexes_cover_every_png():
         assert name in wiki, f"wiki/Demos.md missing {name}"
         assert name in readme, f"README missing {name}"
     for blob in (nb, demos_md, wiki, readme):
-        assert VIDEO in blob
+        for name in VIDEOS:
+            assert name in blob, f"missing {name}"
     assert "The-Mailroom-Demos.ipynb" in readme
     assert "The-Mailroom-Demos.ipynb" in demos_md
+    assert "demo_pilot_run.py" in readme or "demo_pilot_run.py" in demos_md
