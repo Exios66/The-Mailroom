@@ -432,6 +432,13 @@ def interpret_trace(
                     break
         score_map[name] = value
 
+    scored_duration = _float(score_map.get("run_duration_seconds"))
+    if scored_duration is not None:
+        # Deterministic trace IDs are reused across pilot runs. The trace-level
+        # latency can therefore span multiple attempts and later evaluator
+        # updates; this score is the end-to-end duration of the latest run.
+        latency = scored_duration
+
     stage = derive_stage(t_output, spans, schema=schema)
     routing_path = build_routing_path(spans)
 

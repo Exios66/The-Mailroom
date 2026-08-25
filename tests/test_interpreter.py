@@ -70,6 +70,18 @@ def test_archived_run_full():
     assert run.needs_human is False
 
 
+def test_pipeline_duration_score_overrides_reused_trace_latency():
+    trace = make_trace("t-reused-latency")
+    trace["latency"] = 1600.0
+    trace["scores"].append(
+        {"name": "run_duration_seconds", "value": 26.4, "data_type": "NUMERIC"}
+    )
+
+    run = _run(trace)
+
+    assert run.latency == 26.4
+
+
 def test_review_stage():
     trace = make_trace(
         "t-review",
