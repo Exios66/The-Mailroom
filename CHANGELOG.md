@@ -20,13 +20,24 @@ All notable changes to The-Mailroom are documented here, following
   or `sk-lf-`/`pk-lf-` key material appear anywhere in the staged tree;
   `hooks/pre-push` rejects direct `gh-pages` pushes whose tree contains any
   `.env`-like file.
-- `export_snapshot.py`: `sessions.json` top-level `count` was hardcoded to
+-   `export_snapshot.py`: `sessions.json` top-level `count` was hardcoded to
   `0` regardless of content — now the real session count (matches
   `/api/sessions` shape; agents reading the static snapshot get honest
   numbers).
+- Observatory visual/UX: replay controls stay pinned while playback runs
+  on Pipeline; health polls no longer clobber a live WebSocket status
+  line; cards/metrics use valid HTML; trays wrap as a 2×4 grid; replay
+  finishes on the run's real terminal stage (review/failed, not always
+  archived); verdict bars use per-status color.
 
 ### Added
 
+- **Mailroom Observatory debug suite** — hosted UI gained a Debug desk
+  (`#debug`, `?debug=1`, keyboard `6`), a client ring at
+  `window.__OBSERVATORY_DEBUG__` (`dump` / `export` / `pullServer` /
+  `pushClient` / `explain`), and server one-pull `GET /api/debug/bundle`
+  plus `POST /api/debug/client` so the next agent can read the last
+  browser dump.
 - **TUI verdict truncation** — Rich 15 squeezed the floor table so
   `CORRECT` rendered as `COR…`. Verdict and cost columns are now no-wrap.
 - **Mailroom Observatory (hosted edition)** — a public, modern, accessible
