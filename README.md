@@ -107,7 +107,17 @@ renders a single frame for scripting).
 
 Live captures of the three surfaces against the same display API. Values on
 screen are interpreted traces (fixture-shaped exactly like the test suite);
-Langfuse remains the sole display source. Open a section to expand.
+Langfuse remains the sole display source. The full gallery, including the
+PR screen recording, lives in the **[demos notebook](docs/demos/The-Mailroom-Demos.ipynb)**
+and [`docs/demos.md`](docs/demos.md).
+
+**Walkthrough video** (~56s, pixel desks then Observatory):
+[tui-server-observatory-desk-walkthrough.mp4](docs/demos/tui-server-observatory-desk-walkthrough.mp4)
+— click the file on GitHub to play it.
+
+[![Desk walkthrough poster](docs/demos/walkthrough-poster.png)](docs/demos/tui-server-observatory-desk-walkthrough.mp4)
+
+Open a section below to expand the stills.
 
 <details open>
 <summary>Pixel-art console (<code>mailroom-web</code>)</summary>
@@ -362,6 +372,8 @@ scripts/       seed_demo (demo runs INTO Langfuse) · export_snapshot (Pages
                data) · publish_pages (gh-pages push, no Actions) · release
                · render_tui_shots (README TUI SVGs)
 docs/ + wiki/  mirrored documentation (wiki/sync-wiki.sh publishes the wiki)
+docs/screenshots/  stills of every pixel / Observatory / TUI desk
+docs/demos/        walkthrough mp4 + The-Mailroom-Demos.ipynb gallery
 tests/         pytest suite against fake clients — never the real APIs
 ```
 
