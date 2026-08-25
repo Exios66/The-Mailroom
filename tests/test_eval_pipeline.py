@@ -79,3 +79,14 @@ def test_trace_latency_prefers_pipeline_duration_score():
     ])
 
     assert rows[0]["seconds"] == 12.5
+
+
+def test_eval_score_map_keeps_newest_duplicate():
+    from scripts.eval_pipeline import _score_map
+
+    scores = [
+        {"name": "total_tokens", "value": 10722},
+        {"name": "total_tokens", "value": 7748},
+    ]
+
+    assert _score_map(scores)["total_tokens"] == 10722
