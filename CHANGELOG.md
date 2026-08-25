@@ -12,6 +12,10 @@ All notable changes to The-Mailroom are documented here, following
   SESSIONS / METRICS / CONSOLE), the hosted Observatory (pipeline / review /
   metrics / debug), and TUI desks, with collapsible `<details>` sections for
   the rest of the documentation.
+- **Demos notebook + PR walkthrough video** — `docs/demos/The-Mailroom-Demos.ipynb`
+  galleries every still; `docs/demos/tui-server-observatory-desk-walkthrough.mp4`
+  is the ~56s desk recording (pixel then Observatory). Index:
+  `docs/demos.md` / wiki `Demos`.
 
 ### Fixed
 
