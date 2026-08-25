@@ -36,3 +36,27 @@ def test_eval_scorer_merger_alias_and_failures():
     assert not aligned("correspondence", "contract")
     assert summary["confusion"]["merger_agreement"]["contract"] == 1
     assert summary["confusion"]["correspondence"]["contract"] == 1
+
+
+def test_attach_manifest_joins_trace_id_and_local_filename():
+    from scripts.eval_pipeline import attach_manifest
+
+    rows = [
+        {"trace_id": "abc", "filename": "local.txt", "predicted": "contract",
+         "expected": None, "exact_ok": False, "aligned_ok": False, "stage": "archived"},
+        {"trace_id": "zzz", "filename": "other.txt", "predicted": "correspondence",
+         "expected": None, "exact_ok": False, "aligned_ok": False, "stage": "archived"},
+    ]
+    import json
+    from pathlib import Path
+    path = Path("/tmp/mailroom-eval-manifest.json")
+    path.write_text(json.dumps({
+        "samples": [
+            {"trace_id": "abc", "expected": "merger_agreement", "local_filename": "local.txt"},
+        ]
+    }), encoding="utf-8")
+    out = attach_manifest(rows, str(path))
+    assert out[0]["expected"] == "merger_agreement"
+    assert out[0]["aligned_ok"] is True
+    assert out[0]["exact_ok"] is False
+    assert out[1]["expected"] is None

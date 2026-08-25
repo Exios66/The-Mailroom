@@ -193,19 +193,42 @@ def enrich_intake(rows: list[dict]) -> list[dict]:
             detail = _lf_get(f"/api/public/traces/{urllib.parse.quote(str(tid))}")
         except Exception:
             continue
-        for obs in detail.get("observations") or []:
-            name = (obs.get("name") or "") if isinstance(obs, dict) else ""
-            if name != "normalize-intake":
-                continue
-            out = _as_dict(obs.get("output"))
-            row["intake_messy"] = bool(out.get("messy"))
-            row["intake_changed"] = bool(
-                out.get("collapsed_blank_runs") or out.get("hyphen_unwraps") or out.get("changed")
-            )
-            row["intake_method"] = out.get("method")
-            row["intake_chars"] = out.get("chars")
-            break
         out = detail.get("output") if isinstance(detail.get("output"), dict) else {}
+        meta = detail.get("metadata") if isinstance(detail.get("metadata"), dict) else {}
+        inp = detail.get("input") if isinstance(detail.get("input"), dict) else {}
+        gt = (
+            (out.get("ground_truth") if isinstance(out.get("ground_truth"), dict) else None)
+            or (inp.get("ground_truth") if isinstance(inp.get("ground_truth"), dict) else None)
+            or {}
+        )
+        for obs in detail.get("observations") or []:
+            if not isinstance(obs, dict):
+                continue
+            name = obs.get("name") or ""
+            obs_out = _as_dict(obs.get("output"))
+            if name == "normalize-intake":
+                row["intake_messy"] = bool(obs_out.get("messy"))
+                row["intake_changed"] = bool(
+                    obs_out.get("collapsed_blank_runs") or obs_out.get("hyphen_unwraps") or obs_out.get("changed")
+                )
+                row["intake_method"] = obs_out.get("method")
+                row["intake_chars"] = obs_out.get("chars")
+            if name == "pipeline-result":
+                if not gt:
+                    gt = obs_out.get("ground_truth") if isinstance(obs_out.get("ground_truth"), dict) else {}
+                if not row.get("extracted_data"):
+                    row["extracted_data"] = obs_out.get("extracted_data")
+        expected = (
+            row.get("expected")
+            or gt.get("expected_hf_class")
+            or meta.get("expected_hf_class")
+            or gt.get("expected_doc_class")
+        )
+        if expected:
+            row["expected"] = expected
+            pred = row.get("predicted") or out.get("doc_type")
+            row["exact_ok"] = expected == pred
+            row["aligned_ok"] = _aligned(expected, pred)
         if not row.get("predicted"):
             row["predicted"] = out.get("doc_type")
             if row.get("expected"):
@@ -251,6 +274,11 @@ def attach_hf_labels(rows: list[dict], split: str = "train") -> list[dict]:
                 break
             for row in batch:
                 labels[row.get("filename")] = row.get("expected")
+                # sanitized local names used as Langfuse input.filename
+                stem = Path(str(row.get("filename") or "").replace("/", "_").replace(":", "_")).name
+                if stem:
+                    labels.setdefault(stem, row.get("expected"))
+                    labels.setdefault(stem + ".txt", row.get("expected"))
             if len(batch) < 100:
                 break
             offset += len(batch)
@@ -261,6 +289,40 @@ def attach_hf_labels(rows: list[dict], split: str = "train") -> list[dict]:
             r["expected"] = labels[r["filename"]]
             r["exact_ok"] = r["expected"] == r.get("predicted")
             r["aligned_ok"] = _aligned(r["expected"], r.get("predicted"))
+    return rows
+
+
+def attach_manifest(rows: list[dict], path: str | None) -> list[dict]:
+    """Join expected labels from a hf_pilot ``manifest.json`` or ``report.json``."""
+    if not path:
+        return rows
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    items = payload.get("samples") if isinstance(payload, dict) else payload
+    by_local: dict[str, str] = {}
+    by_orig: dict[str, str] = {}
+    by_trace: dict[str, str] = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        expected = item.get("expected")
+        if item.get("local_filename") and expected:
+            by_local[item["local_filename"]] = expected
+        if item.get("filename") and expected:
+            by_orig[item["filename"]] = expected
+        if item.get("trace_id") and expected:
+            by_trace[str(item["trace_id"])] = expected
+    for r in rows:
+        if r.get("expected"):
+            continue
+        expected = (
+            by_trace.get(str(r.get("trace_id") or ""))
+            or by_local.get(r.get("filename") or "")
+            or by_orig.get(r.get("filename") or "")
+        )
+        if expected:
+            r["expected"] = expected
+            r["exact_ok"] = expected == r.get("predicted")
+            r["aligned_ok"] = _aligned(expected, r.get("predicted"))
     return rows
 
 
@@ -311,6 +373,7 @@ def main() -> int:
     parser.add_argument("--since", type=int, default=86400, help="seconds lookback")
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--split", default="train", help="HF split used to join labels")
+    parser.add_argument("--manifest", help="hf_pilot manifest.json or report.json for GT join")
     parser.add_argument("--out", help="write JSON report here")
     parser.add_argument("--md", help="write markdown report here")
     parser.add_argument("--check", action="store_true",
@@ -341,7 +404,10 @@ def main() -> int:
         session=args.session, since=args.since,
         environment=args.environment, limit=args.limit,
     )
-    rows = enrich_intake(attach_hf_labels(traces_to_rows(traces), split=args.split))
+    rows = attach_manifest(
+        enrich_intake(attach_hf_labels(traces_to_rows(traces), split=args.split)),
+        args.manifest,
+    )
     summary = score_rows(rows)
     title = f"Pipeline eval — {args.session or args.environment} ({datetime.now(timezone.utc).date()})"
     md = render_markdown(summary, rows, title)

@@ -118,6 +118,7 @@ def main() -> int:
         if session:
             eval_cmd += ["--session", session]
             print(f"eval session {session}")
+        eval_cmd += ["--manifest", str(reports[-1])]
     ev = subprocess.run(eval_cmd, cwd=str(ROOT), env=env)
     return ev.returncode
 

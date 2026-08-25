@@ -25,6 +25,9 @@ All notable changes to The-Mailroom are documented here, following
   `scripts/run_production_pilot.py` drives a Qwen 3.7-Flash subset through
   sibling `llm-mailroom` (`src/scripts/run_hf_pilot.py`). Intake clerk span
   `normalize-intake` maps to INGEST; agent `intake` added to the roster.
+  Live Qwen 3.7-Flash subset of `docclass-merged` scored exact 0.80 /
+  aligned 1.00; insurance claims with `adjuster: null` were the production
+  schema miss that parked CMS-style rows in REVIEW.
 
 ### Fixed
 
