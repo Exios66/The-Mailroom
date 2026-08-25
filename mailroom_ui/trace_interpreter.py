@@ -480,15 +480,28 @@ def interpret_trace(
             break
 
     scored_tokens = _int(score_map.get("total_tokens"))
+    generated_tokens = sum(g.usage_total_tokens or 0 for g in generations)
     total_tokens = (
         scored_tokens
         if scored_tokens is not None
-        else sum(g.usage_total_tokens or 0 for g in generations)
+        and (score_stamps.get("total_tokens") is not None or generated_tokens == 0)
+        else generated_tokens
     )
     scored_cost = _float(score_map.get("estimated_cost_usd"))
-    cost = scored_cost if scored_cost is not None else sum(g.cost_usd or 0 for g in generations)
+    generated_cost = sum(g.cost_usd or 0 for g in generations)
+    cost = (
+        scored_cost
+        if scored_cost is not None
+        and (score_stamps.get("estimated_cost_usd") is not None or generated_cost == 0)
+        else generated_cost
+    )
     scored_calls = _int(score_map.get("llm_call_count"))
-    llm_call_count = scored_calls if scored_calls is not None else len(generations)
+    llm_call_count = (
+        scored_calls
+        if scored_calls is not None
+        and (score_stamps.get("llm_call_count") is not None or not generations)
+        else len(generations)
+    )
 
     run = PipelineRun(
         trace_id=str(trace.get("id") or ""),
