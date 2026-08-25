@@ -27,7 +27,9 @@ All notable changes to The-Mailroom are documented here, following
   `normalize-intake` maps to INGEST; agent `intake` added to the roster.
   Live Qwen 3.7-Flash subset of `docclass-merged` scored exact 0.80 /
   aligned 1.00; insurance claims with `adjuster: null` were the production
-  schema miss that parked CMS-style rows in REVIEW.
+  schema miss that parked CMS-style rows in REVIEW. Evaluator latency now
+  reads the explicit `run_duration_seconds` score instead of trace
+  `updatedAt`, which can move when asynchronous evaluators attach scores.
 
 ### Fixed
 

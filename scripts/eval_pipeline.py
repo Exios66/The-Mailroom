@@ -175,7 +175,10 @@ def traces_to_rows(traces: list[dict]) -> list[dict]:
             "session": t.get("sessionId") or t.get("session_id"),
             "environment": t.get("environment"),
             "tags": t.get("tags"),
-            "seconds": seconds,
+            # Trace.updatedAt also moves when asynchronous evaluators attach
+            # scores, so it is not pipeline latency. Prefer the explicit
+            # end-to-end score emitted before the trace closes.
+            "seconds": scores.get("run_duration_seconds") or seconds,
             "intake_changed": False,
             "intake_messy": False,
         }
@@ -243,6 +246,7 @@ def enrich_intake(rows: list[dict]) -> list[dict]:
         scores = {s.get("name"): s.get("value") for s in (detail.get("scores") or []) if isinstance(s, dict)}
         row["cost_usd"] = row.get("cost_usd") or scores.get("estimated_cost_usd")
         row["total_tokens"] = row.get("total_tokens") or scores.get("total_tokens")
+        row["seconds"] = scores.get("run_duration_seconds") or row.get("seconds")
         row["verdict"] = row.get("verdict") or scores.get("mailroom-pipeline-judge")
         row["quality"] = row.get("quality") or scores.get("mailroom-pipeline-quality")
     return rows
