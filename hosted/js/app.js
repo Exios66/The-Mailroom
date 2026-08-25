@@ -286,14 +286,15 @@ const App = (() => {
       const docs = Object.entries(m.per_doc_type || {});
       const maxV = Math.max(1, ...verdicts.map(([, v]) => v));
       const maxD = Math.max(1, ...docs.map(([, v]) => v));
-      const bars = (title, entries, max) => {
+      const palette = { CORRECT: "var(--ok)", PARTIAL: "var(--warn)", MISS: "var(--bad)" };
+      const bars = (title, entries, max, useVerdictColors) => {
         if (!entries.length) return "";
         return `<div class="bar-list"><h3>${Obs.esc(title)}</h3>${entries.map(([k, v]) => {
           const label = (meta && meta.doc_classes && meta.doc_classes[k]) || k;
-          const color = k === "CORRECT" ? "ok" : k === "PARTIAL" ? "warn" : k === "MISS" ? "bad" : "info";
           const pct = Math.round((v / max) * 100);
+          const fill = useVerdictColors ? (palette[k] || "var(--info)") : "var(--info)";
           return `<div class="bar"><span>${Obs.esc(label)}</span>
-            <span class="bar-track"><span class="bar-fill bar-fill-${color}" style="width:${pct}%"></span></span>
+            <span class="bar-track"><span class="bar-fill" style="width:${pct}%;background:${fill}"></span></span>
             <span>${v}</span></div>`;
         }).join("")}</div>`;
       };
@@ -307,7 +308,7 @@ const App = (() => {
         + metricTile("Tokens", Obs.fmt.tokens(m.total_tokens))
         + metricTile("LLM calls", Obs.fmt.tokens(m.llm_calls))
         + metricTile("Avg quality", m.avg_quality == null ? "—" : Number(m.avg_quality).toFixed(2))
-      }</dl>${bars("Judge verdicts", verdicts, maxV)}${bars("Document types", docs, maxD)}`;
+      }</dl>${bars("Judge verdicts", verdicts, maxV, true)}${bars("Document types", docs, maxD, false)}`;
       dbg("traces", { where: "metrics", docs: m.total_docs });
     } catch (err) {
       dbg("metrics-error", { message: err.message });
@@ -399,7 +400,11 @@ const App = (() => {
 
   function setReplayBar(visible) {
     const bar = need("replay-bar");
-    if (bar) bar.hidden = !visible;
+    if (!bar) return;
+    bar.hidden = !visible;
+    bar.classList.toggle("is-on", !!visible);
+    if (visible) bar.removeAttribute("hidden");
+    else bar.setAttribute("hidden", "");
   }
 
   function setReplayButtons(on) {
@@ -491,6 +496,7 @@ const App = (() => {
       };
       setReplayButtons(true);
       switchView("pipeline");
+      setReplayBar(true);
       applyReplayStage(replay.steps[0] ? replay.steps[0].stage : "classify");
       if (!reducedMotion()) playReplay();
     } catch (err) {
@@ -582,6 +588,7 @@ const App = (() => {
       const ok = !!(h.ok ?? h.langfuse);
       dbg("health", { ok, source: h.source, raw: h });
       if (ok) {
+        showAlert("");
         if (!socketLive) setSource("live", `Live · source ${h.source || "langfuse"}`);
         if (!meta) {
           try {
@@ -601,7 +608,9 @@ const App = (() => {
       socketLive = false;
       dbg("error", { where: "health", message: err.message });
       setSource("down", `No live connection — ${err.message}`);
-      showAlert("The Observatory needs the Mailroom API (Langfuse-backed) on this host. This is not the GitHub Pages snapshot.");
+      if (!runs.length) {
+        showAlert("The Observatory needs the Mailroom API (Langfuse-backed) on this host. This is not the GitHub Pages snapshot.");
+      }
       return false;
     }
   }

@@ -91,6 +91,7 @@ def test_hosted_js_visual_and_debug_contracts():
     assert '<span class="card-title">' in js
     assert '<p class="card-title">' not in js
     assert '<dl class="metrics">' in js
+    assert "palette" in js and "CORRECT" in js
     assert "setReplayBar" in js and "overlayReplay" in js
     assert "replay.terminal" in js
     assert "if (!socketLive)" in js
