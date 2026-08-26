@@ -267,17 +267,31 @@ const MetricsView = (() => {
       html += tile("VERIFIED PRECISION", pct(m.avg_extraction_verified_precision),
         m.avg_extraction_verified_precision >= 0.8 ? "good" : "warn");
     }
-    if (m.avg_content_topic_accuracy != null || m.avg_sentiment_accuracy != null) {
+    if (m.avg_content_topic_accuracy != null) {
       html += tile("TOPIC ACC", pct(m.avg_content_topic_accuracy));
+    }
+    if (m.avg_content_topic_f1_macro != null) {
       html += tile("TOPIC F1", pct(m.avg_content_topic_f1_macro));
+    }
+    if (m.avg_sentiment_accuracy != null) {
       html += tile("SENTIMENT ACC", pct(m.avg_sentiment_accuracy));
+    }
+    if (m.avg_sentiment_f1_macro != null) {
       html += tile("SENTIMENT F1", pct(m.avg_sentiment_f1_macro));
     }
-    if (m.avg_maud_question_accuracy != null || m.avg_maud_clause_presence != null) {
+    if (m.avg_maud_question_accuracy != null) {
       html += tile("MAUD Q ACC", pct(m.avg_maud_question_accuracy));
+    }
+    if (m.avg_maud_question_macro_accuracy != null) {
       html += tile("MAUD Q MACRO", pct(m.avg_maud_question_macro_accuracy));
+    }
+    if (m.avg_maud_clause_presence != null) {
       html += tile("MAUD CLAUSE", pct(m.avg_maud_clause_presence));
+    }
+    if (m.avg_maud_valid_class_rate != null) {
       html += tile("MAUD VALID", pct(m.avg_maud_valid_class_rate));
+    }
+    if (m.avg_maud_category_accuracy != null) {
       html += tile("MAUD CATEGORY", pct(m.avg_maud_category_accuracy));
     }
     if (m.avg_run_duration_s != null) {
