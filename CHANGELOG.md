@@ -8,6 +8,18 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Added
 
+- **Live conveyor freshness + producer watcher lamp.** In-flight traces are
+  re-enriched every poll (terminal runs stay on the 60s detail cache) so a
+  just-flushed classify/extract/judge span moves the envelope on the next
+  tick instead of sitting on the previous station for a minute. List/obs
+  TTLs match `MAILROOM_POLL_INTERVAL` (3s). WS snapshots carry
+  `poll_interval_s` and `pipeline` ops; the pixel fallback poll uses that
+  interval (was a hard-coded 10s). `GET /api/pipeline` reports llm-mailroom
+  watcher heartbeat + inbox pending when `MAILROOM_PIPELINE_URL` is set
+  (operator liveness, not fabricated document data). Floor gained an INBOX
+  hopper; Observatory/TUI show watcher/inbox; graph node ids
+  (`retry_classify`, `judge_verify`, …) map onto stations.
+
 - **Reconsideration beyond self-reported confidence.** Archived runs with
   objective misses (judge MISS/PARTIAL, GT class/subclass mismatch,
   extraction score below the low floor, schema/guardrail/parse failures,

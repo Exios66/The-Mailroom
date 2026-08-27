@@ -13,6 +13,9 @@ const App = (() => {
 
   const SPAN_STAGE = {
     "ingest-document": "ingest",
+    "normalize-intake": "ingest",
+    "transcribe-pdf": "ingest",
+    "extract-image-text": "ingest",
     "classify-document": "classify",
     "judge-verify": "judge_verify",
     "arbitrate-verdict": "arbiter",
@@ -22,6 +25,19 @@ const App = (() => {
     "compile-report": "report",
     "write-catalog": "catalog",
     "archive-document": "archive",
+    ingest: "ingest",
+    classify: "classify",
+    retry_classify: "retry_classify",
+    review_classify: "retry_classify",
+    extract: "extract",
+    retry_extract: "retry_extract",
+    judge_verify: "judge_verify",
+    arbiter: "arbiter",
+    human_review: "review",
+    boss_escalation: "boss",
+    compile_report: "report",
+    catalog_write: "catalog",
+    archive: "archive",
   };
 
   const views = ["pipeline", "review", "history", "matters", "metrics", "debug"];
@@ -162,6 +178,22 @@ const App = (() => {
     bindCards(board);
     const count = need("run-count");
     if (count) count.textContent = `${runs.length} run${runs.length === 1 ? "" : "s"} in the live window`;
+  }
+
+  function applyPipelineOps(ops) {
+    const el = need("pipeline-ops");
+    if (!el) return;
+    if (!ops || !ops.configured) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const w = ops.watcher === "live" ? "Watcher live"
+      : ops.watcher === "stale" ? "Watcher stale"
+      : "Watcher down";
+    const inbox = ops.inbox_pending == null ? "?" : ops.inbox_pending;
+    const paused = ops.ingestion_paused ? " · ingestion paused" : "";
+    el.textContent = `${w} · inbox ${inbox}${paused}`;
   }
 
   function bindCards(root) {
@@ -676,6 +708,7 @@ const App = (() => {
       else setSource("stale", "Socket disconnected — reconnecting");
     } else if (msg.type === "snapshot") {
       applyRuns(msg.runs || []);
+      applyPipelineOps(msg.pipeline);
       if (msg.stale) setSource("stale", "Live · last snapshot is stale");
     }
   }
