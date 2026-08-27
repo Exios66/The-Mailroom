@@ -147,6 +147,60 @@ def test_ws_snapshot_includes_pipeline_and_poll_interval():
     assert run_fingerprint(done)[1] == "archived"
 
 
+def test_pipeline_ops_prefers_declared_watcher(monkeypatch):
+    from mailroom_ui import pipeline_ops
+
+    monkeypatch.setenv("MAILROOM_PIPELINE_URL", "http://pipeline.test:8000")
+
+    def fake_get(url, *, timeout=1.5, token=""):
+        return {
+            "status": "ok",
+            "checks": {
+                "watcher": "live",
+                "watcher_heartbeat_seconds_ago": 40.0,
+                "inbox_pending": 0,
+            },
+        }
+
+    monkeypatch.setattr(pipeline_ops, "_get_json", fake_get)
+    ops = pipeline_ops.fetch_pipeline_ops()
+    assert ops["watcher"] == "live"
+    assert ops["inbox_pending"] == 0
+    assert ops["ok"] is True
+
+
+def test_pipeline_ops_reads_top_level_inbox(monkeypatch):
+    from mailroom_ui import pipeline_ops
+
+    monkeypatch.setenv("MAILROOM_PIPELINE_URL", "http://pipeline.test:8000")
+
+    def fake_get(url, *, timeout=1.5, token=""):
+        return {
+            "status": "ok",
+            "watcher_heartbeat_seconds_ago": 1.0,
+            "inbox_pending": 3,
+            "ingestion_paused": True,
+        }
+
+    monkeypatch.setattr(pipeline_ops, "_get_json", fake_get)
+    ops = pipeline_ops.fetch_pipeline_ops()
+    assert ops["watcher"] == "live"
+    assert ops["inbox_pending"] == 3
+    assert ops["ingestion_paused"] is True
+    assert ops["ok"] is True
+
+
+def test_server_source_ttl_follows_poll_interval():
+    from pathlib import Path
+
+    from server import main as server_main
+
+    text = Path(server_main.__file__).read_text()
+    assert "cache_ttl=ttl" in text
+    assert "poll_cache_ttl=ttl" in text
+    assert "ttl = max(0.0, POLL_INTERVAL)" in text
+
+
 def test_pipeline_ops_unconfigured_without_url(monkeypatch):
     from mailroom_ui.pipeline_ops import fetch_pipeline_ops
 

@@ -1,7 +1,8 @@
 /* Mailroom Observatory app shell: views, live board, replay, inspector, debug. */
 const App = (() => {
   const STATIONS = [
-    { key: "sorter", label: "Sorter", stages: ["inbox", "ingest", "classify", "retry_classify", "review_classify", "unknown"] },
+    { key: "inbox", label: "Inbox", stages: ["inbox"] },
+    { key: "sorter", label: "Sorter", stages: ["ingest", "classify", "retry_classify", "review_classify", "unknown"] },
     { key: "extract", label: "Extract", stages: ["extract", "retry_extract"] },
     { key: "judge", label: "Judge", stages: ["judge_verify", "arbiter"] },
     { key: "boss", label: "Boss", stages: ["boss"] },
@@ -48,6 +49,9 @@ const App = (() => {
   let replayTimers = [];
   let lastFocus = null;
   let socketLive = false;
+  let pollIntervalMs = 3000;
+  let fallbackTimer = null;
+  let fallbackPollMs = 0;
 
   const $ = (id) => document.getElementById(id);
 
@@ -656,16 +660,37 @@ const App = (() => {
     refreshTraces();
   }
 
+  function applyPollInterval(seconds) {
+    if (typeof seconds === "number" && seconds > 0) {
+      pollIntervalMs = Math.max(1000, Math.round(seconds * 1000));
+    }
+  }
+
   async function refreshTraces() {
     try {
       const data = await Obs.api.traces(604800, 200);
       applyRuns(data.runs || []);
       showAlert("");
       dbg("traces", { where: "floor", count: (data.runs || []).length });
+      try {
+        applyPipelineOps(await Obs.api.pipeline());
+      } catch (_e) { /* producer URL optional */ }
     } catch (err) {
       dbg("traces-error", { message: err.message });
       showAlert(`Could not load traces — ${err.message}`);
     }
+  }
+
+  function startFallbackPolling() {
+    const tick = async () => {
+      if (socketLive) return;
+      await refreshTraces();
+    };
+    if (fallbackTimer && fallbackPollMs === pollIntervalMs) return;
+    if (fallbackTimer) clearInterval(fallbackTimer);
+    fallbackPollMs = pollIntervalMs;
+    fallbackTimer = setInterval(tick, pollIntervalMs);
+    dbg("poll", { where: "fallback", ms: pollIntervalMs });
   }
 
   async function checkHealth() {
@@ -679,6 +704,7 @@ const App = (() => {
         if (!meta) {
           try {
             meta = await Obs.api.meta();
+            applyPollInterval(meta.poll_interval_s);
             dbg("meta", { edition: meta.edition, version: meta.version });
             applyEditionNote();
           } catch (e) {
@@ -709,6 +735,8 @@ const App = (() => {
     } else if (msg.type === "snapshot") {
       applyRuns(msg.runs || []);
       applyPipelineOps(msg.pipeline);
+      applyPollInterval(msg.poll_interval_s);
+      if (!socketLive) startFallbackPolling();
       if (msg.stale) setSource("stale", "Live · last snapshot is stale");
     }
   }
@@ -874,8 +902,12 @@ const App = (() => {
 
     checkHealth().then((ok) => {
       if (!ok) return;
+      applyPollInterval(meta && meta.poll_interval_s);
       refreshTraces();
       Obs.connectWS(onMessage);
+      setTimeout(() => {
+        if (!socketLive) startFallbackPolling();
+      }, 8000);
     });
     setInterval(checkHealth, 10000);
   }

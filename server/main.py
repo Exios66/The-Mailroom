@@ -72,11 +72,17 @@ API_ENDPOINTS = [
 def _build_default_source() -> object:
     """MAILROOM_SOURCE selector: langfuse (default) | phoenix | both."""
     which = os.environ.get("MAILROOM_SOURCE", "langfuse").strip().lower()
+    # List/obs TTL follows the poll interval so a just-created trace is
+    # visible on the next snapshot instead of sitting behind a longer cache.
+    ttl = max(0.0, POLL_INTERVAL)
     if which == "phoenix":
-        return PhoenixSource()
+        return PhoenixSource(cache_ttl=ttl)
     if which in ("both", "multi", "all"):
-        return MultiSource([LangfuseSource(), PhoenixSource()])
-    return LangfuseSource()
+        return MultiSource([
+            LangfuseSource(cache_ttl=ttl, poll_cache_ttl=ttl),
+            PhoenixSource(cache_ttl=ttl),
+        ])
+    return LangfuseSource(cache_ttl=ttl, poll_cache_ttl=ttl)
 
 
 def create_app(source: Optional[object] = None) -> FastAPI:

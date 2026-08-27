@@ -220,13 +220,19 @@ const Main = (() => {
 
   function applyPipeline(ops) {
     if (!ops) return;
-    const prev = lastPipeline && lastPipeline.watcher;
+    const prev = lastPipeline || {};
     lastPipeline = ops;
-    if (ops.configured && prev && prev !== ops.watcher) {
-      ConsoleView.log(`watcher ${prev} → ${ops.watcher}`, ops.watcher === "live" ? "c-ok" : "c-warn");
+    if (ops.configured && prev.watcher && prev.watcher !== ops.watcher) {
+      ConsoleView.log(`watcher ${prev.watcher} → ${ops.watcher}`, ops.watcher === "live" ? "c-ok" : "c-warn");
     }
-    if (ops.configured && typeof ops.inbox_pending === "number" && ops.inbox_pending > 0) {
-      ConsoleView.log(`inbox pending: ${ops.inbox_pending}`, "c-dim");
+    const prevInbox = prev.inbox_pending;
+    if (ops.configured && typeof ops.inbox_pending === "number"
+        && ops.inbox_pending !== prevInbox) {
+      if (ops.inbox_pending > 0) {
+        ConsoleView.log(`inbox pending: ${ops.inbox_pending}`, "c-dim");
+      } else if (typeof prevInbox === "number" && prevInbox > 0) {
+        ConsoleView.log("inbox empty", "c-dim");
+      }
     }
     renderStatus();
   }
@@ -253,6 +259,7 @@ const Main = (() => {
       const poll = Mailroom.meta && Mailroom.meta.poll_interval_s;
       if (typeof poll === "number" && poll > 0) {
         pollIntervalMs = Math.max(1000, Math.round(poll * 1000));
+        if (fallbackTimer) startFallbackPolling();
       }
     } catch (e) {
       Mailroom.showError(`meta: ${e.message || e}`);
@@ -311,6 +318,7 @@ const Main = (() => {
       if (msg.fetched_at) lastFetchedAt = msg.fetched_at;
       if (typeof msg.poll_interval_s === "number" && msg.poll_interval_s > 0) {
         pollIntervalMs = Math.max(1000, Math.round(msg.poll_interval_s * 1000));
+        if (fallbackTimer) startFallbackPolling();
       }
       // V-14: surface staleness + last-updated so a frozen floor with a green
       // lamp is distinguishable from a live one.
@@ -322,8 +330,9 @@ const Main = (() => {
     }
   }
 
+  let fallbackPollMs = 0;
+
   function startFallbackPolling() {
-    if (fallbackTimer) return;
     const tick = async () => {
       if (!langfuseOk || wsOk) return;
       try {
@@ -338,6 +347,9 @@ const Main = (() => {
         Mailroom.showError(`fallback poll: ${msg}`);
       }
     };
+    if (fallbackTimer && fallbackPollMs === pollIntervalMs) return;
+    if (fallbackTimer) clearInterval(fallbackTimer);
+    fallbackPollMs = pollIntervalMs;
     fallbackTimer = setInterval(tick, pollIntervalMs);
     ConsoleView.log(`polling /api/traces as fallback (${pollIntervalMs}ms)`, "c-dim");
   }

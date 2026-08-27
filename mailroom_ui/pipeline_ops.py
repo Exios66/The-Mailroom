@@ -47,7 +47,19 @@ def _get_json(url: str, *, timeout: float = 1.5, token: str = "") -> dict[str, A
     return data if isinstance(data, dict) else {}
 
 
-def _watcher_state(age: Optional[float]) -> str:
+def _as_int(value: Any) -> Optional[int]:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value == int(value):
+        return int(value)
+    return None
+
+
+def _watcher_state(age: Optional[float], declared: Any = None) -> str:
+    if declared in ("live", "stale", "missing"):
+        return declared
     if age is None:
         return "missing"
     try:
@@ -89,14 +101,20 @@ def fetch_pipeline_ops(*, timeout: float = 1.5) -> dict[str, Any]:
         return out
     checks = health.get("checks") if isinstance(health.get("checks"), dict) else {}
     age = checks.get("watcher_heartbeat_seconds_ago")
-    watcher = _watcher_state(age if isinstance(age, (int, float)) else None)
-    paused = bool(checks.get("ingestion_paused"))
-    inbox = checks.get("inbox_pending")
+    if not isinstance(age, (int, float)):
+        age = health.get("watcher_heartbeat_seconds_ago")
+    age_n = age if isinstance(age, (int, float)) and not isinstance(age, bool) else None
+    watcher = _watcher_state(age_n, checks.get("watcher") or health.get("watcher"))
+    paused = bool(checks.get("ingestion_paused") if "ingestion_paused" in checks
+                  else health.get("ingestion_paused"))
+    inbox = _as_int(checks.get("inbox_pending"))
+    if inbox is None:
+        inbox = _as_int(health.get("inbox_pending"))
     out.update({
         "ok": str(health.get("status", "")).lower() == "ok" and watcher == "live",
         "watcher": watcher,
-        "watcher_heartbeat_seconds_ago": age,
-        "inbox_pending": inbox if isinstance(inbox, int) else None,
+        "watcher_heartbeat_seconds_ago": age_n,
+        "inbox_pending": inbox,
         "ingestion_paused": paused,
         "status": health.get("status"),
     })

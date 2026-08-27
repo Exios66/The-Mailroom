@@ -43,6 +43,7 @@ keys).
    are then **re-enriched every poll** (`inflight_ttl=0`) so a node that
    just flushed moves the envelope on the next tick; archived/failed runs
    stay on the 60s detail cache until `updated_at` / stage change.
+   List/obs TTLs follow `MAILROOM_POLL_INTERVAL`.
 2. Each light run is interpreted by `trace_interpreter.interpret_trace` and
    compacted by `poller.floor_payload` (stage, doc type, confidences, verdict,
    cost, …). Optional `MAILROOM_PIPELINE_URL` is fetched the same tick
@@ -52,7 +53,8 @@ keys).
    demand via `LangfuseSource.get_run()`; pass `force_refresh` for in-flight.
 4. Snapshots are broadcast over WebSocket `/ws`; the SPA renders the floor,
    sessions, metrics, and console from the same payloads. HTTP fallback
-   polls at the same interval as the hub.
+   (pixel console and Observatory) polls traces + `/api/pipeline` at the
+   same interval as the hub when the WebSocket is down.
 
 ## Interpreting traces
 

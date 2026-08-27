@@ -155,8 +155,10 @@ class PollHub:
     async def _run(self) -> None:
         while not self._stop.is_set():
             try:
-                runs = await asyncio.to_thread(self._fetch)
-                ops = await asyncio.to_thread(fetch_pipeline_ops)
+                runs, ops = await asyncio.gather(
+                    asyncio.to_thread(self._fetch),
+                    asyncio.to_thread(fetch_pipeline_ops),
+                )
                 self.pipeline_ops = ops
                 # V-4: a partial Langfuse failure must NOT wipe the floor —
                 # keep the last good snapshot and mark it stale so the UI can
