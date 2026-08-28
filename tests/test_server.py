@@ -84,6 +84,10 @@ def test_sessions_embed_all_runs_not_capped_at_20():
         one = c.get(f"/api/sessions/{sid}").json()
         assert one["count"] == 25
         assert len(one["runs"]) == 25
+        compact = s["sessions"][0]["runs"][0]
+        assert "spans" not in compact
+        assert "generations" not in compact
+        assert compact["total_tokens"] > 0
 
 
 def test_desk_runs_prefer_poller_snapshot():

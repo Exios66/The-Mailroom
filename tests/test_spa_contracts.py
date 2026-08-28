@@ -146,6 +146,8 @@ def test_desk_tabs_show_loading_placeholder():
     assert "stopPropagation" in API
     assert "LOADING SESSIONS FROM LANGFUSE" in sessions
     assert ".slice(0, 20)" not in sessions
+    theme = (ROOT / "web" / "css" / "theme.css").read_text()
+    assert "max-height" in theme.split(".session-runs")[1][:200]
     assert "LOADING METRICS FROM LANGFUSE" in metrics
     assert "LOADING RUN HISTORY FROM LANGFUSE" in history
 

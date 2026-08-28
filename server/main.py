@@ -213,8 +213,20 @@ def create_app(source: Optional[object] = None) -> FastAPI:
                 runs=rs,
             ))
         out.sort(key=lambda s: s.updated_at or datetime.min, reverse=True)
-        return {"count": len(out[:limit]), "source": _source_names(src),
-                "sessions": [s.model_dump() for s in out[:limit]]}
+        return JSONResponse(
+            {
+                "count": len(out[:limit]),
+                "source": _source_names(src),
+                "sessions": [
+                    {
+                        **s.model_dump(mode="json", exclude={"runs"}),
+                        "runs": [floor_payload(r) for r in s.runs],
+                    }
+                    for s in out[:limit]
+                ],
+            },
+            headers=_NO_CACHE,
+        )
 
     @app.get("/api/sessions/{session_id}")
     def session_detail(session_id: str):
