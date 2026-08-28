@@ -162,17 +162,19 @@ class FakeProducerStore:
             if kind:
                 doc["doc_type"] = kind
         if doc_subclass is not None and str(doc_subclass).strip():
-            sub = normalize_review_subclass(doc.get("doc_type"), str(doc_subclass))
-            if sub:
-                doc["doc_subclass"] = sub
-                if doc.get("doc_type") == "contract":
-                    doc["contract_subtype"] = sub
-        elif contract_subtype is not None and str(contract_subtype).strip():
-            sub = normalize_review_subclass(doc.get("doc_type") or "contract", str(contract_subtype))
-            if sub:
+            sub = str(doc_subclass).strip()
+            try:
+                sub = normalize_review_subclass(doc.get("doc_type"), sub) or sub
+            except ValueError:
+                pass
+            doc["doc_subclass"] = sub
+            if doc.get("doc_type") == "contract":
                 doc["contract_subtype"] = sub
-                if not doc.get("doc_subclass"):
-                    doc["doc_subclass"] = sub
+        elif contract_subtype is not None and str(contract_subtype).strip():
+            sub = str(contract_subtype).strip()
+            doc["contract_subtype"] = sub
+            if not doc.get("doc_subclass"):
+                doc["doc_subclass"] = sub
         doc["updated_at"] = _now()
 
 

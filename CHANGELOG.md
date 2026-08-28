@@ -42,6 +42,12 @@ All notable changes to The-Mailroom are documented here, following
   instead of synthesizing a file. Watcher/inbox liveness uses
   `GET /v1/health` and `GET /v1/queue`.
 
+### Fixed
+
+- **Parked non-catalog subclasses no longer 400 Complete.** Producer main does
+  not catalog-gate `doc_subclass`; the proxy now passes parked tokens such as
+  insurance `fnol` through so Complete / Resume still work.
+
 ## [0.3.0] - 2026-08-28
 
 > review resolve, live floor, skills, and reconsideration
