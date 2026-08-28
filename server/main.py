@@ -224,6 +224,12 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             r for r in (hub.runs or [])
             if (r.session_id or r.matter_id) == session_id
         ]
+        if not desk:
+            cutoff = _utcnow() - timedelta(seconds=7 * 86400)
+            desk = [
+                r for r in list_recent_runs(src, since=cutoff, limit=TRACE_LIMIT)
+                if (r.session_id or r.matter_id) == session_id
+            ]
         if desk:
             desk.sort(
                 key=lambda r: (r.updated_at or r.created_at or datetime.min),
