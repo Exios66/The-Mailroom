@@ -145,6 +145,7 @@ def test_desk_tabs_show_loading_placeholder():
     assert 'data-decision="approved"' in API
     assert "stopPropagation" in API
     assert "LOADING SESSIONS FROM LANGFUSE" in sessions
+    assert ".slice(0, 20)" not in sessions
     assert "LOADING METRICS FROM LANGFUSE" in metrics
     assert "LOADING RUN HISTORY FROM LANGFUSE" in history
 

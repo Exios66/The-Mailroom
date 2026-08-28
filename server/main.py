@@ -211,7 +211,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
                 created_at=min(stamps_c) if stamps_c else None,
                 updated_at=max(stamps_u) if stamps_u else None,
                 trace_count=len(rs),
-                runs=rs[:20],
+                runs=rs,
             ))
         out.sort(key=lambda s: s.updated_at or datetime.min, reverse=True)
         return {"count": len(out[:limit]), "source": _source_names(src),
@@ -219,7 +219,24 @@ def create_app(source: Optional[object] = None) -> FastAPI:
 
     @app.get("/api/sessions/{session_id}")
     def session_detail(session_id: str):
-        runs = _session_runs(src, session_id, limit=200)
+        # Prefer the poller's already-enriched window. A 50-doc pilot used to
+        # N+1 get_session_traces × get_run and time out against Langfuse.
+        desk = [
+            r for r in (hub.runs or [])
+            if (r.session_id or r.matter_id) == session_id
+        ]
+        if desk:
+            desk.sort(
+                key=lambda r: (r.updated_at or r.created_at or datetime.min),
+                reverse=True,
+            )
+            return {
+                "session_id": session_id,
+                "count": len(desk),
+                "source": _source_names(src),
+                "runs": [_serialize(r) for r in desk],
+            }
+        runs = _session_runs(src, session_id, limit=TRACE_LIMIT)
         return {
             "session_id": session_id,
             "count": len(runs),
