@@ -1,8 +1,12 @@
 # Releases
 
-**Current:** [v0.3.0](https://github.com/Exios66/The-Mailroom/releases/tag/v0.3.0)
+**Current tagged release:** [v0.3.0](https://github.com/Exios66/The-Mailroom/releases/tag/v0.3.0)
 (2026-08-28) — review resolve, live floor, skills, and reconsideration.
 Demos: [Demos](Demos).
+
+Post-tag work on `main` (working REVIEW tray + optional `[pipeline]` pin of
+llm-mailroom `@2c0bcac`) lives under `CHANGELOG.md` `[Unreleased]` until the
+next cut.
 
 The-Mailroom follows **Semantic Versioning** (`MAJOR.MINOR.PATCH`) with the
 version living in `pyproject.toml` and the release record in `CHANGELOG.md`.

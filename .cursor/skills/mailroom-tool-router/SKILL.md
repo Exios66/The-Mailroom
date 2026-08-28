@@ -49,7 +49,8 @@ may go through `MAILROOM_PIPELINE_URL` on the visualizer server. That is
 Ollama / Modal / OpenRouter / vLLM belong in
 [`local-mailroom-sandbox`](https://github.com/Exios66/local-mailroom-sandbox)
 or [`llm-mailroom`](https://github.com/Exios66/llm-mailroom). This process is
-read-only FastAPI on `:8001`.
+FastAPI on `:8001`: Langfuse reads plus a producer REVIEW proxy. Document
+display stays Langfuse-only; the browser never holds keys.
 
 ## Repo anchors
 
@@ -59,6 +60,7 @@ read-only FastAPI on `:8001`.
 | Langfuse adapter | `mailroom_ui/langfuse_source.py` |
 | Phoenix adapter | `mailroom_ui/phoenix_source.py` |
 | Topology mirror | `mailroom_ui/pipeline_schema.py` |
+| Producer pin / REVIEW proxy | `mailroom_ui/producer.py`, `mailroom_ui/review_actions.py` |
 | Poller / WS | `server/poller.py`, `/ws` |
 | Pixel SPA | `web/` |
 | Observatory | `hosted/` |

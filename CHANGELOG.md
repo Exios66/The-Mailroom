@@ -41,6 +41,12 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Changed
 
+- **Docs sweep.** Root README is the operator entry point (working REVIEW
+  tray vs the v0.3.0 honest-503 cast, `[pipeline]` pin, TUI `complete` /
+  `--extracted-data`, docs map). AGENTS.md no longer calls TUI/seed_demo
+  planned. `docs/index.md` mirrors wiki Home. Architecture diagram includes
+  the producer adapter. GitHub-release still image points at `main`.
+
 - **Aligned the producer proxy with llm-mailroom `main`.** Calls go through
   `/v1` (`MAILROOM_PIPELINE_API_PREFIX`, default `/v1`; empty/`/` uses the
   unversioned aliases). Class correction is posted as `override_doc_type`

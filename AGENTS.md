@@ -1,6 +1,6 @@
 # AGENTS.md — The-Mailroom
 
-The-Mailroom is the **visual engine** for the `llm-mailroom` multi-agent legal-document pipeline: a pixel-art console (web + planned TUI) that renders every run from its Langfuse traces. **Langfuse is the sole source of truth** — every displayed value is derived from Langfuse traces, observations, scores, and sessions. This repo never fabricates or falls back to locally-canned data. Python 3.11+, no build step.
+The-Mailroom is the **visual engine** for the `llm-mailroom` multi-agent legal-document pipeline: a pixel-art console, hosted Observatory, and TUI that render every run from its Langfuse traces. **Langfuse is the sole source of truth for document display** — every envelope, verdict, and metric is derived from Langfuse traces, observations, scores, and sessions. This repo never fabricates or falls back to locally-canned data on the live floor. Operator writes go through the producer proxy. Python 3.11+, no build step.
 
 ## Skills (tool selection)
 
@@ -28,7 +28,7 @@ open exactly one specialty skill. Companion to
 
 ## Sister repo: `llm-mailroom` (the pipeline)
 
-- **Expected location**: a sibling of this repo, i.e. `../llm-mailroom` from this checkout (e.g. `/Users/luciusjmorningstar/Downloads/llm-mailroom`). It is **not currently present on this machine** — clone it before relying on `MAILROOM_TAXONOMY`.
+- **Expected location**: a sibling of this repo, i.e. `../llm-mailroom` from this checkout (or `MAILROOM_PIPELINE_ROOT`). Clone it for `MAILROOM_TAXONOMY` live override and production-pilot scripts; the `[pipeline]` extra pins dist `mailroom` without a checkout.
 - **Import pin**: optional extra `[pipeline]` installs dist `mailroom` from
   `git+https://github.com/Exios66/llm-mailroom.git@2c0bcac` (package 0.5.0).
   `mailroom_ui/producer.py` is the only import adapter — `pipeline.review_resolve`
@@ -53,8 +53,8 @@ pip install -e ".[pipeline]"   # pin llm-mailroom @ 2c0bcac (optional import)
 python -m pytest tests/ -q     # whole suite (never hits real Langfuse)
 python -m server.main          # FastAPI web server on :8001 (also: mailroom-web)
 mailroom-hosted                # Observatory on 0.0.0.0 (public /live UI)
-mailroom-tui                   # TUI console (planned, M4)
-python scripts/seed_demo.py    # seed demo traces INTO Langfuse (planned, M5)
+mailroom-tui                   # TUI console (shipped)
+python scripts/seed_demo.py    # seed demo traces INTO Langfuse (env demo)
 python scripts/demo_review_tray.py --check-api  # working REVIEW tray vs fake /v1 producer
 python scripts/run_production_pilot.py --check   # HF subset + eval scorer (needs sibling llm-mailroom)
 python scripts/run_production_pilot.py --real    # live Qwen 3.7-Flash pilot → Langfuse, then eval
@@ -73,7 +73,7 @@ scripts/publish_pages.sh       # build site/ + push gh-pages:/docs (NO Actions;
 
 ## Architecture (not obvious from filenames)
 
-- `mailroom_ui/` — data core (everything reads Langfuse only):
+- `mailroom_ui/` — data core. **Display path** reads Langfuse (and optional Phoenix) only; **operator path** (`review_actions.py`, `pipeline_ops.py`, `producer.py`) talks to llm-mailroom:
   - `langfuse_source.py` — Langfuse SDK adapter: `client.api.trace.list/get`, `client.api.observations.get_many`, `client.api.scores.get_many`, `client.api.sessions.list/get`; `TTLCache`; `LangfuseUnavailable`. `list_recent_runs()` uses trace-list responses only (cheap "light" runs for the floor); `get_run()` fetches observations+scores for drill-down.
   - `trace_interpreter.py` — `interpret_trace(trace, observations?, scores?)` → `PipelineRun`. Accepts **both v2/v3 snake_case and v4 camelCase** observation shapes (see SDK tolerance). Light runs (no observations arg) have empty span/generation detail. Re-run clustering: deterministic trace ids are reused by pilot/attempt re-runs, so a trace can carry several full runs — observations are clustered by time gaps (`RUN_GAP_S`) and only the latest cluster is kept.
   - `pipeline_schema.py` — topology mirror (see sister-repo section).
@@ -90,8 +90,8 @@ scripts/publish_pages.sh       # build site/ + push gh-pages:/docs (NO Actions;
 - `hosted/` — Mailroom Observatory (public hosted edition): modern accessible SPA, distinct from the pixel console / TUI / GH Pages snapshot. Vanilla HTML/CSS/JS, no build step. Debug desk + `hosted/js/debug.js` (`window.__OBSERVATORY_DEBUG__`) records fetches, WebSocket frames, and uncaught errors.
 - `web/` — pixel-art SPA:
   - `js/floor.js` — canvas conveyor renderer (stations, rollers, envelope animation, review/failed sidings, RECONSIDER parked on REVIEW even when stage is archived, tombstones for clean archived/failed runs). `js/api.js` (fetch + WS with reconnect + global error banner), `js/inspector.js`, `js/sessions.js`, `js/history.js`, `js/metrics.js`, `js/review.js`, `js/console.js`, `js/main.js` (app shell).
-- `tui/` — planned rich-console (AgentLab-style `*** Beginning station: ... ***` banners, per-doc summary tables). Not yet built (M4).
-- `scripts/seed_demo.py` — planned (M5): generates demo traces **into Langfuse** (env `demo`), never served directly.
+- `tui/` — shipped rich-console (`mailroom-tui`): AgentLab-style `*** Beginning station: ... ***` banners, per-doc tables, `--resolve` / `--source` / `--extracted-data` over the same display API / WS snapshots (`--once` for scripting).
+- `scripts/seed_demo.py` — seeds demo traces **into Langfuse** (env `demo`), never served directly. `scripts/demo_review_tray.py` is the working `/v1` REVIEW round-trip (FakeClient + `tests/fake_producer.py`).
 
 ## Langfuse is ALWAYS the source of visualization
 
@@ -151,10 +151,12 @@ scripts/publish_pages.sh       # build site/ + push gh-pages:/docs (NO Actions;
 
 ## Docs duplication
 
-- `docs/` and `wiki/` mirror each other (same convention as llm-mailroom, e.g. `docs/architecture.md` == `wiki/Architecture.md`); `wiki/sync-wiki.sh` pushes `wiki/` to the GitHub wiki. Edit both together, or regenerate from one.
+- `docs/` and `wiki/` mirror each other (same convention as llm-mailroom, e.g. `docs/architecture.md` == `wiki/Architecture.md`, `docs/index.md` ↔ `wiki/Home.md`); `wiki/sync-wiki.sh` pushes `wiki/` to the GitHub wiki. Edit both together, or regenerate from one.
 - This AGENTS.md is the process/architecture authority; `README.md` is the user-facing entry point; `CHANGELOG.md` is the release record.
 
-## Milestone status (in-flight work)
+## Milestone history
+
+M1–M5 shipped. Live taxonomy is **five extract classes** + `merger_agreement` display/HF alias + `unknown` (retired `court_opinion` / `due_diligence` stay off the roster) — not the v0.2.0 seven-class snapshot below.
 
 - **M1 — data core + API + tests**: DONE (mailroom_ui/, server/, tests/ green).
 - **M2 — pixel engine + static web**: DONE — `web/` SPA complete (`index.html`,
@@ -169,9 +171,10 @@ scripts/publish_pages.sh       # build site/ + push gh-pages:/docs (NO Actions;
   Langfuse (env `demo`) with `--check` / `--check-api` / `--check-logs`
   verification modes; sprite layout verified programmatically. Remaining:
   acceptance sweep of new doc classes/live traces, sprite expansions.
-- **v0.2.0 — upstream sync (2026-08-23)**: mirror updated to the current
-  llm-mailroom graph — `judge_verify`/`arbiter` stages + spans, 15-agent
-  roster, 7 doc classes, `judge_band_high`; floor gained the JUDGE station
+- **v0.2.0 — upstream sync (2026-08-23)** *(dated snapshot — not current
+  taxonomy)*: mirror updated to that cut of the llm-mailroom graph —
+  `judge_verify`/`arbiter` stages + spans, then-current 15-agent roster and
+  7 doc classes, `judge_band_high`; floor gained the JUDGE station
   (7 stations); seed_demo grew judge-gate/arbiter scenarios on the real
   model registry (qwen/deepseek); in-flight runs now refine the generic
   `processing` marker with span progress instead of pinning to INGEST;
@@ -185,3 +188,6 @@ scripts/publish_pages.sh       # build site/ + push gh-pages:/docs (NO Actions;
   `scripts/publish_pages.sh` → `gh-pages:/docs` (deploy-from-branch, NO
   Actions). Snapshot exporter, `?api=` live/snapshot dual mode, debug
   layer, and Phoenix (`MAILROOM_SOURCE=phoenix|both`) ship in this cut.
+- **Post-v0.3.0 (Unreleased):** working REVIEW-tray demo (`demo_review_tray.py`
+  + `tests/fake_producer.py`), `disposition=complete` / `extracted_data`,
+  and optional `[pipeline]` pin (`mailroom @ 2c0bcac`).

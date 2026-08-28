@@ -10,10 +10,11 @@
 The-Mailroom renders every run of the `llm-mailroom` multi-agent
 legal-document pipeline from its Langfuse traces (pixel-art console, hosted
 Observatory, and TUI).
-**Langfuse is the sole source of truth**: no display value is ever fabricated
-or served from local canned data. The repo is read-only against Langfuse
-(project-scoped API keys, backend proxies everything — the browser never holds
-keys).
+**Langfuse is the sole source of truth for document display**: no envelope
+is ever fabricated or served from local canned data on the live floor.
+The backend is read-only against Langfuse (project-scoped API keys).
+Operator writes (REVIEW resolve) proxy to llm-mailroom; the browser never
+holds keys.
 
 ```
 ┌────────────────────────── Langfuse (US cloud, project llm-mailroom) ──────┐
@@ -21,16 +22,20 @@ keys).
 └────────────▲──────────────────────────────────────────────▲────────────────┘
              │ project-scoped API keys (read-only)          │
 ┌────────────┴──────────────── The-Mailroom ────────────────┴────────────────┐
-│ mailroom_ui/  langfuse_source.py ← adapter (trace/observations/scores/     │
-│               trace_interpreter.py ← sessions via SDK)                    │
-│               pipeline_schema.py ← topology mirror (taxonomy.yaml)        │
-│               metrics.py · models.py                                       │
-│ server/  FastAPI → /api/* + /ws → serves web/ (console) and hosted/ (/live)│
+│ mailroom_ui/  DISPLAY: langfuse_source.py · trace_interpreter.py          │
+│               pipeline_schema.py · metrics.py · models.py                 │
+│               OPERATOR: producer.py (pin @2c0bcac) · review_actions.py    │
+│                         pipeline_ops.py                                   │
+│ server/  FastAPI → /api/* (reads + REVIEW proxy) + /ws                    │
+│          serves web/ (console) and hosted/ (/live)                        │
 │ web/     pixel-art SPA: Floor (conveyor, 7 stations incl. JUDGE) ·        │
 │          Inspector · Sessions · History · Metrics · Review · Console      │
 │ hosted/  Observatory — public modern accessible desk (live + replay)      │
-│ tui/     rich-based console (mailroom-tui)                                 │
-└────────────────────────────────────────────────────────────────────────────┘
+│ tui/     rich-based console (mailroom-tui, shipped)                       │
+└───────────────────────────────────────────────────────────────────────────┘
+                    │ MAILROOM_PIPELINE_URL + token
+                    ▼
+         llm-mailroom :8000  /v1  (lookup, resolve, audit, health)
 ```
 
 ## Data flow

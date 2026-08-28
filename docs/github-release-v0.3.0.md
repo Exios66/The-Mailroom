@@ -14,6 +14,8 @@ Full-screen recordings of the new desks (click to play on GitHub):
 | [Desk walkthrough (~56s)](https://github.com/Exios66/The-Mailroom/blob/main/docs/demos/tui-server-observatory-desk-walkthrough.mp4) | Pixel desks then Observatory (v0.2-era still). |
 
 Re-record the v0.3.0 cast with `PYTHONPATH=. python scripts/demo_v030_cast.py --port 8006`.
+Complete / `extracted_data` and the working `/v1` stub (`demo_review_tray.py`)
+landed after this tag — see `[Unreleased]` in the changelog.
 
 ### Added (highlights)
 
@@ -27,5 +29,5 @@ Re-record the v0.3.0 cast with `PYTHONPATH=. python scripts/demo_v030_cast.py --
 Full record: [CHANGELOG.md](https://github.com/Exios66/The-Mailroom/blob/main/CHANGELOG.md)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Exios66/The-Mailroom/cursor/release-v030-62f9/docs/screenshots/review.png" width="700" alt="REVIEW siding with Approve / Reject / Requeue"/>
+  <img src="https://raw.githubusercontent.com/Exios66/The-Mailroom/main/docs/screenshots/review.png" width="700" alt="REVIEW siding with Approve / Reject / Requeue"/>
 </p>

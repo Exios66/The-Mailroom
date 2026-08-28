@@ -54,7 +54,11 @@ expose the pixel console paths — assets stay under `/live/static`).
 
 - **Pipeline** — live trays for Sorter · Extract · Judge · Boss · Report ·
   Archive · Review · Completed. Cards update from the WebSocket snapshot.
-- **Review** — human-review queue (`/api/review-queue`).
+- **Review** — human-review queue (`/api/review-queue`) with inline resolve:
+  Approve / Reject / Record / Requeue / Complete, class / subclass correction
+  (`doc_type` mapped to producer `override_doc_type`), `extracted_data` for
+  Complete, and parked-text lookup. Needs `MAILROOM_PIPELINE_URL` + token on
+  the server. Working demo: `scripts/demo_review_tray.py`.
 - **History + replay** — walk a stored trace through its real span sequence
   (paces by span latency; respects `prefers-reduced-motion`).
 - **Matters** — Langfuse sessions.

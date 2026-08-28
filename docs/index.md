@@ -1,9 +1,9 @@
-# The-Mailroom Wiki
+# The-Mailroom docs
 
-> This wiki mirrors `docs/` in the repository (`docs/index.md` is this page).
-> **Edit both together** — `wiki/sync-wiki.sh` publishes `wiki/` to the GitHub
-> wiki. Architecture and process authority: `AGENTS.md` in the repo root.
-> User-facing entry: root `README.md`.
+Landing page for in-repo documentation. The GitHub wiki copy is
+[`wiki/Home.md`](../wiki/Home.md) — edit both together (`wiki/sync-wiki.sh`).
+Process and architecture authority: root [`AGENTS.md`](../AGENTS.md).
+User-facing entry: root [`README.md`](../README.md).
 
 The-Mailroom is the visual engine for
 [`llm-mailroom`](https://github.com/Exios66/llm-mailroom). **Langfuse is the
@@ -36,6 +36,14 @@ is the LegalBench eval sibling. Full map:
   inspect · debug; `--resolve` / `--source` / `--extracted-data`)
 - **GitHub Pages** — static snapshot of the pixel SPA (not the Observatory)
 
+## Pages
+
+- [Architecture](architecture.md) — how traces become pixels; producer proxy
+- [Demos](demos.md) — stills of every desk, working REVIEW tray, v0.3.0 503 cast
+- [Releases](releases.md) — semantic versioning, changelog, tagging process
+- [Observatory deploy](../hosted/README.md) — Spaces / Docker
+- [v0.3.0 GitHub release notes](github-release-v0.3.0.md) — historical cut
+
 ## Agent skills
 
 Committed under `.cursor/skills/`. Start with `mailroom-tool-router`. Family
@@ -43,11 +51,4 @@ stacks match
 [local-mailroom-sandbox](https://github.com/Exios66/local-mailroom-sandbox/tree/main/.cursor/skills)
 (Langfuse default; Phoenix optional; Braintrust/Ollama/Modal are not this
 visualizer). Extra skills cover pixel console, Observatory, live floor, schema
-sync, Pages, and TUI. Index: repo `.cursor/skills/README.md`.
-
-## Pages
-
-- [Home](Home) — overview, sister-repo pointer (this page; repo `docs/index.md`)
-- [Architecture](Architecture) — how traces become pixels; producer proxy
-- [Demos](Demos) — stills of every desk, working REVIEW tray, v0.3.0 503 cast
-- [Releases](Releases) — semantic versioning, changelog, tagging process
+sync, Pages, and TUI. Index: repo [`.cursor/skills/README.md`](../.cursor/skills/README.md).
