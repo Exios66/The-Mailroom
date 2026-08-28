@@ -75,8 +75,9 @@ All notable changes to The-Mailroom are documented here, following
   `list_traces` now merges into `list-harvest`, the poller overlays list
   identity (session / stage / `needs_human`) onto cached full runs, `/api/sessions`
   embeds every run in the window, and `GET /api/sessions/{id}` reads the poller
-  desk instead of N+1 Langfuse. Pixel SESSIONS and Observatory Matters scroll
-  the full list.
+  desk instead of N+1 Langfuse. Empty-desk SESSIONS/REVIEW/METRICS fall back to
+  the cheap trace list, not `enriched_recent_runs`. Pixel SESSIONS and Observatory
+  Matters scroll the full list.
 
 ## [0.3.0] - 2026-08-28
 

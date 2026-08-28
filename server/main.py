@@ -23,7 +23,6 @@ load_dotenv()
 
 from mailroom_ui.langfuse_source import (
     LangfuseSource,
-    enriched_recent_runs,
     list_recent_runs,
 )
 from mailroom_ui.metrics import compute_metrics
@@ -520,15 +519,20 @@ def _desk_runs(src, hub: PollHub, *, since_seconds: int, limit: int) -> list[Pip
     The poller already called get_run() for the live window. Reusing that
     list keeps those desks instant and leaves the inspector able to fetch
     /api/traces/{id} instead of waiting behind a sequential Langfuse walk.
-    Fall back to enriched_recent_runs when the poller has not produced a
-    snapshot yet (tests, first second after boot).
+    Fall back to the cheap trace-list (light runs) when the poller has not
+    produced a snapshot yet — never enriched_recent_runs, which N+1s get_run
+    and hung a 50-doc SESSIONS load.
     """
     cutoff = _utcnow() - timedelta(seconds=since_seconds)
     cached = [r for r in (hub.runs or [])
               if (r.updated_at or r.created_at or cutoff) >= cutoff]
     if cached:
         return cached[:limit]
-    return enriched_recent_runs(src, since=cutoff, limit=limit)
+    # Never N+1 Langfuse here. A 50-doc window used to hang SESSIONS/REVIEW
+    # for minutes while the poller was still filling hub.runs. Light list
+    # rows carry session_id / stage / needs_human; the next poller tick
+    # replaces this with enriched desk runs.
+    return list_recent_runs(src, since=cutoff, limit=limit)
 
 
 def _session_runs(src: LangfuseSource, session_id: str, limit: int) -> list[PipelineRun]:
