@@ -8,6 +8,14 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Added
 
+- **Working REVIEW-tray demo.** `scripts/demo_review_tray.py` boots a FakeClient
+  floor plus an in-process llm-mailroom stub (`/v1` lookup, resolve, audit,
+  health) so Approve / Reject / Record / Requeue / Complete, class correction,
+  and the parked-text pane actually round-trip `POST /api/review/resolve` and
+  `GET /api/review/source` (lookup fallback). `--check` / `--check-api` verify
+  the cast without a browser. Pixel + Observatory REVIEW gained a Complete
+  action and `extracted_data` JSON field. Snapshot / GH Pages stay read-only.
+
 - **REVIEW tray class correction and document viewer.** Pixel REVIEW, inspector,
   and Observatory Review can correct `doc_type` / `doc_subclass` on a parked
   item and read parked text (extracted text pane + Open original) while
