@@ -44,8 +44,10 @@ SDK **Docker**, root directory empty, `app_port` 7860. Secrets:
 `python scripts/publish_space.py --check` is offline. Do not configure
 the Space as FastAPI/Vercel and do not bake keys into the image.
 Cards show primary/secondary hit·miss·pending (not cls/ext %). Inbox
-queue is disabled until `MAILROOM_PIPELINE_URL`. Trace inspect uses
-`MAILROOM_TRACE_CACHE_DIR` (`GET /api/snapshot`) when Langfuse is slow.
+queue proxies `POST /v1/upload` when `MAILROOM_PIPELINE_URL` + token
+are set (loopback `:8000` locally, or a public producer Space URL).
+Trace inspect uses `MAILROOM_TRACE_CACHE_DIR` (`GET /api/snapshot`)
+when Langfuse is slow.
 
 ## Related
 

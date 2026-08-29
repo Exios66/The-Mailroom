@@ -53,6 +53,7 @@ This visualizer reads **`LANGFUSE_HOST`**. If you only have Langfuse's
 | `MAILROOM_TRACE_TAGS` | unset = no tag filter |
 | `MAILROOM_TRACE_CACHE_DIR` | `/tmp/mailroom-trace-cache` (ephemeral; lost on sleep) |
 | `MAILROOM_POLL_ENRICH` | `inflight` (do not set `all` on the Space) |
+| `MAILROOM_PIPELINE_API_PREFIX` | `/v1` (producer default) |
 
 Do **not** put `HF_TOKEN` or Langfuse keys in Variables (they are visible
 to Space collaborators as plain text). The Hub token is only needed on
