@@ -62,6 +62,8 @@ const Obs = (() => {
       return get(`/api/review/context${qs ? `?${qs}` : ""}`);
     },
     reviewResolve: (body) => post("/api/review/resolve", body),
+    inboxEnqueue: (body) => post("/api/inbox/enqueue", body),
+    snapshot: () => get("/api/snapshot"),
     reviewAudit: (docId) => get(`/api/review/audit?doc_id=${encodeURIComponent(docId)}`),
     reviewSource: (opts = {}) => {
       const q = new URLSearchParams();

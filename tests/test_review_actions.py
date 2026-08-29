@@ -34,6 +34,39 @@ def test_floor_payload_includes_doc_id():
     assert floor_payload(run)["doc_id"] == "doc-pay"
 
 
+def test_inbox_enqueue_unconfigured_is_503(monkeypatch):
+    from mailroom_ui.review_actions import enqueue_inbox
+
+    monkeypatch.delenv("MAILROOM_PIPELINE_URL", raising=False)
+    monkeypatch.delenv("MAILROOM_PIPELINE_API", raising=False)
+    monkeypatch.delenv("MAILROOM_PIPELINE_TOKEN", raising=False)
+    try:
+        enqueue_inbox(filename="a.pdf")
+        assert False, "expected ReviewActionError"
+    except ReviewActionError as exc:
+        assert exc.status == 503
+        assert "MAILROOM_PIPELINE_URL" in exc.message
+    src = LangfuseSource(client=FakeClient([make_trace("t1")]))
+    with TestClient(create_app(src)) as c:
+        r = c.post("/api/inbox/enqueue", json={"filename": "a.pdf"})
+        assert r.status_code == 503
+        assert r.json()["configured"] is False
+        assert "queue" in r.json()["error"].lower()
+
+
+def test_inbox_enqueue_configured_is_honest_501(monkeypatch):
+    from mailroom_ui.review_actions import enqueue_inbox
+
+    monkeypatch.setenv("MAILROOM_PIPELINE_URL", "http://producer.test")
+    monkeypatch.setenv("MAILROOM_PIPELINE_TOKEN", "tok")
+    try:
+        enqueue_inbox(filename="a.pdf", matter_id="M-1")
+        assert False, "expected ReviewActionError"
+    except ReviewActionError as exc:
+        assert exc.status == 501
+        assert "upload" in exc.message.lower()
+
+
 def test_review_context_unconfigured(monkeypatch):
     monkeypatch.delenv("MAILROOM_PIPELINE_URL", raising=False)
     monkeypatch.delenv("MAILROOM_PIPELINE_API", raising=False)

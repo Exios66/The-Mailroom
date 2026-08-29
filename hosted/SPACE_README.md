@@ -51,14 +51,20 @@ This visualizer reads **`LANGFUSE_HOST`**. If you only have Langfuse's
 | `MAILROOM_EDITION` | `hosted` (already set in the Dockerfile) |
 | `MAILROOM_TRACE_ENVIRONMENTS` | unset = show every env on the floor |
 | `MAILROOM_TRACE_TAGS` | unset = no tag filter |
+| `MAILROOM_TRACE_CACHE_DIR` | `/tmp/mailroom-trace-cache` (ephemeral; lost on sleep) |
+| `MAILROOM_POLL_ENRICH` | `inflight` (do not set `all` on the Space) |
 
 Do **not** put `HF_TOKEN` or Langfuse keys in Variables (they are visible
 to Space collaborators as plain text). The Hub token is only needed on
 your laptop to run `scripts/publish_space.py`.
 
-Human-review **resolve** still needs a reachable llm-mailroom producer
-(`MAILROOM_PIPELINE_URL` + `MAILROOM_PIPELINE_TOKEN`). Without it the
-desk stays read-only and REVIEW returns an honest 503.
+Human-review **resolve** and the Inbox **Queue a document** form still need
+a reachable llm-mailroom producer (`MAILROOM_PIPELINE_URL` +
+`MAILROOM_PIPELINE_TOKEN` as **Secrets**). Without them the desk stays
+read-only: REVIEW and enqueue return an honest 503. The floor uses a
+Langfuse-derived JSON cache so inspect does not wait 30s on `get_run`;
+**Export snapshot** downloads that bundle. Empty cache + Langfuse down
+is MAILROOM CLOSED.
 
 ## Republish
 

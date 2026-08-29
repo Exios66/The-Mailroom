@@ -43,6 +43,9 @@ SDK **Docker**, root directory empty, `app_port` 7860. Secrets:
 `https://us.cloud.langfuse.com`; `LANGFUSE_BASE_URL` is an alias).
 `python scripts/publish_space.py --check` is offline. Do not configure
 the Space as FastAPI/Vercel and do not bake keys into the image.
+Cards show primary/secondary hit·miss·pending (not cls/ext %). Inbox
+queue is disabled until `MAILROOM_PIPELINE_URL`. Trace inspect uses
+`MAILROOM_TRACE_CACHE_DIR` (`GET /api/snapshot`) when Langfuse is slow.
 
 ## Related
 

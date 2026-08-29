@@ -69,8 +69,10 @@ HF_TOKEN=hf_... \
 ```
 
 The Space URL is the Observatory (`/` inside the container). Pixel assets
-remain at `/static`. REVIEW resolve still needs `MAILROOM_PIPELINE_URL` on
-a reachable producer — the Space shows the live Langfuse floor without it.
+remain at `/static`. REVIEW resolve and Inbox enqueue still need
+`MAILROOM_PIPELINE_URL` on a reachable producer — the Space shows the live
+Langfuse floor without it, with a disk snapshot cache
+(`MAILROOM_TRACE_CACHE_DIR`) so inspect does not stall on `get_run`.
 
 ### Any Docker host (Fly, Render, Cloud Run, a VPS)
 

@@ -504,3 +504,38 @@ def resolve_review(
         body=body,
         timeout=timeout,
     )
+
+
+INBOX_SETUP = (
+    "Set MAILROOM_PIPELINE_URL and MAILROOM_PIPELINE_TOKEN to "
+    "queue documents into llm-mailroom."
+)
+INBOX_NO_UPLOAD = (
+    "producer has no upload route — drop files in the llm-mailroom inbox "
+    "or set a producer upload URL when one exists."
+)
+
+
+def enqueue_inbox(
+    *,
+    filename: str = "",
+    matter_id: str = "",
+    content_type: str = "",
+) -> dict[str, Any]:
+    """Queue a document into the producer inbox.
+
+    Unconfigured → HTTP 503 with setup copy (no fabricated queue row).
+    Configured but no producer upload API → HTTP 501.
+    """
+    if not pipeline_configured():
+        raise ReviewActionError(INBOX_SETUP, status=503, detail={"configured": False})
+    raise ReviewActionError(
+        INBOX_NO_UPLOAD,
+        status=501,
+        detail={
+            "configured": True,
+            "filename": filename or None,
+            "matter_id": matter_id or None,
+            "content_type": content_type or None,
+        },
+    )
