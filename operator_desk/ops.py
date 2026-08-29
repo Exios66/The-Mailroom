@@ -55,23 +55,30 @@ def _run_ts(run: Any) -> Optional[datetime]:
     return stamp.astimezone(timezone.utc)
 
 
+def _stage_token(value: Any) -> str:
+    if value is None:
+        return ""
+    if hasattr(value, "value"):
+        return str(value.value)
+    return str(value)
+
+
 def _as_dict(run: Any) -> dict[str, Any]:
     if isinstance(run, dict):
-        return run
-    dump = getattr(run, "model_dump", None)
-    if callable(dump):
-        try:
-            return dump()
-        except Exception:
-            pass
+        return {
+            **run,
+            "stage": _stage_token(run.get("stage")),
+            "needs_human": bool(run.get("needs_human")),
+        }
     return {
-        "stage": getattr(getattr(run, "stage", None), "value", getattr(run, "stage", None)),
+        "stage": _stage_token(getattr(run, "stage", None)),
         "verdict": getattr(run, "verdict", None),
-        "needs_human": getattr(run, "needs_human", False),
+        "needs_human": bool(getattr(run, "needs_human", False)),
         "doc_type": getattr(run, "doc_type", None),
         "latency": getattr(run, "latency", None),
         "updated_at": getattr(run, "updated_at", None),
         "created_at": getattr(run, "created_at", None),
+        "spans": getattr(run, "spans", None),
     }
 
 
@@ -86,7 +93,7 @@ def compute_ops_status(runs: Optional[list] = None) -> OpsStatus:
     agents: set[str] = set()
     for run in rows:
         data = _as_dict(run)
-        stage = str(data.get("stage") or "")
+        stage = _stage_token(data.get("stage"))
         if data.get("needs_human") or stage in ("review", "processing", "inbox", "ingest", "classify"):
             queue_depth += 1
         stamp = _run_ts(run)
@@ -148,7 +155,7 @@ async def get_throughput(user: UserProfile = Depends(get_current_user)):
             stamp = _run_ts(run)
             if stamp is None or stamp <= start or stamp > end:
                 continue
-            stage = str(getattr(getattr(run, "stage", None), "value", getattr(run, "stage", "")) or "")
+            stage = _stage_token(getattr(run, "stage", None) if not isinstance(run, dict) else run.get("stage"))
             if stage in ("archived", "archive", "catalog", "failed"):
                 count += 1
         history.append({"time": end.strftime("%H:%M"), "count": count})

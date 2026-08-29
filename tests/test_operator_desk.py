@@ -162,12 +162,14 @@ def test_ingest_event_broadcasts_on_pipeline_ws():
 
 
 def test_pipeline_ws_rejects_missing_token():
+    from starlette.websockets import WebSocketDisconnect
+
     with _client() as c:
         try:
             with c.websocket_connect("/ws/pipeline"):
                 raise AssertionError("unauthenticated websocket should not connect")
-        except Exception as exc:
-            assert "4401" in str(exc) or "1008" in str(exc) or "401" in str(exc)
+        except WebSocketDisconnect as exc:
+            assert exc.code == 4401
 
 
 def test_observer_bin_move_indexes_archive(tmp_path, monkeypatch):
