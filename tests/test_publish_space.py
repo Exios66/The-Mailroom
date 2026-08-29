@@ -19,6 +19,9 @@ def test_space_card_is_docker_on_7860():
     assert "app_port: 7860" in card
     assert "LANGFUSE_PUBLIC_KEY" in card
     assert "LANGFUSE_HOST" in card
+    for field in ("colorFrom:", "colorTo:"):
+        line = next(ln for ln in card.splitlines() if ln.startswith(field))
+        assert line.split(":", 1)[1].strip() in pub.HF_COLORS
 
 
 def test_dockerfile_is_hosted_observatory():

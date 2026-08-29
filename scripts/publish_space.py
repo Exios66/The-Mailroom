@@ -45,6 +45,9 @@ REQUIRED_FRONTMATTER = (
     "app_port: 7860",
 )
 
+# Hub YAML enum — "rose" is rejected by /api/validate-yaml.
+HF_COLORS = frozenset({"red", "yellow", "green", "blue", "indigo", "purple", "pink", "gray"})
+
 DEFAULT_HOST = "https://us.cloud.langfuse.com"
 DEFAULT_SPACE_NAME = "mailroom-observatory"
 
@@ -76,6 +79,13 @@ def check_payload() -> list[str]:
     for needle in REQUIRED_FRONTMATTER:
         if needle not in card:
             _die(f"hosted/SPACE_README.md missing `{needle}`")
+    for field in ("colorFrom:", "colorTo:"):
+        for line in card.splitlines():
+            if line.startswith(field):
+                color = line.split(":", 1)[1].strip()
+                if color not in HF_COLORS:
+                    _die(f"hosted/SPACE_README.md {field} {color!r} is not a Hub color")
+                break
     notes.append("SPACE_README frontmatter: sdk=docker app_port=7860")
     if not DOCKERFILE.is_file():
         _die("missing root Dockerfile")

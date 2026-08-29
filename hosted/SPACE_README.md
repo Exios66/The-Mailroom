@@ -1,7 +1,7 @@
 ---
 title: Mailroom Observatory
 emoji: 📬
-colorFrom: rose
+colorFrom: pink
 colorTo: yellow
 sdk: docker
 app_port: 7860
