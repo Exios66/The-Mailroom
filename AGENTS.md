@@ -26,6 +26,7 @@ open exactly one specialty skill. Companion to
 | `gh-pages` | Deploy-from-branch snapshot (no Actions) |
 | `tui` | `mailroom-tui` (`MAILROOM_API_URL` → this visualizer; `--resolve` / `--source` via `/api/review/*`) |
 | `operator-desk` | `operator_desk/` JWT auth, archive, Langfuse-backed ops, `/ws/pipeline`, `mailroom-observer` |
+| `optional-ui` | Optional React desk `ui/` (`/desk` when built). Never replace `web/` / `hosted/` |
 
 ## Sister repo: `llm-mailroom` (the pipeline)
 
@@ -59,6 +60,8 @@ mailroom-observer              # optional operator bin watcher (or MAILROOM_OBSE
 pip install -e ".[operator]"   # bcrypt / PyJWT / watchdog / PyMuPDF
 python -m operator_desk        # migrate operator SQLite
 scripts/setup_operator.sh      # bins + migrate (no npm)
+# optional React desk (Node 22+; never required):
+#   cd ui && npm install && npm run build   # then GET /desk on mailroom-web
 python scripts/seed_demo.py    # seed demo traces INTO Langfuse (planned, M5)
 python scripts/demo_review_tray.py --check-api  # working REVIEW tray vs fake /v1 producer
 python scripts/run_production_pilot.py --check   # HF subset + eval scorer (needs sibling llm-mailroom)
@@ -101,6 +104,8 @@ scripts/publish_pages.sh       # build site/ + push gh-pages:/docs (NO Actions;
   `MAILROOM_OBSERVER=1`, or standalone POST to `/v1/ops/events`). Mounted
   from `server/main.py` via `mount_operator`. Never imports `api.main`.
   Extra `[operator]`; default `[dev]` uses stdlib password/JWT fallbacks.
+  Optional React desk lives in `ui/` (extra `[ui]` is a marker; Node is
+  separate). `/desk` mounts only when `ui/dist` or `MAILROOM_UI_DIST` exists.
 - `tui/` — planned rich-console (AgentLab-style `*** Beginning station: ... ***` banners, per-doc summary tables). Not yet built (M4).
 - `scripts/seed_demo.py` — planned (M5): generates demo traces **into Langfuse** (env `demo`), never served directly.
 

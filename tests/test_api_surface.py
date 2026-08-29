@@ -40,6 +40,7 @@ def test_every_meta_endpoint_is_reachable():
         "/v1/ops/distribution",
         "/v1/ops/events",
         "/ws/pipeline",
+        "/desk",
     }
     with _client() as c:
         meta = c.get("/api/meta").json()

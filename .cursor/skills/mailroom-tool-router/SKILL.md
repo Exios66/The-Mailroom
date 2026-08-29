@@ -27,7 +27,8 @@ this visualizer.
 | Span/stage/taxonomy drift | `mailroom_ui/pipeline_schema.py` | [pipeline-schema-sync](../pipeline-schema-sync/SKILL.md) | Editing schema without interpreter + tests + CHANGELOG |
 | Static snapshot site | `scripts/publish_pages.sh` | [gh-pages](../gh-pages/SKILL.md) | GitHub Actions for Pages |
 | Terminal console | `mailroom-tui` | [tui](../tui/SKILL.md) | Pointing `MAILROOM_API_URL` at producer `:8000` |
-| Operator desk (auth / archive / ops / bin observer) | `operator_desk/` on `:8001` (`/v1/*`, `/ws/pipeline`) | [operator-desk](../operator-desk/SKILL.md) | React/Vite/npm UI; treating operator SQLite as a display source |
+| Operator desk (auth / archive / ops / bin observer) | `operator_desk/` on `:8001` (`/v1/*`, `/ws/pipeline`) | [operator-desk](../operator-desk/SKILL.md) | Treating operator SQLite as a display source |
+| Optional React operator desk | `ui/` (`the-mailroom-ui`, `/desk` when built) | [optional-ui](../optional-ui/SKILL.md) | Replacing `web/` or `hosted/` with npm; making Node required for `mailroom-web` |
 
 ## Source precedence (`MAILROOM_SOURCE`)
 

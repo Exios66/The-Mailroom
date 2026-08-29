@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from .archive import router as archive_router
 from .auth import router as auth_router
@@ -27,7 +30,19 @@ OPERATOR_ENDPOINTS = [
     {"method": "GET", "path": "/v1/ops/distribution", "desc": "doc-type mix from Langfuse runs"},
     {"method": "POST", "path": "/v1/ops/events", "desc": "ingest observer events into /ws/pipeline"},
     {"method": "WS", "path": "/ws/pipeline", "desc": "operator bin-move events"},
+    {"method": "GET", "path": "/desk", "desc": "optional React operator desk (build ui/ to enable)"},
 ]
+
+
+def react_ui_dist() -> Path:
+    explicit = os.environ.get("MAILROOM_UI_DIST", "").strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    return Path(__file__).resolve().parent.parent / "ui" / "dist"
+
+
+def react_ui_available() -> bool:
+    return (react_ui_dist() / "index.html").is_file()
 
 
 def operator_status() -> dict[str, Any]:
@@ -40,6 +55,7 @@ def operator_status() -> dict[str, Any]:
         "observer": observer_enabled(),
         "db": str(db_path()),
         "pipeline_ws_clients": len(manager.active_connections),
+        "react_ui": react_ui_available(),
     }
 
 
@@ -56,6 +72,26 @@ def mount_operator(
     app.include_router(archive_router)
     app.include_router(ops_router)
     app.include_router(ws_router)
+    if react_ui_available():
+        dist = react_ui_dist().resolve()
+
+        @app.get("/desk", include_in_schema=False)
+        @app.get("/desk/", include_in_schema=False)
+        @app.get("/desk/{spa_path:path}", include_in_schema=False)
+        def optional_react_desk(spa_path: str = ""):
+            index = dist / "index.html"
+            if not spa_path or spa_path.endswith("/"):
+                return FileResponse(index)
+            target = (dist / spa_path).resolve()
+            try:
+                target.relative_to(dist)
+            except ValueError:
+                return FileResponse(index)
+            if target.is_file():
+                return FileResponse(target)
+            return FileResponse(index)
+
+        log.info("optional React desk mounted at /desk (%s)", dist)
     app.state.operator = operator_status()
     log.info("operator desk mounted (db=%s)", db_path())
 

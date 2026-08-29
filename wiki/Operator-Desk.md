@@ -3,8 +3,9 @@
 > This file is mirrored at `docs/operator-desk.md` — edit both together.
 
 `operator_desk/` is a dedicated submodule on the visualizer process. It is
-**not** a document-display source and **not** a React/npm UI (pixel console
-and Observatory already cover the desks).
+**not** a document-display source. Pixel console and Observatory stay the
+default vanilla desks. An optional React package lives in `ui/` and mounts
+at `/desk` only after `npm run build`.
 
 ## What it adds
 
@@ -39,3 +40,12 @@ docker compose -f operator_desk/docker-compose.yml up --build
 ```
 
 See `operator_desk/README.md` and `.env.example` (`MAILROOM_OPERATOR_*`).
+
+Optional React desk (Node 22+, never required for `mailroom-web`):
+
+```bash
+cd ui && npm install && npm run build
+# then GET http://127.0.0.1:8001/desk
+```
+
+See `ui/README.md`. Extra `[ui]` is a marker only.

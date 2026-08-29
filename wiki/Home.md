@@ -30,7 +30,9 @@ is the LegalBench eval sibling. Full map:
   inspect · debug)
 - **GitHub Pages** — static snapshot of the pixel SPA (not the Observatory)
 - **Operator desk** (`operator_desk/`) — JWT auth, local archive, Langfuse-backed
-  ops, `/ws/pipeline` (not a display source; not a React UI)
+  ops, `/ws/pipeline` (not a display source)
+- **Optional React desk** (`ui/`) — `/desk` when built; Node never required for
+  `mailroom-web`
 
 ## Agent skills
 

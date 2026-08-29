@@ -68,7 +68,9 @@ mailroom-web              # → http://127.0.0.1:8001  (pixel-art console)
 mailroom-hosted           # → public Observatory on 0.0.0.0 (container-ready)
 mailroom-tui              # AgentLab-style live console (same data, in a terminal)
 pip install -e ".[operator]"  # optional: operator desk (auth / archive / observer)
+pip install -e ".[ui]"        # marker only; React desk still needs Node
 mailroom-observer         # bin watcher (or MAILROOM_OBSERVER=1 on mailroom-web)
+# optional React desk: cd ui && npm install && npm run build  →  /desk
 ```
 
 <details>
@@ -418,7 +420,9 @@ mailroom_ui/   data core — Langfuse + Phoenix adapters, trace interpreter,
 server/        FastAPI, read-only: /api/* + debug endpoints + WebSocket + serves web/
                (also mounts operator_desk at /v1/* + /ws/pipeline)
 operator_desk/ operator submodule — JWT auth, local archive, Langfuse-backed
-               ops, bin observer (not a display source; no React/npm UI)
+               ops, bin observer (not a display source)
+ui/            optional React operator desk (npm; /desk when built — never
+               required for mailroom-web; pixel + Observatory stay vanilla)
 web/           pixel-art SPA (vanilla HTML/CSS/JS, no build step)
 hosted/        Observatory — public modern accessible desk
 tui/           rich console — the pipeline in a terminal (mailroom-tui)

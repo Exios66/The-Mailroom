@@ -20,8 +20,17 @@ All notable changes to The-Mailroom are documented here, following
   `documents` table is never required. Extra `[operator]` adds bcrypt /
   PyJWT / watchdog / PyMuPDF; stdlib pbkdf2 + HMAC-JWT fallbacks keep
   `[dev]` tests green. Compose + nginx sit under `operator_desk/` (no
-  React/npm UI — pixel + Observatory already cover the desks).
+  React/npm UI as a required path — pixel + Observatory already cover
+  the default desks).
 
+- **Optional React operator desk (`ui/`, extra `[ui]`).** Vite/React
+  package `the-mailroom-ui` is an optional dependency branch: default
+  `pip install -e ".[dev]"` and `mailroom-web` never need Node. `cd ui &&
+  npm install && npm run build` produces `ui/dist`; the visualizer mounts
+  it at `/desk` when present (`MAILROOM_UI_DIST` override). The desk talks
+  to this process (`:8001` `/api/*` + `/v1/*` + `/ws/pipeline`), not
+  producer `:8000`. Ingest stays on llm-mailroom. Compose profile `ui`
+  is opt-in.
 
 - **llm-mailroom #53 abort class and REVIEW Complete schema.** Aborted
   traces now surface `failure_class` (`llm_timeout` / `llm_auth` /

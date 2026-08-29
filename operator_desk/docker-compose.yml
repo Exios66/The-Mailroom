@@ -47,6 +47,17 @@ services:
     depends_on:
       - mailroom
 
+  mailroom-ui:
+    profiles: ["ui"]
+    build:
+      context: ../ui
+      dockerfile: Dockerfile
+    container_name: mailroom-ui
+    ports:
+      - "5174:80"
+    depends_on:
+      - mailroom
+
   nginx:
     image: nginx:alpine
     container_name: mailroom-nginx

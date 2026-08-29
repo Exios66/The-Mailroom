@@ -32,11 +32,15 @@ mailroom-observer                # standalone watcher → POST /v1/ops/events
 python -m operator_desk          # migrate only
 ```
 
-Compose (visualizer + observer + nginx, no React UI, no local Langfuse):
+Compose (visualizer + observer + nginx, no local Langfuse). React desk is
+an **opt-in profile** after `cd ui && npm install && npm run build`:
 
 ```bash
 docker compose -f operator_desk/docker-compose.yml up --build
+docker compose -f operator_desk/docker-compose.yml --profile ui up --build
 ```
+
+Or serve the built SPA from this process at `/desk` when `ui/dist` exists.
 
 ## Knobs
 

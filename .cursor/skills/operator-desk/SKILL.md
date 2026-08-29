@@ -8,8 +8,9 @@ description: Operator desk submodule (operator_desk/) — JWT auth, archive file
 **When:** `/v1/auth`, `/v1/archive`, `/v1/ops`, `/ws/pipeline`,
 `mailroom-observer`, `MAILROOM_OPERATOR_*`, `MAILROOM_OBSERVER`, operator
 SQLite (`ui_users` / `ui_audit` / `archive_index`).
-**Not:** a second document-display source; not a Node/React SPA (the scaffold
-UI is intentionally omitted — pixel + Observatory already exist).
+**Not:** a second document-display source. The optional React SPA lives in
+`ui/` — see [optional-ui](../optional-ui/SKILL.md). Do not replace `web/` or
+`hosted/` with npm.
 
 ## Contract
 

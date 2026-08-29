@@ -36,6 +36,10 @@ operator = [
     "watchdog",
     "pymupdf",
 ]
+# Optional React operator desk (`ui/`). Marker only — Node 22+ is required
+# separately (`cd ui && npm install && npm run build`). Default [dev] never
+# installs npm. Built assets mount at /desk when ui/dist exists.
+ui = []
 
 [project.scripts]
 mailroom-web = "server.main:run"
