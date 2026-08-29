@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -13,7 +14,7 @@ from typing import Any, Optional
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -92,7 +93,7 @@ API_ENDPOINTS = [
     {"method": "POST", "path": "/api/review/resolve", "desc": "proxy approve/reject/record/requeue/complete (+ doc_type mapped to override_doc_type) to llm-mailroom /v1"},
     {"method": "GET", "path": "/api/review/source", "desc": "parked document text from producer (lookup fallback if no /documents/{id}/source); ?trace_id=&filename=&doc_id=&download=1"},
     {"method": "GET", "path": "/api/review/audit", "desc": "hash-chained producer audit; ?doc_id="},
-    {"method": "POST", "path": "/api/inbox/enqueue", "desc": "queue a file into the producer inbox (503 until MAILROOM_PIPELINE_URL)"},
+    {"method": "POST", "path": "/api/inbox/enqueue", "desc": "proxy multipart file to producer POST /v1/upload (503 until MAILROOM_PIPELINE_URL)"},
     {"method": "GET", "path": "/api/snapshot", "desc": "Langfuse-derived JSON snapshot (cache; never fabricated)"},
     {"method": "WS", "path": "/ws", "desc": "floor snapshots (live mode only)"},
     {"method": "GET", "path": "/live", "desc": "hosted Observatory UI (modern, accessible, public)"},
@@ -420,14 +421,44 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             )
 
     @app.post("/api/inbox/enqueue")
-    def inbox_enqueue_ep(payload: dict[str, Any]):
-        """Queue a document into the producer inbox. No fabricated catalog row."""
+    async def inbox_enqueue_ep(request: Request):
+        """Proxy a file to producer POST /v1/upload. No fabricated catalog row."""
         try:
-            return enqueue_inbox(
-                filename=str(payload.get("filename") or ""),
-                matter_id=str(payload.get("matter_id") or ""),
-                content_type=str(payload.get("content_type") or ""),
+            ctype = (request.headers.get("content-type") or "").lower()
+            filename = ""
+            matter_id = ""
+            content_type = ""
+            file_bytes: Optional[bytes] = None
+            if "application/json" in ctype:
+                payload = await request.json()
+                if not isinstance(payload, dict):
+                    payload = {}
+                filename = str(payload.get("filename") or "")
+                matter_id = str(payload.get("matter_id") or "")
+                content_type = str(payload.get("content_type") or "")
+                raw = payload.get("content_base64") or payload.get("content")
+                if isinstance(raw, str) and raw.strip():
+                    try:
+                        file_bytes = base64.b64decode(raw)
+                    except Exception as exc:
+                        raise ReviewActionError("content_base64 is not valid base64", status=400) from exc
+            else:
+                form = await request.form()
+                upload = form.get("file")
+                matter_id = str(form.get("matter_id") or "")
+                filename = str(form.get("filename") or "")
+                if upload is not None and hasattr(upload, "read"):
+                    file_bytes = await upload.read()
+                    filename = filename or (getattr(upload, "filename", None) or "")
+                    content_type = getattr(upload, "content_type", None) or ""
+            result = enqueue_inbox(
+                filename=filename,
+                matter_id=matter_id,
+                content_type=content_type,
+                file_bytes=file_bytes,
             )
+            status = 202 if str(result.get("status") or "").lower() == "accepted" else 200
+            return JSONResponse(status_code=status, content=result)
         except ReviewActionError as exc:
             return JSONResponse(
                 status_code=exc.status,

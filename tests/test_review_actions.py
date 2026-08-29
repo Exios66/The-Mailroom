@@ -54,7 +54,7 @@ def test_inbox_enqueue_unconfigured_is_503(monkeypatch):
         assert "queue" in r.json()["error"].lower()
 
 
-def test_inbox_enqueue_configured_is_honest_501(monkeypatch):
+def test_inbox_enqueue_configured_without_file_is_400(monkeypatch):
     from mailroom_ui.review_actions import enqueue_inbox
 
     monkeypatch.setenv("MAILROOM_PIPELINE_URL", "http://producer.test")
@@ -63,8 +63,43 @@ def test_inbox_enqueue_configured_is_honest_501(monkeypatch):
         enqueue_inbox(filename="a.pdf", matter_id="M-1")
         assert False, "expected ReviewActionError"
     except ReviewActionError as exc:
-        assert exc.status == 501
-        assert "upload" in exc.message.lower()
+        assert exc.status == 400
+        assert "file" in exc.message.lower()
+    src = LangfuseSource(client=FakeClient([make_trace("t-nofile")]))
+    with TestClient(create_app(src)) as c:
+        r = c.post("/api/inbox/enqueue", json={"filename": "a.pdf", "matter_id": "M-1"})
+        assert r.status_code == 400
+        assert r.json()["configured"] is True
+
+
+def test_inbox_enqueue_proxies_multipart_to_producer_upload(monkeypatch):
+    from tests.fake_producer import DEMO_TOKEN, create_fake_producer, serve_in_thread, stop_server
+
+    producer = create_fake_producer()
+    server, port, _thread = serve_in_thread(producer)
+    monkeypatch.setenv("MAILROOM_PIPELINE_URL", f"http://127.0.0.1:{port}")
+    monkeypatch.setenv("MAILROOM_PIPELINE_TOKEN", DEMO_TOKEN)
+    monkeypatch.delenv("MAILROOM_PIPELINE_API_PREFIX", raising=False)
+    src = LangfuseSource(client=FakeClient([make_trace("t-up")]))
+    try:
+        with TestClient(create_app(src)) as c:
+            r = c.post(
+                "/api/inbox/enqueue",
+                files={"file": ("nda.txt", b"hello-nda", "text/plain")},
+                data={"matter_id": "MATTER-9"},
+            )
+            assert r.status_code == 202
+            body = r.json()
+            assert body["status"] == "accepted"
+            assert body["file"] == "nda.txt"
+            assert body["matter_id"] == "MATTER-9"
+            assert body["upload_id"]
+            queued = producer.state.store.queued
+            assert queued[-1]["file"] == "nda.txt"
+            assert queued[-1]["matter_id"] == "MATTER-9"
+            assert queued[-1]["upload_id"] == body["upload_id"]
+    finally:
+        stop_server(server)
 
 
 def test_review_context_unconfigured(monkeypatch):

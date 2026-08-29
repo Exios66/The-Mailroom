@@ -1112,14 +1112,20 @@ const App = (() => {
     if (!form) return;
     const file = form.file && form.file.files && form.file.files[0];
     const matter = (form.matter_id && form.matter_id.value) || "";
+    if (!file) {
+      if (status) status.textContent = "Choose a file to queue.";
+      return;
+    }
     if (status) status.textContent = "Submitting…";
     try {
-      await Obs.api.inboxEnqueue({
-        filename: file ? file.name : "",
-        matter_id: matter,
-        content_type: file ? file.type : "",
-      });
-      if (status) status.textContent = "Queued.";
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+      if (matter) fd.append("matter_id", matter);
+      const result = await Obs.api.inboxEnqueue(fd);
+      const queued = result && (result.file || file.name);
+      const uploadId = result && result.upload_id ? ` (${result.upload_id})` : "";
+      if (status) status.textContent = queued ? `Queued ${queued}${uploadId}.` : "Queued.";
+      form.reset();
     } catch (err) {
       if (status) status.textContent = err.message || String(err);
     }

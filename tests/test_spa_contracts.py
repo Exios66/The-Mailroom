@@ -128,6 +128,8 @@ def test_live_poll_matches_server_interval_and_pipeline_ops():
     assert "classification_confidence" not in card_fn
     assert "extraction_confidence" not in card_fn
     assert "inboxEnqueue" in hosted_client
+    assert "postForm" in hosted_client
+    assert "FormData" in hosted_app
     assert "snapshot" in hosted_client
     assert "/api/inbox/enqueue" in hosted_client
     assert "/api/snapshot" in hosted_client
