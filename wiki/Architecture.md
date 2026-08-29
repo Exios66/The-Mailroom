@@ -26,10 +26,12 @@ keys).
 │               pipeline_schema.py ← topology mirror (taxonomy.yaml)        │
 │               metrics.py · models.py                                       │
 │ server/  FastAPI → /api/* + /ws → serves web/ (console) and hosted/ (/live)│
+│          + operator_desk mount (/v1/auth|/archive|/ops, /ws/pipeline)     │
 │ web/     pixel-art SPA: Floor (conveyor, 7 stations incl. JUDGE) ·        │
 │          Inspector · Sessions · History · Metrics · Review · Console      │
 │ hosted/  Observatory — public modern accessible desk (live + replay)      │
 │ tui/     rich-based console (mailroom-tui)                                 │
+│ operator_desk/  JWT, local archive, Langfuse-backed ops, bin observer     │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -215,6 +217,17 @@ Requires `MAILROOM_PIPELINE_URL` + `MAILROOM_PIPELINE_TOKEN` on the visualizer
 (`:8000` producer — not `MAILROOM_API_URL`, which is TUI → this process
 `:8001`). `MAILROOM_PIPELINE_API_PREFIX` defaults to `/v1`. Display data
 stays Langfuse-only — the producer token never leaves the visualizer server.
+
+## Operator desk (`operator_desk/`)
+
+A dedicated submodule mounted on the visualizer — **not** a second display
+source and **not** a React SPA. JWT auth (`/v1/auth`) gates archive file
+access (`/v1/archive`) and ops snapshots (`/v1/ops`). Ops numbers come from
+the same Langfuse `PipelineRun` window as METRICS. The bin observer
+(`MAILROOM_OBSERVER=1` in-process, or `mailroom-observer` POSTing
+`/v1/ops/events`) publishes filesystem bin moves on `/ws/pipeline`. SQLite
+tables live in `MAILROOM_OPERATOR_DB`; the producer's `documents` table is
+never required. Display `/api/*` and floor `/ws` stay open.
 
 The producer **code** pin is optional extra `[pipeline]`
 (`mailroom @ git+https://github.com/Exios66/llm-mailroom.git@0928de1`).
