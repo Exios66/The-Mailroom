@@ -1,6 +1,6 @@
 """Hugging Face corpus pin for The-Mailroom eval / Langfuse dataset sync.
 
-``Lucius-Morningstar/docclass-merged`` (corrected GT revision) is the
+``Lucius-Morningstar/mailroom-corpus`` (corrected GT revision) is the
 authoritative full corpus. Display still comes from Langfuse traces; this
 module only covers Hub GT / pilot intake so scripts hit one pinned revision
 via the datasets-server REST API (no ``datasets`` / ``huggingface_hub``
@@ -17,7 +17,9 @@ import urllib.request
 from typing import Any
 
 ORG = "Lucius-Morningstar"
-FULL_CORPUS_ID = f"{ORG}/docclass-merged"
+# Renamed 2026-09-02 (human directive): Hub repo mailroom-corpus
+# (formerly docclass-merged); old id serves a Hub redirect.
+FULL_CORPUS_ID = f"{ORG}/mailroom-corpus"
 EXAMPLES_ID = f"{ORG}/docclass-pilot"
 # v7 tip (issue #5 intent hydration): data tip 1acd2600 + card-only bump.
 FULL_CORPUS_REVISION = "fc1f211c48e5f1f5a1a01c02f9e56c0e16e70a5f0"
