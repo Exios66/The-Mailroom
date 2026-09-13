@@ -20,7 +20,7 @@ Four surfaces share one display API (`/api/*` + `/ws`):
 | Terminal site | `…/terminal/` on GH Pages | owlcot-style TTY: `ls`/`cat`/`cd`, `corpus ls|show`, `repos` |
 
 The terminal site and the TUI both add a **dataset viewer** (`corpus …`
-commands over `Lucius-Morningstar/mailroom-corpus` — slim windowed
+commands over `Lucius-Morningstar/mailroom-dataset` — slim windowed
 listing, live per-row `doc_text` + ground truth) and a **constellation
 repo browser** (`repos …` — every mirror package plus the hub copies and
 derived graph sites).
@@ -463,7 +463,7 @@ tui/           rich console — the pipeline in a terminal (mailroom-tui)
 scripts/       seed_demo (demo runs INTO Langfuse) · demo_pilot_run
                (staggered floor recording) · run_production_pilot
                (live Qwen 3.7-Flash HF subset) · eval_pipeline
-               (Langfuse traces vs docclass-merged GT) · export_snapshot (Pages
+               (Langfuse traces vs mailroom-dataset GT) · export_snapshot (Pages
                data) · publish_pages (gh-pages push, no Actions) · release
                · render_tui_shots (README TUI SVGs)
 docs/ + wiki/  mirrored documentation (wiki/sync-wiki.sh publishes the wiki)
