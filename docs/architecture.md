@@ -49,7 +49,7 @@ page, instant), one-time slim catalog for search/stats, and per-row live
 monorepo mirrors upstream — contract-tested against `packages_sync.json` —
 plus the hub copies `mailroom-dev`/`mailroom-hub`/`LLM-Postal` and the
 derived graph sites). The static site bundles a slim catalog
-(`scripts/export_corpus_catalog.py` → `site/data/corpus.json`, 2,000 rows)
+(`scripts/export_corpus_catalog.py` → `site/data/corpus.json`, 3,302 rows)
 so listing/search/stats work offline; `corpus show` fetches rows live
 (datasets-server CORS is verified for the Pages origin).
 
@@ -260,8 +260,8 @@ built and served at `/desk` when `ui/dist` exists. Default `mailroom-web`
 does not need Node. Pixel console and Observatory stay vanilla.
 
 The producer **code** pin is optional extra `[pipeline]`
-(`mailroom @ git+https://github.com/Exios66/llm-mailroom.git@3cf9fb9`,
-package 0.6.0 / tag `v0.6.0`).
+(`mailroom @ git+https://github.com/Exios66/llm-mailroom.git@2a212e76a62b`,
+package 0.7.1 / tag `v0.7.1`).
 `mailroom_ui/producer.py` imports `pipeline.review_resolve` and
 `schemas.manifest` when that extra or a sibling checkout is present; the
 REVIEW proxy and `tests/fake_producer.py` use those contract helpers
