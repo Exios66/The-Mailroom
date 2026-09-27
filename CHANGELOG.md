@@ -8,6 +8,9 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Changed
 
+- Pin `Lucius-Morningstar/mailroom-dataset` default revision from
+  `46a4d3c2` (v9 GT-closure) to Hub tag `v9.1` (`ed7576b`).
+
 - **DMR-016: vendored docclass mirror resynced 32→74 keys.**
   `mailroom_ui/docclass_prompts.py::DOCLASS_PROMPT_VERSIONS` regenerated
   verbatim (byte-identical, order-preserving) from llm-entity-extraction

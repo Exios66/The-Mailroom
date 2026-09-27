@@ -133,7 +133,7 @@ python scripts/publish_space.py --check  # Hugging Face Docker Space payload
   on-demand doc_text fetches) → `site/data/corpus.json`; run by
   `publish_pages.sh` alongside the snapshot export. Verified end-to-end
   against the live Hub: 3,302 rows (2,979 train / 323 test; mailroom-dataset
-  v9, pinned revision 46a4d3c2).
+  v9.1, pinned revision tag `v9.1` / ed7576b).
 - `scripts/seed_demo.py` — planned (M5): generates demo traces **into Langfuse** (env `demo`), never served directly.
 
 ## Langfuse is ALWAYS the source of visualization
