@@ -20,27 +20,56 @@ const Mailroom = (() => {
   // ?api= (empty) CLEARS a stale persisted base — previously qs.get("api")
   // was falsy for "" so localStorage could never be unset, and a dead
   // localhost base blanked the GH Pages snapshot fallback.
+  //
+  // A crafted link could otherwise point this console — and its review
+  // POSTs — at someone else's server for good. Loopback/same-origin bases
+  // persist silently; any other host needs an explicit confirmation.
+  function trustedBase(base) {
+    if (!base) return true;
+    try {
+      const u = new URL(base, location.href);
+      if (u.origin === location.origin) return true;
+      return ["localhost", "127.0.0.1", "[::1]", "::1"].includes(u.hostname);
+    } catch (e) {
+      return false;
+    }
+  }
   let BASE = "";
   if (qs.has("api")) {
-    BASE = (qs.get("api") || "").trim().replace(/\/+$/, "");
-    try { localStorage.setItem("mailroom.api", BASE); } catch (e) { /* private mode */ }
+    const requested = (qs.get("api") || "").trim().replace(/\/+$/, "");
+    if (trustedBase(requested) ||
+        window.confirm(`Connect this console to the API server at ${requested}?\n` +
+                       "Review decisions you make will be sent there.")) {
+      BASE = requested;
+      try { localStorage.setItem("mailroom.api", BASE); } catch (e) { /* private mode */ }
+    }
   } else {
-    BASE = (localStorage.getItem("mailroom.api") || "").trim().replace(/\/+$/, "");
+    try {
+      BASE = (localStorage.getItem("mailroom.api") || "").trim().replace(/\/+$/, "");
+    } catch (e) { BASE = ""; }
   }
   const url = (path) => {
     if (!BASE) return path;
     const p = path.startsWith("/") ? path : `/${path}`;
     return `${BASE}${p}`;
   };
-  // Bundled snapshots always live next to the SPA (GH Pages docs/ or a local
-  // export). Never prefix them with the live API BASE.
-  const snapUrl = (path) => String(path).replace(/^\/+/, "");
+  // Bundled snapshots live in the site's data/ dir (GH Pages docs/ or a local
+  // export). Never prefix them with the live API BASE. On Pages the console
+  // is staged under /pixel/ while data/ sits at the site root, so resolve
+  // one level up there (a <meta name="mailroom-snapshot-root"> overrides).
+  const SNAP_ROOT = (() => {
+    const meta = document.querySelector('meta[name="mailroom-snapshot-root"]');
+    if (meta && meta.content) return meta.content.replace(/\/?$/, "/");
+    return /\/pixel\/(index\.html)?$/.test(location.pathname) ? "../" : "";
+  })();
+  const snapUrl = (path) => SNAP_ROOT + String(path).replace(/^\/+/, "");
   const safeId = (id) => String(id).replace(/[^A-Za-z0-9._-]/g, "_");
 
   // ---- debug capture -----------------------------------------------------
   const MAX_DEBUG_EVENTS = 500;
   const dbgEvents = [];
-  let debugVerbose = qs.has("debug") || localStorage.getItem("mailroom.debug") === "1";
+  let debugVerbose = qs.has("debug");
+  try { debugVerbose = debugVerbose || localStorage.getItem("mailroom.debug") === "1"; } catch (e) { /* storage blocked */ }
 
   // ---- review-tray probe limiter -----------------------------------------
   // Every REVIEW card fires context + source probes on render; a long queue
@@ -431,7 +460,6 @@ const Mailroom = (() => {
       contract: "Contract / Agreement",
       corporate_record: "Corporate Record",
       correspondence: "Correspondence",
-      compliance_filing: "Compliance Filing",
       insurance_claim: "Insurance Claim",
       merger_agreement: "Merger Agreement",
       unknown: "Unknown",
@@ -552,7 +580,8 @@ const Mailroom = (() => {
         if (open) open.hidden = true;
         return;
       }
-      if (!src.readable || !src.text) {
+      // `readable` is optional on producer payloads — real text counts.
+      if (src.readable === false || !src.text) {
         pane.textContent = src.error || "(empty document text)";
         if (open) open.hidden = true;
         return;
@@ -675,7 +704,7 @@ const Mailroom = (() => {
     if (BASE) {
       const u = new URL(BASE, location.href);
       const proto = u.protocol === "https:" ? "wss" : "ws";
-      return `${proto}//${u.host}/ws`;
+      return `${proto}://${u.host}/ws`;
     }
     const proto = location.protocol === "https:" ? "wss" : "ws";
     return `${proto}://${location.host}/ws`;
