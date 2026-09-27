@@ -44,6 +44,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
+from mailroom_ui.env import env_float, env_int
 from tui import commands as cmds
 from tui import views
 from tui.corpus import CorpusClient
@@ -78,9 +79,9 @@ __all__ = [
 ]
 
 API_BASE = os.environ.get("MAILROOM_API_URL", "http://127.0.0.1:8001").rstrip("/")
-POLL_INTERVAL = float(os.environ.get("MAILROOM_TUI_POLL", "3"))
+POLL_INTERVAL = env_float("MAILROOM_TUI_POLL", 3.0, minimum=0.5)
 # Same 7-day live window as the pixel console and Observatory HTTP clients.
-WINDOW_S = int(os.environ.get("MAILROOM_RECENT_WINDOW", "604800"))
+WINDOW_S = env_int("MAILROOM_RECENT_WINDOW", 604800, minimum=60)
 
 
 def _record_error(where: str, exc: BaseException) -> None:
@@ -113,6 +114,16 @@ def fetch_list(path: str) -> Optional[list[dict]]:
     return data.get("runs") or []
 
 
+def _post_headers() -> dict[str, str]:
+    """JSON headers + operator JWT (MAILROOM_OPERATOR_TOKEN) for public hosts,
+    where review writes require a reviewer login."""
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    token = (os.environ.get("MAILROOM_OPERATOR_TOKEN") or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def post_json(path: str, body: dict, timeout: float = 60.0) -> Optional[dict]:
     """POST JSON to the visualizer (review resolve). None on failure."""
     url = f"{API_BASE}{path}"
@@ -121,7 +132,7 @@ def post_json(path: str, body: dict, timeout: float = 60.0) -> Optional[dict]:
         req = urllib.request.Request(
             url,
             data=payload,
-            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            headers=_post_headers(),
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:

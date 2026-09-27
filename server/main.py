@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -33,6 +34,7 @@ from mailroom_ui.multi_source import MultiSource
 from mailroom_ui.pipeline_ops import fetch_pipeline_ops
 from mailroom_ui.review_actions import (
     ReviewActionError,
+    content_disposition,
     enqueue_inbox,
     fetch_audit,
     fetch_source,
@@ -55,20 +57,24 @@ from mailroom_ui.pipeline_schema import DOC_CLASSES, DOC_SUBCLASS_BY_CLASS
 from mailroom_ui.phoenix_source import PhoenixSource
 from mailroom_ui.producer import producer_status
 from mailroom_ui.sources import TraceSourceUnavailable
+from mailroom_ui.env import env_float, env_int
 from mailroom_ui.trace_interpreter import EPOCH, interpret_trace
 from operator_desk import OPERATOR_ENDPOINTS, mount_operator, operator_status
 from operator_desk.observer import start_observer
 from operator_desk.observer import observer_enabled as operator_observer_enabled
 from server.debug_log import DebugLog, DebugLogMiddleware
-from server.poller import PollHub, floor_payload
+from server.poller import PollHub, floor_payload, source_names
 
 log = logging.getLogger("mailroom.server")
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 HOSTED_DIR = Path(__file__).resolve().parent.parent / "hosted"
-RECENT_WINDOW = float(os.environ.get("MAILROOM_RECENT_WINDOW", 7 * 86400))
-POLL_INTERVAL = float(os.environ.get("MAILROOM_POLL_INTERVAL", "3"))
-TRACE_LIMIT = int(os.environ.get("MAILROOM_TRACE_LIMIT", "200"))
+RECENT_WINDOW = env_float("MAILROOM_RECENT_WINDOW", 7 * 86400.0, minimum=60.0)
+# 0 disabled caching and made the poller hammer Langfuse in a tight loop.
+POLL_INTERVAL = env_float("MAILROOM_POLL_INTERVAL", 3.0, minimum=1.0)
+TRACE_LIMIT = env_int("MAILROOM_TRACE_LIMIT", 200, minimum=1)
+_MAX_CLIENT_REPORT_BYTES = 64 * 1024
+_MAX_ENQUEUE_BODY = 32 * 1024 * 1024 * 4 // 3 + 1024 * 1024
 _NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate"}
 
 
@@ -155,7 +161,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             watcher.stop()
         await hub.stop()
 
-    app = FastAPI(title="The-Mailroom", version="0.3.0", lifespan=lifespan)
+    app = FastAPI(title="The-Mailroom", version=_version(), lifespan=lifespan)
 
     # GH Pages edition: the static site (https://<user>.github.io/<repo>/) must
     # be able to call this API when it runs locally next to Phoenix — CORS for
@@ -163,12 +169,53 @@ def create_app(source: Optional[object] = None) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
     origins = [o.strip() for o in os.environ.get("MAILROOM_CORS_ORIGINS", "*").split(",") if o.strip()]
+    origins = origins or ["*"]
+    explicit_origins = {o.rstrip("/") for o in origins if o != "*"}
+    # Wildcard origins get read-only CORS: a POST from another site must not
+    # pass preflight. Name origins explicitly to allow cross-origin writes.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=origins or ["*"],
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["*"],
+        allow_origins=origins,
+        allow_methods=["GET", "POST", "OPTIONS"] if explicit_origins else ["GET", "OPTIONS"],
+        allow_headers=["Accept", "Content-Type", "Authorization"],
     )
+
+    from fastapi import Depends, HTTPException
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    from operator_desk.auth import auth_required, public_bind, require_role
+    from operator_desk.auth import security as operator_bearer
+
+    _reviewer_only = require_role("reviewer")
+
+    def _same_origin_or_allowed(request: Request) -> None:
+        """Refuse cross-site browser writes (CSRF).
+
+        Browsers always send ``Origin`` on cross-site POSTs (a multipart form
+        needs no preflight); CLI clients (TUI, curl) send none.
+        """
+        origin = (request.headers.get("origin") or "").strip().rstrip("/")
+        if not origin:
+            return
+        if origin in explicit_origins:
+            return
+        from urllib.parse import urlsplit
+
+        host = (request.headers.get("host") or "").strip().lower()
+        if origin != "null" and urlsplit(origin).netloc.lower() == host:
+            return
+        raise HTTPException(status_code=403, detail="cross-origin write refused")
+
+    async def write_guard(
+        request: Request,
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(operator_bearer),
+    ):
+        """Producer writes (review resolve, inbox enqueue) hold the server-side
+        producer token: on a public bind they need an operator reviewer login."""
+        _same_origin_or_allowed(request)
+        if public_bind() and auth_required():
+            return await _reviewer_only(credentials)
+        return None
     app.add_middleware(DebugLogMiddleware, recorder=debug_log)
 
     @app.exception_handler(TraceSourceUnavailable)
@@ -203,7 +250,12 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             payload["operator"] = operator_status()
             payload["cache"] = cache
             if not payload.get("ok") and cache.get("has_snapshot"):
+                # The lamp stays lit so the floor keeps its last snapshot, but
+                # the payload says plainly that the live source is down.
                 payload["ok"] = True
+                payload["stale"] = True
+                payload["degraded"] = True
+                payload["live_ok"] = False
                 payload["source"] = CACHE_SOURCE
                 payload["cached_at"] = cache.get("cached_at")
                 payload["cached_trace_count"] = cache.get("cached_trace_count")
@@ -264,18 +316,18 @@ def create_app(source: Optional[object] = None) -> FastAPI:
 
     @app.get("/api/traces/{trace_id}")
     def trace_detail(trace_id: str):
-        cached = load_run(trace_id)
-        if cached and (cached.get("spans") is not None or cached.get("generations") is not None):
-            return {**cached, "source": cached.get("source") or CACHE_SOURCE}
+        # Live source first: the disk snapshot used to win whenever it held
+        # spans, so late scores (offline judge, eval_pipeline) never reached
+        # the inspector — even across restarts. The snapshot is only the
+        # outage fallback, and says so.
         try:
             run = src.get_run(trace_id)
         except TraceSourceUnavailable:
+            cached = load_run(trace_id)
             if cached:
-                return {**cached, "source": CACHE_SOURCE}
+                return {**cached, "source": CACHE_SOURCE, "stale": True}
             raise
         if run is None:
-            if cached:
-                return {**cached, "source": CACHE_SOURCE}
             return JSONResponse(status_code=404, content={"error": "trace not found"})
         detail = _serialize(run, full=True)
         persist_run(trace_id, detail)
@@ -362,7 +414,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         return {
             "session_id": session_id,
             "count": len(runs),
-            "source": "langfuse",
+            "source": _source_names(src),
             "runs": [_serialize(r) for r in runs],
         }
 
@@ -395,7 +447,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         return review_context(trace_id=trace_id, filename=filename, doc_id=doc_id, timeout=4.0)
 
     @app.post("/api/review/resolve")
-    def review_resolve_ep(payload: dict[str, Any]):
+    def review_resolve_ep(payload: dict[str, Any], _operator=Depends(write_guard)):
         """Proxy a human review decision to llm-mailroom. Browser never holds the token."""
         try:
             return resolve_review(
@@ -431,7 +483,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
                 )
                 headers = {}
                 if name:
-                    headers["Content-Disposition"] = f'attachment; filename="{name}"'
+                    headers["Content-Disposition"] = content_disposition(name)
                 return Response(content=data, media_type=content_type, headers=headers)
             if not (trace_id or filename or doc_id):
                 if not pipeline_configured():
@@ -463,9 +515,17 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             )
 
     @app.post("/api/inbox/enqueue")
-    async def inbox_enqueue_ep(request: Request):
+    async def inbox_enqueue_ep(request: Request, _operator=Depends(write_guard)):
         """Proxy a file to producer POST /v1/upload. No fabricated catalog row."""
         try:
+            # Refuse oversize bodies BEFORE buffering them (base64 JSON is
+            # ~4/3 of the file; allow that plus multipart overhead).
+            try:
+                declared = int(request.headers.get("content-length") or 0)
+            except ValueError:
+                declared = 0
+            if declared > _MAX_ENQUEUE_BODY:
+                raise ReviewActionError("upload too large (32 MB max)", status=413)
             ctype = (request.headers.get("content-type") or "").lower()
             filename = ""
             matter_id = ""
@@ -481,7 +541,9 @@ def create_app(source: Optional[object] = None) -> FastAPI:
                 raw = payload.get("content_base64") or payload.get("content")
                 if isinstance(raw, str) and raw.strip():
                     try:
-                        file_bytes = base64.b64decode(raw)
+                        # validate=True: stray characters used to be dropped
+                        # silently, uploading a corrupted file.
+                        file_bytes = base64.b64decode("".join(raw.split()), validate=True)
                     except Exception as exc:
                         raise ReviewActionError("content_base64 is not valid base64", status=400) from exc
             else:
@@ -609,9 +671,12 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         }
 
     @app.post("/api/debug/client")
-    def debug_client_post(body: dict):
+    def debug_client_post(body: dict, request: Request):
+        _same_origin_or_allowed(request)
         if not isinstance(body, dict):
             return JSONResponse(status_code=400, content={"error": "expected JSON object"})
+        if len(json.dumps(body, default=str)) > _MAX_CLIENT_REPORT_BYTES:
+            return JSONResponse(status_code=413, content={"error": "debug report too large (64 KB max)"})
         events = body.get("events") or []
         entry = {
             "received_at": datetime.now(timezone.utc).isoformat(),
@@ -683,10 +748,7 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _source_names(src: object) -> str:
-    if isinstance(src, MultiSource):
-        return "+".join(type(s).__name__.replace("Source", "").lower() for s in src.sources)
-    return type(src).__name__.replace("Source", "").lower()
+_source_names = source_names
 
 
 def _version() -> str:

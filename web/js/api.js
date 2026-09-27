@@ -198,13 +198,71 @@ const Mailroom = (() => {
     return res.json();
   }
 
-  async function post(path, body) {
+  // ---- operator auth (public binds) ---------------------------------------
+  // On a hosted/public server, producer writes need an operator JWT. The
+  // token lives in sessionStorage (per tab, never localStorage) and is only
+  // requested after the server answers 401 to a write.
+  const TOKEN_KEY = "mailroom.operatorToken";
+  function operatorToken() {
+    try { return sessionStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; }
+  }
+  function setOperatorToken(tok) {
+    try {
+      if (tok) sessionStorage.setItem(TOKEN_KEY, tok);
+      else sessionStorage.removeItem(TOKEN_KEY);
+    } catch (e) { /* storage blocked: token lives for this call only */ }
+  }
+  function askCredentials(message) {
+    return new Promise((resolve) => {
+      const dlg = document.createElement("dialog");
+      dlg.className = "operator-login";
+      dlg.innerHTML =
+        '<form method="dialog"><p class="operator-login-msg"></p>' +
+        '<label>USER <input name="u" autocomplete="username" required></label>' +
+        '<label>PASS <input name="p" type="password" autocomplete="current-password" required></label>' +
+        '<menu><button value="cancel" formnovalidate>CANCEL</button>' +
+        '<button value="ok">LOG IN</button></menu></form>';
+      dlg.querySelector(".operator-login-msg").textContent = message;
+      document.body.appendChild(dlg);
+      dlg.addEventListener("close", () => {
+        const ok = dlg.returnValue === "ok";
+        const u = dlg.querySelector('[name="u"]').value.trim();
+        const p = dlg.querySelector('[name="p"]').value;
+        dlg.remove();
+        resolve(ok && u && p ? { username: u, password: p } : null);
+      });
+      dlg.showModal();
+    });
+  }
+  async function operatorLogin(message) {
+    const creds = await askCredentials(message || "Operator login required on this host.");
+    if (!creds) return false;
+    const res = await fetch(url("/v1/auth/login"), {
+      method: "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(creds),
+    });
+    if (!res.ok) {
+      let detail = "";
+      try { const b = await res.json(); detail = b && b.detail ? ` — ${b.detail}` : ""; } catch (e) { /* ignore */ }
+      showError(`Operator login failed (HTTP ${res.status})${detail}`);
+      return false;
+    }
+    const body = await res.json();
+    setOperatorToken(body.access_token || "");
+    return !!body.access_token;
+  }
+
+  async function post(path, body, _retried = false) {
     const t0 = performance.now();
+    const headers = { "Accept": "application/json", "Content-Type": "application/json" };
+    const tok = operatorToken();
+    if (tok) headers.Authorization = `Bearer ${tok}`;
     let res;
     try {
       res = await fetch(url(path), {
         method: "POST",
-        headers: { "Accept": "application/json", "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(body || {}),
       });
     } catch (err) {
@@ -212,6 +270,10 @@ const Mailroom = (() => {
       throw err;
     }
     capture("fetch", { url: path, status: res.status, ms: Math.round(performance.now() - t0), method: "POST" });
+    if (res.status === 401 && !_retried) {
+      setOperatorToken("");
+      if (await operatorLogin()) return post(path, body, true);
+    }
     if (!res.ok) {
       let detail = "";
       try {

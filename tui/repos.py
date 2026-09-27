@@ -16,6 +16,8 @@ import urllib.request
 import webbrowser
 from typing import Any, Optional
 
+from mailroom_ui.env import env_float
+
 GITHUB_ORG = "Exios66"
 # Name -> (role, dist, bundled blurb, homepage).
 CONSTELLATION: dict[str, dict[str, str]] = {
@@ -145,7 +147,7 @@ CONSTELLATION: dict[str, dict[str, str]] = {
 }
 
 GH_API = "https://api.github.com/repos"
-CACHE_TTL = float(os.environ.get("MAILROOM_REPOS_TTL", "3600"))
+CACHE_TTL = env_float("MAILROOM_REPOS_TTL", 3600.0, minimum=0.0)
 
 
 def repo_url(name: str) -> str:
