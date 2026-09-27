@@ -73,6 +73,11 @@ def fetch_rows(
     corpus catalog).  ``page_sleep`` paces requests between pages — the
     unauthenticated Hub budget is small, so long exports should pass
     something like 1.0.
+
+    ``revision`` is forwarded as a query parameter, but the datasets-server
+    ``/rows`` endpoint is documented against the default branch; treat the
+    pin as best-effort here and use the parquet/``resolve/<rev>`` path when
+    byte-exact pinned rows are required.
     """
     ds = dataset or corpus_id()
     rev = revision if revision is not None else corpus_revision()
@@ -109,6 +114,10 @@ def fetch_rows(
                 last = exc
                 if exc.code == 429:
                     time.sleep(5.0 * (2 ** attempt))  # 5s, 10s, 20s, 40s
+                elif 400 <= exc.code < 500:
+                    # 400/401/403/404/422 are answers, not blips — retrying
+                    # just burned ~20 s before the same error.
+                    break
                 else:
                     time.sleep(2 * (attempt + 1))
             except Exception as exc:  # noqa: BLE001 — transient Hub blips

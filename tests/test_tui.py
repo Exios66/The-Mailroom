@@ -395,7 +395,10 @@ def test_corpus_command_ls_with_mock(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def _sync_packages():
-    sync = json.loads((ROOT.parents[1] / "scripts" / "packages_sync.json").read_text())
+    path = ROOT.parents[1] / "scripts" / "packages_sync.json"
+    if not path.is_file():
+        pytest.skip("packages_sync.json lives in the Digital-Mailroom monorepo only")
+    sync = json.loads(path.read_text())
     return {k.lower() for k in sync["packages"].keys()}
 
 

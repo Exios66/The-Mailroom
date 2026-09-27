@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-from mailroom_ui.models import Phase, Stage
+from mailroom_ui.models import NodeSpan, Phase, Stage
 from mailroom_ui.trace_interpreter import (
     RUN_GAP_S,
-    _latest_cluster,
+    _latest_run_cut,
     build_routing_path,
     derive_stage,
     interpret_trace,
@@ -223,17 +223,38 @@ def test_light_interpretation_without_embedded_observations():
     assert run.cost_usd == 0.0
 
 
-def test_latest_cluster_keeps_only_most_recent_run():
-    base = datetime(2026, 1, 1, 12, 0, 0)
-    early = [Obj(id="a", start_time=base)]
-    late = [Obj(id="b", start_time=base + timedelta(seconds=RUN_GAP_S + 5))]
-    assert [o.id for o in _latest_cluster([*early, *late], get_start=lambda o: o.start_time)] == ["b"]
+def _span(name, start, end=None, *, root=False):
+    return NodeSpan(name=name, start_time=start, end_time=end or start, is_root=root)
 
 
-def test_latest_cluster_keeps_single_run_untouched():
-    base = datetime(2026, 1, 1, 12, 0, 0)
-    items = [Obj(id=f"o{i}", start_time=base + timedelta(seconds=5 * i)) for i in range(3)]
-    assert len(_latest_cluster(items, get_start=lambda o: o.start_time)) == 3
+def test_latest_run_cut_splits_on_idle_gap():
+    base = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    early = _span("intake-document", base)
+    late = _span("intake-document", base + timedelta(seconds=RUN_GAP_S + 5))
+    cut = _latest_run_cut([early, late], [])
+    assert cut is not None and early.start_time < cut <= late.start_time
+
+
+def test_latest_run_cut_keeps_single_run_untouched():
+    base = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    items = [_span(f"o{i}", base + timedelta(seconds=5 * i)) for i in range(3)]
+    assert _latest_run_cut(items, []) is None
+
+
+def test_slow_llm_call_does_not_split_one_run():
+    """A generation longer than RUN_GAP_S used to cut intake/classify off."""
+    base = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    classify = _span("classify-document", base, base + timedelta(seconds=95))
+    extract = _span("extract-fields", base + timedelta(seconds=96))
+    assert _latest_run_cut([classify, extract], []) is None
+
+
+def test_latest_run_cut_anchors_on_root_chain():
+    base = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    r1 = _span("document-pipeline", base, root=True)
+    r2 = _span("document-pipeline", base + timedelta(seconds=30), root=True)
+    cut = _latest_run_cut([r1, r2], [])
+    assert cut is not None and r1.start_time < cut <= r2.start_time
 
 
 def test_multi_run_trace_interprets_latest_run_only():

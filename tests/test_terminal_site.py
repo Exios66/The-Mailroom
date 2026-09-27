@@ -46,7 +46,10 @@ def test_index_references_assets():
 def test_manifest_covers_every_synced_package():
     """The site's repos manifest must cover every package the monorepo
     mirrors upstream (mailroom-dev's packages/) plus the hub/derived repos."""
-    sync = json.loads((ROOT.parents[1] / "scripts" / "packages_sync.json").read_text())
+    sync_path = ROOT.parents[1] / "scripts" / "packages_sync.json"
+    if not sync_path.is_file():
+        pytest.skip("packages_sync.json lives in the Digital-Mailroom monorepo only")
+    sync = json.loads(sync_path.read_text())
     synced = {k.lower() for k in sync["packages"].keys()}
     names = {n.lower() for n in REPO_URLS}
     assert not (synced - names), f"data.js missing synced packages: {sorted(synced - names)}"

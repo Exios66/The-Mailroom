@@ -55,7 +55,7 @@ from mailroom_ui.pipeline_schema import DOC_CLASSES, DOC_SUBCLASS_BY_CLASS
 from mailroom_ui.phoenix_source import PhoenixSource
 from mailroom_ui.producer import producer_status
 from mailroom_ui.sources import TraceSourceUnavailable
-from mailroom_ui.trace_interpreter import interpret_trace
+from mailroom_ui.trace_interpreter import EPOCH, interpret_trace
 from operator_desk import OPERATOR_ENDPOINTS, mount_operator, operator_status
 from operator_desk.observer import start_observer
 from operator_desk.observer import observer_enabled as operator_observer_enabled
@@ -306,7 +306,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             grouped.setdefault(r.session_id or r.matter_id or "(no session)", []).append(r)
         out = []
         for sid, rs in grouped.items():
-            rs.sort(key=lambda r: (r.updated_at or r.created_at or datetime.min), reverse=True)
+            rs.sort(key=lambda r: (r.updated_at or r.created_at or EPOCH), reverse=True)
             stamps_c = [r.created_at for r in rs if r.created_at]
             stamps_u = [r.updated_at or r.created_at for r in rs
                         if (r.updated_at or r.created_at) is not None]
@@ -317,7 +317,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
                 trace_count=len(rs),
                 runs=rs,
             ))
-        out.sort(key=lambda s: s.updated_at or datetime.min, reverse=True)
+        out.sort(key=lambda s: s.updated_at or EPOCH, reverse=True)
         return JSONResponse(
             {
                 "count": len(out[:limit]),
@@ -349,7 +349,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             ]
         if desk:
             desk.sort(
-                key=lambda r: (r.updated_at or r.created_at or datetime.min),
+                key=lambda r: (r.updated_at or r.created_at or EPOCH),
                 reverse=True,
             )
             return {
@@ -757,7 +757,7 @@ def _session_runs(src: LangfuseSource, session_id: str, limit: int) -> list[Pipe
         except Exception as exc:
             log.warning("session run failed for %s: %s", tid, exc)
             runs.append(interpret_trace(t))
-    runs.sort(key=lambda r: r.updated_at or datetime.min, reverse=True)
+    runs.sort(key=lambda r: r.updated_at or EPOCH, reverse=True)
     return runs
 
 

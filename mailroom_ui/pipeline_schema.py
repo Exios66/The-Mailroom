@@ -8,12 +8,15 @@ are read from there instead (the topology above is data-driven there too).
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from dataclasses import dataclass, field
 from typing import Optional
 
 from .models import Phase, Stage
+
+_log = logging.getLogger(__name__)
 
 # Verb-first observation names (traced_node) plus LangGraph node names, so
 # a floor envelope never falls through to INBOX/unknown when the producer
@@ -81,6 +84,9 @@ _NODE_TYPE_ALIASES: dict[str, str] = {
     "extract": "agent",
     "retry_extract": "agent",
     "judge_verify": "evaluator",
+    "arbiter": "agent",
+    "boss_escalation": "agent",
+    "compile_report": "agent",
 }
 
 
@@ -410,24 +416,48 @@ class PipelineSchema:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
-        except Exception:
+        except Exception as exc:
+            # A broken MAILROOM_TAXONOMY must be visible, not silently ignored.
+            _log.error("MAILROOM_TAXONOMY %s unreadable (%s) — using bundled mirror", path, exc)
+            return schema
+        if not isinstance(cfg, dict):
+            _log.error("MAILROOM_TAXONOMY %s is not a mapping — using bundled mirror", path)
             return schema
         conf = dict(cfg.get("confidence", {}) or {})
         by_class = conf.pop("by_class", None) or {}
-        schema.confidence_high = float(conf.get("high", schema.confidence_high))
-        schema.confidence_low = float(conf.get("low", schema.confidence_low))
-        schema.retry_max = int(conf.get("retry_max", schema.retry_max))
-        schema.conflict_threshold = float(conf.get("conflict_threshold", schema.conflict_threshold))
-        schema.judge_band_high = float(conf.get("judge_band_high", schema.judge_band_high))
-        schema.arbiter_retry_max = int(conf.get("arbiter_retry_max", schema.arbiter_retry_max))
-        schema.judge_max_passes = int(conf.get("judge_max_passes", schema.judge_max_passes))
+
+        def _num(key: str, current, cast):
+            raw = conf.get(key)
+            if raw is None:
+                return current
+            try:
+                return cast(raw)
+            except (TypeError, ValueError):
+                _log.error("MAILROOM_TAXONOMY confidence.%s=%r is not numeric — keeping %r",
+                           key, raw, current)
+                return current
+
+        schema.confidence_high = _num("high", schema.confidence_high, float)
+        schema.confidence_low = _num("low", schema.confidence_low, float)
+        schema.retry_max = _num("retry_max", schema.retry_max, int)
+        schema.conflict_threshold = _num("conflict_threshold", schema.conflict_threshold, float)
+        schema.judge_band_high = _num("judge_band_high", schema.judge_band_high, float)
+        schema.arbiter_retry_max = _num("arbiter_retry_max", schema.arbiter_retry_max, int)
+        schema.judge_max_passes = _num("judge_max_passes", schema.judge_max_passes, int)
         if isinstance(by_class, dict):
             parsed: dict[str, dict[str, float]] = {}
             for key, overrides in by_class.items():
-                if isinstance(overrides, dict):
-                    parsed[str(key)] = {
-                        str(k): float(v) for k, v in overrides.items() if v is not None
-                    }
+                if not isinstance(overrides, dict):
+                    continue
+                clean: dict[str, float] = {}
+                for k, v in overrides.items():
+                    if v is None:
+                        continue
+                    try:
+                        clean[str(k)] = float(v)
+                    except (TypeError, ValueError):
+                        _log.error("MAILROOM_TAXONOMY by_class.%s.%s=%r is not numeric", key, k, v)
+                parsed[str(key)] = clean
             schema.by_class = parsed
         classes = {}
         for dc in cfg.get("doc_classes", []) or []:
