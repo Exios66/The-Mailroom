@@ -6,7 +6,8 @@
 # branch", branch: gh-pages, folder: /docs) and never touches Actions.
 #
 # Site layout produced (under docs/ on the gh-pages branch):
-#   docs/index.html       terminal site root (owlcot-style TTY)
+#   docs/index.html       redirect → terminal/ (the TTY needs its own dir for
+#                         relative css/js + ../data/ paths)
 #   docs/terminal/        terminal site (terminal/) — the TTY
 #   docs/pixel/           pixel-art SPA console
 #   docs/pixel/static/{css,js}  pixel-engine assets
@@ -30,7 +31,7 @@
 # ⚠ PAGES_REMOTE disambiguation (hub#61): this script defaults REMOTE=origin,
 # which in the Digital-Mailroom monorepo is the *hub* repo
 # (LLM-Mailroom-Services/Digital-Mailroom). The gh-pages branch is meant for
-# The-Mailroom's own repo (LLM-Mailroom-Services/The-Mailroom) — set
+# The-Mailroom's own repo (Exios66/The-Mailroom) — set
 # PAGES_REMOTE to that remote (or add it and pass its name) before publishing.
 set -euo pipefail
 
@@ -101,6 +102,14 @@ if [[ -n "$DIRTY" ]]; then
   echo "note: working tree has uncommitted changes; build-info records HEAD ${HEAD_SHA} anyway"
 fi
 
+# --skip-export reuses the previous export. `rm -rf site` used to delete it
+# first, and the publish then replaced the live docs/data with nothing.
+STASH=""
+if [[ "$SKIP_EXPORT" -eq 1 && -d site/data ]]; then
+  STASH="$(mktemp -d)"
+  cp -R site/data "$STASH/data"
+fi
+
 echo "== staging site shell (pixel console -> /pixel/) =="
 rm -rf site
 mkdir -p site/pixel/static
@@ -112,8 +121,31 @@ echo "== staging terminal site (docs/terminal/) =="
 cp -R terminal site/terminal
 touch site/terminal/.nojekyll
 
-echo "== root index.html -> terminal =="
-cp terminal/index.html site/index.html
+echo "== root index.html -> redirect to terminal/ =="
+# A raw copy of terminal/index.html at the root 404s its css/js (relative
+# paths) and resolves ../data/ above the project path.
+cat > site/index.html <<'HTML'
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Mailroom</title>
+<meta http-equiv="refresh" content="0; url=terminal/">
+<link rel="canonical" href="terminal/">
+<script>location.replace("terminal/" + location.search + location.hash);</script>
+</head>
+<body style="background:#050709;color:#d8d4ce;font-family:monospace;padding:2rem">
+<p>The Mailroom → <a style="color:#67e8f9" href="terminal/">terminal</a> ·
+<a style="color:#67e8f9" href="pixel/">pixel console</a></p>
+</body>
+</html>
+HTML
+
+if [[ -n "$STASH" ]]; then
+  cp -R "$STASH/data" site/data
+  rm -rf "$STASH"
+fi
 
 if [[ "$SKIP_EXPORT" -ne 1 ]]; then
   echo "== exporting snapshot (source=${SOURCE} since=${SINCE_HOURS}h limit=${LIMIT}) =="
@@ -127,15 +159,28 @@ else
   echo "== skipping export (--skip-export): reusing existing site/data =="
 fi
 
-echo "== verifying snapshot =="
-python scripts/export_snapshot.py --check --out site/data 2>/dev/null || \
-  TRACE_COUNT=1
+# --skip-export with no local export: keep whatever data/ is already live on
+# the branch (restored at publish time) instead of blanking it.
+KEEP_REMOTE_DATA=0
+if [[ ! -f site/data/traces.json ]]; then
+  if [[ "$SKIP_EXPORT" -eq 1 ]]; then
+    echo "== no local site/data: the live docs/data on $BRANCH will be kept =="
+    KEEP_REMOTE_DATA=1
+  elif [[ "$ALLOW_EMPTY" -ne 1 ]]; then
+    echo "REFUSING to publish: the export wrote no site/data/traces.json." >&2
+    exit 1
+  fi
+fi
+
+TRACE_COUNT=1
+if [[ "$KEEP_REMOTE_DATA" -eq 0 && -f site/data/traces.json ]]; then
+  echo "== verifying snapshot =="
+  python scripts/export_snapshot.py --check --out site/data
+  TRACE_COUNT=$(python3 -c "import json;print(json.load(open('site/data/traces.json'))['count'])")
+fi
 
 # Guard: an empty export usually means unreachable/misconfigured source, not
-# "no runs". Never let it silently blank a populated live site.  For
-# static-site deployments (--skip-export) the trace file may be absent; treat
-# that as a passing guard so the terminal can be published independently.
-TRACE_COUNT=$(python3 -c "import json;print(json.load(open('site/data/traces.json'))['count'])" 2>/dev/null || echo "1")
+# "no runs". Never let it silently blank a populated live site.
 if [[ "$TRACE_COUNT" -eq 0 && "$ALLOW_EMPTY" -ne 1 ]]; then
   echo "" >&2
   echo "REFUSING to publish: the export contains 0 runs." >&2
@@ -171,9 +216,15 @@ fi
 for legacy in index.html .nojekyll static data debug .env .DS_Store mailroom_ui server site tests tui web scripts docs.wiki; do
   rm -rf "$CLONE/$legacy"
 done
+if [[ "$KEEP_REMOTE_DATA" -eq 1 && -d "$CLONE/docs/data" ]]; then
+  mv "$CLONE/docs/data" "$TMP/live-data"
+fi
 rm -rf "$CLONE/docs"
 mkdir -p "$CLONE/docs"
 rsync -a --exclude '.git' site/ "$CLONE/docs/"
+if [[ -d "$TMP/live-data" ]]; then
+  mv "$TMP/live-data" "$CLONE/docs/data"
+fi
 
 # Final guard: never push secrets or env files to a public-serving branch.
 if find "$CLONE" -name ".env" -o -name "*.env" | grep -q .; then

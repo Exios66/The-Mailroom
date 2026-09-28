@@ -180,8 +180,9 @@ class Metrics(BaseModel):
     total_cost_usd: float = 0.0
     total_tokens: int = 0
     avg_cost_usd: float = 0.0
-    avg_latency_s: float = 0.0
-    p95_generation_latency_s: float = 0.0
+    # None = no data (not a 0-second latency).
+    avg_latency_s: Optional[float] = None
+    p95_generation_latency_s: Optional[float] = None
     verdict_counts: dict[str, int] = Field(default_factory=dict)
     avg_quality: Optional[float] = None
     per_doc_type: dict[str, int] = Field(default_factory=dict)

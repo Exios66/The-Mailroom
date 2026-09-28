@@ -32,5 +32,8 @@ def _isolate_operator_desk(tmp_path, monkeypatch):
     monkeypatch.setenv("MAILROOM_OPERATOR_AUTH", "1")
     monkeypatch.setenv("MAILROOM_OBSERVER", "0")
     monkeypatch.delenv("MAILROOM_OPERATOR_INGEST_TOKEN", raising=False)
+    # Local (loopback) bind by default; public-bind tests opt in explicitly.
+    monkeypatch.delenv("MAILROOM_EDITION", raising=False)
+    monkeypatch.delenv("MAILROOM_HOST", raising=False)
     monkeypatch.delenv("MAILROOM_UI_DIST", raising=False)
     monkeypatch.setenv("MAILROOM_TRACE_CACHE_DIR", str(tmp_path / "trace-cache"))

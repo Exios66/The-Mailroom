@@ -30,8 +30,13 @@ mailroom-observer                # standalone → POST /v1/ops/events
 ```
 
 Default admin is `admin` / `changeme` until `MAILROOM_OPERATOR_ADMIN_PASSWORD`
-is set. Use `MAILROOM_OPERATOR_JWT_SECRET` (or `JWT_SECRET`) — never reuse
-`MAILROOM_PIPELINE_TOKEN`.
+is set — **loopback only**. On a public bind (hosted edition or a non-loopback
+`MAILROOM_HOST`) login is refused until `MAILROOM_OPERATOR_JWT_SECRET` (or
+`JWT_SECRET`) is set and the admin password is rotated; review resolve and
+inbox upload then require a reviewer (or admin) token. Never reuse
+`MAILROOM_PIPELINE_TOKEN`. Roles: `viewer` < `reviewer` < `admin`; archive
+download / preview / verify and `POST /v1/ops/events` need reviewer+ (the
+ingest token counts as admin).
 
 Compose (visualizer + observer + nginx, no local Langfuse, no React UI):
 
