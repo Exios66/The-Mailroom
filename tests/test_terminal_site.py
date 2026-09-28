@@ -33,9 +33,13 @@ def test_site_files_exist():
 
 
 def test_index_references_assets():
-    assert 'href="css/terminal.css?v=0.4.0"' in INDEX
-    assert 'src="js/data.js?v=0.4.0"' in INDEX
-    assert 'src="js/terminal.js?v=0.4.0"' in INDEX
+    # Cache-bust follows pyproject.toml (scripts/release.py rewrites it).
+    import re
+
+    ver = re.search(r'^version = "([^"]+)"', (ROOT / "pyproject.toml").read_text(), re.M).group(1)
+    assert f'href="css/terminal.css?v={ver}"' in INDEX
+    assert f'src="js/data.js?v={ver}"' in INDEX
+    assert f'src="js/terminal.js?v={ver}"' in INDEX
     assert 'id="cmdInput"' in INDEX
     assert 'id="ghostText"' in INDEX
     assert 'id="blockCursor"' in INDEX

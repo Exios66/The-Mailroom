@@ -6,6 +6,10 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-28
+
+> Upstream resync to llm-mailroom 959bb0b + full audit fixes
+
 ### Security
 
 - **Public binds fail closed.** Hosted edition or any non-loopback
