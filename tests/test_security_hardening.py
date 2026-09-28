@@ -7,6 +7,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -17,6 +18,11 @@ from mailroom_ui.review_actions import content_disposition
 from operator_desk.db import upsert_archive_entry
 from server.main import create_app
 from tests.fake_langfuse import FakeClient, make_trace
+
+
+# Generated per run: a rotated (non-default) admin password for public-bind
+# tests. Never a literal — secret scanners rightly flag hardcoded passwords.
+ROTATED_ADMIN_PASSWORD = secrets.token_urlsafe(16)
 
 
 def _app():
@@ -57,9 +63,9 @@ def test_public_bind_with_default_admin_password_refuses_login(monkeypatch):
 
 def test_public_bind_with_real_credentials_logs_in(monkeypatch):
     monkeypatch.setenv("MAILROOM_EDITION", "hosted")
-    monkeypatch.setenv("MAILROOM_OPERATOR_ADMIN_PASSWORD", "s3cret-rotated")
+    monkeypatch.setenv("MAILROOM_OPERATOR_ADMIN_PASSWORD", ROTATED_ADMIN_PASSWORD)
     with TestClient(_app()) as c:
-        assert _login(c, "s3cret-rotated").status_code == 200
+        assert _login(c, ROTATED_ADMIN_PASSWORD).status_code == 200
 
 
 def test_forged_default_secret_token_rejected_on_public_bind(monkeypatch):
@@ -104,13 +110,13 @@ def test_same_origin_write_passes_guard_locally():
 
 def test_public_bind_write_requires_reviewer_login(monkeypatch):
     monkeypatch.setenv("MAILROOM_EDITION", "hosted")
-    monkeypatch.setenv("MAILROOM_OPERATOR_ADMIN_PASSWORD", "s3cret-rotated")
+    monkeypatch.setenv("MAILROOM_OPERATOR_ADMIN_PASSWORD", ROTATED_ADMIN_PASSWORD)
     with TestClient(_app()) as c:
         anon = c.post("/api/review/resolve", json={"decision": "approve", "trace_id": "t-rev"})
         assert anon.status_code == 401
         up = c.post("/api/inbox/enqueue", files={"file": ("a.txt", b"hi", "text/plain")})
         assert up.status_code == 401
-        token = _login(c, "s3cret-rotated").json()["access_token"]
+        token = _login(c, ROTATED_ADMIN_PASSWORD).json()["access_token"]
         ok = c.post("/api/review/resolve", json={"decision": "approve", "trace_id": "t-rev"},
                     headers={"Authorization": f"Bearer {token}"})
         assert ok.status_code not in (401, 403)

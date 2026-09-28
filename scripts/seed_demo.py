@@ -536,8 +536,10 @@ def cleanup_stale_traces(client, keep_tids: set[str], settle_s=5):
             for t in batch:
                 tid = getattr(t, "id", None)
                 tags = getattr(t, "tags", None) or []
+                # Only traces THIS script seeded (source-seed_demo tag): a
+                # pipeline-created demo-* trace must never be deleted.
                 if tid and tid.startswith("demo-") and "mailroom" in tags \
-                        and tid not in keep_tids:
+                        and "source-seed_demo" in tags and tid not in keep_tids:
                     stale.append(tid)
             if len(batch) < 100 or page >= 20:
                 break
@@ -935,6 +937,9 @@ def run_check_logs(logs_dir: str, specs) -> None:
     return fails
 
 
+PROTECTED_ENVS = frozenset({"prod", "production", "live"})
+
+
 def main():
     parser = argparse.ArgumentParser(description="Seed demo traces into Langfuse (env demo).")
     parser.add_argument("--list-scenarios", action="store_true", help="list available demo scenarios")
@@ -955,6 +960,8 @@ def main():
                              "(dir from llm-mailroom scripts/sync_langfuse_logs.py)")
     parser.add_argument("--keep", action="store_true",
                         help="do not delete previously seeded demo traces first")
+    parser.add_argument("--force", action="store_true",
+                        help="allow seeding into a production-like environment tag")
     args = parser.parse_args()
 
     load_dotenv()
@@ -965,6 +972,10 @@ def main():
             stage = spec["trace_output"].get("stage", "(in flight)")
             print(f"{spec['slug']:24} {spec['filename']:48} {stage:12} {flags}")
         return
+
+    if args.env.strip().lower() in PROTECTED_ENVS and not args.force:
+        sys.exit(f"refusing to seed demo traces into env '{args.env}' "
+                 "(production-like); pass --force if you really mean it")
 
     specs = [dict(s) for s in SPECS]
     if args.scenario:
@@ -979,7 +990,8 @@ def main():
     client = make_langfuse_client()
     judge_config_id = ensure_score_configs(client)
     keep = {f"demo-{spec['slug']}" for spec in specs}
-    if not args.keep:
+    # A single --scenario must not wipe every other seeded scenario.
+    if not args.keep and not args.scenario:
         cleanup_stale_traces(client, keep)
     start_base = datetime.now(timezone.utc) - timedelta(minutes=1)
     print(f"seeding {len(specs)} demo run(s) into Langfuse (env={args.env}) ...")
