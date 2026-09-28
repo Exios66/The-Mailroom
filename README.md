@@ -1,7 +1,7 @@
 # The-Mailroom
 
-![version](https://img.shields.io/badge/version-0.5.0-blue)
-[![release](https://img.shields.io/badge/release-v0.5.0-blue)](https://github.com/Exios66/The-Mailroom/releases/tag/v0.5.0)
+![version](https://img.shields.io/badge/version-0.5.1-blue)
+[![release](https://img.shields.io/badge/release-v0.5.1-blue)](https://github.com/Exios66/The-Mailroom/releases/tag/v0.5.1)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![data source](https://img.shields.io/badge/data%20source-Langfuse%20only-6C5CE7)
 
@@ -76,7 +76,7 @@ mailroom-hosted           # → public Observatory on 0.0.0.0 (container-ready)
 mailroom-tui              # typed-command REPL (floor/corpus/repos/inspect)
 pip install -e ".[operator]"  # optional: operator desk (auth / archive / observer)
 pip install -e ".[ui]"        # marker only; React desk still needs Node
-mailroom-observer         # bin watcher (or MAILROOM_OBSERVER=1 on mailroom-web)
+mailroom-observer         # standalone bin watcher — or MAILROOM_OBSERVER=1 on mailroom-web (never both)
 # optional React desk: cd ui && npm install && npm run build  →  /desk
 ```
 
