@@ -6,6 +6,10 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-28
+
+> Operator desk: one bin watcher + Docker production path (hub #117/#118)
+
 ### Changed
 
 - **Operator desk: one bin watcher** (mailroom-issues#118, Option A). The

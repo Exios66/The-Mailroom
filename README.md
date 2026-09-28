@@ -1,7 +1,7 @@
 # The-Mailroom
 
-![version](https://img.shields.io/badge/version-0.5.0-blue)
-[![release](https://img.shields.io/badge/release-v0.5.0-blue)](https://github.com/Exios66/The-Mailroom/releases/tag/v0.5.0)
+![version](https://img.shields.io/badge/version-0.5.1-blue)
+[![release](https://img.shields.io/badge/release-v0.5.1-blue)](https://github.com/Exios66/The-Mailroom/releases/tag/v0.5.1)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![data source](https://img.shields.io/badge/data%20source-Langfuse%20only-6C5CE7)
 
