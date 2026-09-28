@@ -32,20 +32,28 @@ const Floor = (() => {
   // trace_id -> last updated_at seen; a genuinely NEW run on the same
   // deterministic trace id (pilot re-run) clears the tombstone.
   const gone = new Map();
+  const MAX_TOMBSTONES = 2000;
   let hoveredId = null;
   let sourceState = "gold";
 
-  function targetFor(run) {
+    function targetFor(run) {
     const st = run.stage;
-    // Archived/failed items leave the floor
-    if (st === "archived" || st === "failed") {
+    // Failed items leave the floor. Archived items leave unless objective
+    // misses pulled them back onto the REVIEW siding (reconsideration).
+    if (st === "failed") {
       return { x: 1500, y: 440, remove: true };
     }
     if (st === "review" || run.needs_human) {
       return { x: STATIONS[6].x, y: ENV_Y };
     }
+    if (st === "archived") {
+      return { x: 1500, y: 440, remove: true };
+    }
+    if (st === "inbox") {
+      return { x: 24, y: ENV_Y };
+    }
     if (st === "classify" || st === "retry_classify" || st === "review_classify"
-        || st === "ingest" || st === "inbox" || st === "unknown") {
+        || st === "intake" || st === "unknown") {
       return { x: STATIONS[0].x, y: ENV_Y };
     }
     if (st === "extract" || st === "retry_extract") {
@@ -58,8 +66,11 @@ const Floor = (() => {
     if (st === "boss") {
       return { x: STATIONS[3].x, y: ENV_Y };
     }
-    if (st === "report" || st === "catalog" || st === "archive") {
+    if (st === "report") {
       return { x: STATIONS[4].x, y: ENV_Y };
+    }
+    if (st === "catalog" || st === "archive") {
+      return { x: STATIONS[5].x, y: ENV_Y };
     }
     return { x: STATIONS[0].x, y: ENV_Y };
   }
@@ -71,6 +82,9 @@ const Floor = (() => {
       corporate_record: "#659099",
       correspondence: "#e8b478",
       insurance_claim: "#b18ec2",
+      court_opinion: "#c47a7a",
+      due_diligence: "#9aa87a",
+      compliance_filing: "#7a8fb0",
     };
     return colors[run.doc_type] || "#a09f9f";
   }
@@ -95,6 +109,21 @@ const Floor = (() => {
     ctx.fillRect(x, y + ENV_H - 1, ENV_W, 1);
     ctx.fillRect(x, y, 1, ENV_H);
     ctx.fillRect(x + ENV_W - 1, y, 1, ENV_H);
+  }
+
+  function drawInboxHopper() {
+    // Files that have a Langfuse trace at stage=inbox sit in this hopper
+    // before the SORTER desk (uploads without a trace show on the ops strip).
+    ctx.fillStyle = "#3a2f22";
+    ctx.fillRect(4, ENV_Y + ENV_H + 4, 56, 4);
+    ctx.fillStyle = "#a48c6d";
+    ctx.fillRect(4, ENV_Y + ENV_H + 4, 56, 1);
+    ctx.fillStyle = "#7d97b5";
+    ctx.fillRect(8, ENV_Y - 20, 48, 4);
+    ctx.font = "bold 10px 'Courier New', monospace";
+    ctx.fillStyle = "#7d97b5";
+    ctx.textAlign = "center";
+    ctx.fillText("INBOX", 32, ENV_Y - 26);
   }
 
   function drawStation(s) {
@@ -140,6 +169,13 @@ const Floor = (() => {
   }
 
   function update(runs) {
+    // A live snapshot must not yank a replay in progress (it reset the
+    // replayed envelope's target and resurrected every envelope the replay
+    // had cleared). Hold the latest snapshot and apply it afterwards.
+    if (replayState && Date.now() < replayState.until) {
+      pendingRuns = runs;
+      return;
+    }
     const seen = new Set();
     for (const run of runs) {
       if (!run || !run.trace_id) continue;
@@ -172,6 +208,7 @@ const Floor = (() => {
       e.ty = t.y;
       e.remove = !!t.remove;
       e.tint = tintFor(run);
+      if (e.dying) e.alpha = 1; // revived mid-fade: fully visible/clickable again
       e.dying = false;
       kickLoop(); // V-17: ensure the animation loop runs when envelopes exist
     }
@@ -181,6 +218,9 @@ const Floor = (() => {
   }
 
   function reset() {
+    clearReplayTimers();
+    replayState = null;
+    pendingRuns = null;
     envs.clear();
     gone.clear();
   }
@@ -232,6 +272,28 @@ const Floor = (() => {
     if (callbacks.hover) callbacks.hover(null);
   });
 
+  function assignLanes() {
+    // Several runs park at the same station x; without a lane offset they
+    // stack on one pixel and only the top envelope is clickable.
+    const groups = new Map();
+    for (const e of envs.values()) {
+      if (e.dying || e.remove || e.alpha <= 0) continue;
+      const key = Math.round((e.tx ?? 0) / 5);
+      let list = groups.get(key);
+      if (!list) { list = []; groups.set(key, list); }
+      list.push(e);
+    }
+    for (const list of groups.values()) {
+      list.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      list.forEach((e, i) => {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        e.laneDx = (col - 1) * 16;
+        e.laneDy = row * 16;
+      });
+    }
+  }
+
   function drawEnvelopes(t) {
     for (const e of envs.values()) {
       if (e.alpha <= 0) continue;
@@ -262,6 +324,7 @@ const Floor = (() => {
   function draw(t) {
     ctx.clearRect(0, 0, W, H);
     drawBackground();
+    drawInboxHopper();
     for (const s of STATIONS) drawStation(s);
     drawConveyor();
     drawEnvelopes(t);
@@ -269,10 +332,13 @@ const Floor = (() => {
   }
 
   function frame(t) {
+    assignLanes();
     for (const e of [...envs.values()]) {
       if (!e.dying) {
-        e.x += (e.tx - e.x) * 0.08;
-        e.y += (e.ty - e.y) * 0.08;
+        const tx = (e.tx ?? 0) + (e.remove ? 0 : (e.laneDx || 0));
+        const ty = (e.ty ?? 0) + (e.remove ? 0 : (e.laneDy || 0));
+        e.x += (tx - e.x) * 0.08;
+        e.y += (ty - e.y) * 0.08;
         // Remove archived/failed items that reach offscreen
         if (e.remove && Math.abs(e.x - e.tx) < 5) {
           e.dying = true;
@@ -283,7 +349,10 @@ const Floor = (() => {
           // V-9: record the tombstone when an archived/failed envelope is
           // fully gone so the next snapshot can't respawn it.
           if (e.remove && e.run && e.run.trace_id) {
+            gone.delete(e.run.trace_id); // re-insert = newest (Map order)
             gone.set(e.run.trace_id, e.run.updated_at);
+            // Bound the tombstones: a long-lived tab saw every run ever.
+            while (gone.size > MAX_TOMBSTONES) gone.delete(gone.keys().next().value);
           }
           envs.delete(e.id);
           if (hoveredId === e.id) hoveredId = null;
@@ -291,7 +360,6 @@ const Floor = (() => {
       }
     }
     draw(t);
-    requestAnimationFrame(frame);
   }
 
   // V-17: the 60 fps full-canvas redraw ran unconditionally forever, even
@@ -302,9 +370,9 @@ const Floor = (() => {
   let lastFrame = null;
   let idleTimer = null;
   function loop(t) {
+    rafId = null;
     idleTimer = null;
     if (document.hidden) {
-      rafId = null;
       return;
     }
     frame(t);
@@ -319,7 +387,11 @@ const Floor = (() => {
     }
   }
   function kickLoop() {
-    if (rafId === null && idleTimer === null) {
+    if (idleTimer !== null) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+    if (rafId === null) {
       rafId = requestAnimationFrame(loop);
     }
   }
@@ -333,6 +405,7 @@ const Floor = (() => {
 
   let replayTimers = [];
   let replayState = null;
+  let pendingRuns = null;
 
   function clearReplayTimers() {
     for (const t of replayTimers) clearTimeout(t);
@@ -359,7 +432,25 @@ const Floor = (() => {
     // step is paced by its real span latency (capped) instead of a fixed
     // 600/700 ms.
     const spanToStage = {
-      "ingest-document": "ingest",
+      "intake-document": "ingest",
+      "normalize-intake": "ingest",
+      "intake-ml-triage": "ingest",
+      "transcribe-pdf": "ingest",
+      "extract-image-text": "ingest",
+      // LangGraph node ids (traces recorded from the graph, not traced_node)
+      intake: "ingest",
+      classify: "classify",
+      retry_classify: "classify",
+      review_classify: "classify",
+      extract: "extract",
+      retry_extract: "extract",
+      judge_verify: "judge_verify",
+      arbiter: "arbiter",
+      boss_escalation: "boss",
+      human_review: "review",
+      compile_report: "report",
+      catalog_write: "catalog",
+      archive: "archive",
       "classify-document": "classify",
       "judge-verify": "judge_verify",
       "arbitrate-verdict": "arbiter",
@@ -413,7 +504,8 @@ const Floor = (() => {
       extract: 1, retry_extract: 1,
       judge_verify: 2, arbiter: 2,
       boss: 3,
-      report: 4, catalog: 4, archive: 4, archived: 4,
+      report: 4,
+      catalog: 5, archive: 5, archived: 5,
       review: 6, failed: 6,
     };
     const stationIdx = (st) => {
@@ -452,6 +544,8 @@ const Floor = (() => {
     e.tint = tintFor(baseRun);
     e.tx = STATIONS[0].x;
     e.ty = ENV_Y;
+    e.remove = false;
+    kickLoop();
 
     // Animate through each stage in sequence
     let cumulativeDelay = 600; // initial pause so user sees the envelope appear
@@ -486,6 +580,16 @@ const Floor = (() => {
       ConsoleView.banner(`REPLAY COMPLETE — ${runData.filename || replayId}`);
     }, cumulativeDelay + 800);
     replayTimers.push(endTimer);
+    // Hold live updates until the envelope has slid off, then catch up.
+    replayState.until = Date.now() + cumulativeDelay + 3000;
+    replayTimers.push(setTimeout(() => {
+      replayState = null;
+      if (pendingRuns) {
+        const runs = pendingRuns;
+        pendingRuns = null;
+        update(runs);
+      }
+    }, cumulativeDelay + 3100));
   }
 
   return { update, reset, setSource, onSelect, onHover, replay };

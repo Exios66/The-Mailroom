@@ -4,6 +4,9 @@ const SessionsView = (() => {
   const listEl = document.getElementById("sessions-list");
 
   function chip(run) {
+    if (run.needs_human && run.stage !== "review") {
+      return `<span class="chip stage-review">RECONSIDER</span>`;
+    }
     let cls = "";
     if (["review"].includes(run.stage)) cls = "stage-review";
     else if (run.stage === "failed") cls = "stage-failed";
@@ -11,7 +14,7 @@ const SessionsView = (() => {
     else if (["judge_verify", "arbiter"].includes(run.stage)) cls = "stage-judge";
     else if (["report", "catalog", "archive"].includes(run.stage)) cls = "stage-report";
     else if (["extract", "retry_extract", "boss"].includes(run.stage)) cls = "stage-extract";
-    else if (["inbox", "ingest", "classify", "retry_classify", "review_classify", "unknown"].includes(run.stage)) cls = "stage-intake";
+    else if (["inbox", "intake", "classify", "retry_classify", "review_classify", "unknown"].includes(run.stage)) cls = "stage-intake";
     return `<span class="chip ${cls}">${Mailroom.esc((run.stage || "unknown").toUpperCase())}</span>`;
   }
 
@@ -27,7 +30,7 @@ const SessionsView = (() => {
     }
     listEl.innerHTML = sessions
       .map((s) => {
-        const runs = (s.runs || []).slice(0, 20);
+        const runs = s.runs || [];
         const rows = runs
           .map((r) => `<div class="run-row" data-trace="${Mailroom.esc(r.trace_id)}">
             <span class="run-file">${Mailroom.esc(r.filename || r.trace_id)}</span>
@@ -60,6 +63,7 @@ const SessionsView = (() => {
   }
 
   async function refresh() {
+    listEl.innerHTML = `<div class="hint mono">LOADING SESSIONS FROM LANGFUSE…</div>`;
     try {
       const data = await Mailroom.api.sessions(50);
       renderSessions(data.sessions || []);

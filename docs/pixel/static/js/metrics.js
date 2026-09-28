@@ -16,7 +16,7 @@ const MetricsView = (() => {
     const rows = entries
       .map((e) => `<div class="bar-row">
         <span class="bar-label">${Mailroom.esc(e.label)}</span>
-        <span class="bar-track"><span class="bar-fill" style="width:${Math.round((e.value / max) * 100)}%;background:${color}"></span></span>
+        <span class="bar-track"><span class="bar-fill" style="width:${Math.round((e.value / max) * 100)}%;background:${e.color || color}"></span></span>
         <span class="bar-num">${e.value}</span>
       </div>`)
       .join("");
@@ -27,8 +27,35 @@ const MetricsView = (() => {
   }
 
   function scoreValue(run, name) {
-    const hit = (run.scores || []).find((s) => s.name === name && s.value != null);
-    return hit ? Number(hit.value) : null;
+    const scores = run.scores;
+    const aliases = {
+      extraction_overall_verified_precision: "extraction_verified_precision",
+      extraction_verified_precision: "extraction_overall_verified_precision",
+    };
+    const names = [name];
+    if (aliases[name]) names.push(aliases[name]);
+    for (const key of names) {
+      if (!scores) continue;
+      if (Array.isArray(scores)) {
+        const hit = scores.find((s) => s && s.name === key && s.value != null);
+        if (hit) {
+          const n = Number(hit.value);
+          if (Number.isFinite(n)) return n;
+        }
+        continue;
+      }
+      if (typeof scores === "object" && scores[key] != null) {
+        const v = scores[key];
+        if (typeof v === "object" && v !== null && "value" in v) {
+          const n = Number(v.value);
+          if (Number.isFinite(n)) return n;
+        } else {
+          const n = Number(v);
+          if (Number.isFinite(n)) return n;
+        }
+      }
+    }
+    return null;
   }
 
   function computeLocalMetrics(runs) {
@@ -36,6 +63,7 @@ const MetricsView = (() => {
       total_docs: 0,
       archived: 0,
       review: 0,
+      reconsideration: 0,
       failed: 0,
       in_flight: 0,
       total_cost_usd: 0,
@@ -57,6 +85,17 @@ const MetricsView = (() => {
       avg_run_duration_s: null,
       avg_classification_attempts: null,
       avg_extraction_attempts: null,
+      avg_extraction_verified_precision: null,
+      avg_content_topic_accuracy: null,
+      avg_content_topic_f1_macro: null,
+      avg_sentiment_accuracy: null,
+      avg_sentiment_f1_macro: null,
+      avg_maud_question_accuracy: null,
+      avg_maud_question_macro_accuracy: null,
+      avg_maud_clause_presence: null,
+      avg_maud_valid_class_rate: null,
+      avg_maud_category_accuracy: null,
+      per_doc_subclass: {},
     };
     const latencies = [];
     const qualities = [];
@@ -70,12 +109,23 @@ const MetricsView = (() => {
       run_duration_seconds: [],
       classification_attempts: [],
       extraction_attempts: [],
+      extraction_overall_verified_precision: [],
+      content_topic_accuracy: [],
+      content_topic_f1_macro: [],
+      sentiment_accuracy: [],
+      sentiment_f1_macro: [],
+      maud_question_accuracy: [],
+      maud_question_macro_accuracy: [],
+      maud_clause_presence: [],
+      maud_valid_class_rate: [],
+      maud_category_accuracy: [],
     };
     for (const r of runs) {
       m.total_docs++;
-      if (r.stage === "archived") m.archived++;
+      if (r.needs_reconsideration) m.reconsideration++;
+      if (r.stage === "failed") m.failed++;
       else if (r.stage === "review" || r.needs_human) m.review++;
-      else if (r.stage === "failed") m.failed++;
+      else if (r.stage === "archived") m.archived++;
       else m.in_flight++;
       m.total_cost_usd += r.cost_usd || 0;
       m.total_tokens += r.total_tokens || 0;
@@ -87,6 +137,10 @@ const MetricsView = (() => {
       if (r.quality != null) qualities.push(r.quality);
       if (r.doc_type) {
         m.per_doc_type[r.doc_type] = (m.per_doc_type[r.doc_type] || 0) + 1;
+      }
+      if (r.doc_subclass) {
+        const subKey = `${r.doc_type || "unknown"}/${r.doc_subclass}`;
+        m.per_doc_subclass[subKey] = (m.per_doc_subclass[subKey] || 0) + 1;
       }
       const fs = scoreValue(r, "extraction_field_score");
       if (fs != null) m.n_grounded_runs++;
@@ -112,9 +166,19 @@ const MetricsView = (() => {
       run_duration_seconds: "avg_run_duration_s",
       classification_attempts: "avg_classification_attempts",
       extraction_attempts: "avg_extraction_attempts",
+      extraction_overall_verified_precision: "avg_extraction_verified_precision",
+      content_topic_accuracy: "avg_content_topic_accuracy",
+      content_topic_f1_macro: "avg_content_topic_f1_macro",
+      sentiment_accuracy: "avg_sentiment_accuracy",
+      sentiment_f1_macro: "avg_sentiment_f1_macro",
+      maud_question_accuracy: "avg_maud_question_accuracy",
+      maud_question_macro_accuracy: "avg_maud_question_macro_accuracy",
+      maud_clause_presence: "avg_maud_clause_presence",
+      maud_valid_class_rate: "avg_maud_valid_class_rate",
+      maud_category_accuracy: "avg_maud_category_accuracy",
     };
     for (const [key, attr] of Object.entries(attrMap)) {
-      if (buckets[key].length) {
+      if (buckets[key] && buckets[key].length) {
         m[attr] = buckets[key].reduce((a, b) => a + b, 0) / buckets[key].length;
       }
     }
@@ -136,7 +200,9 @@ const MetricsView = (() => {
       const ts = r.updated_at || r.created_at;
       if (!ts) continue;
       const age = (now - new Date(ts).getTime()) / 3600000;
-      const bucket = Math.floor(5 - age);
+      // Bucket 5 is the current hour: age 0–1h → 5, 1–2h → 4, …
+      // (floor(5 - age) put the last hour one bar early and left "now" empty).
+      const bucket = 5 - Math.floor(Math.max(0, age));
       if (bucket >= 0 && bucket < 6) {
         buckets[bucket]++;
         costBuckets[bucket] += r.cost_usd || 0;
@@ -166,6 +232,8 @@ const MetricsView = (() => {
         value: v,
         color: "#d9a866",
       }));
+    const subclassBars = Object.entries(m.per_doc_subclass || {})
+      .map(([k, v]) => ({ label: k, value: v, color: "#8aa3c0" }));
 
     const quality = m.avg_quality == null ? "—" : Number(m.avg_quality).toFixed(2);
     const qcls = m.avg_quality != null ? (m.avg_quality >= 0.8 ? "good" : "warn") : "";
@@ -176,6 +244,9 @@ const MetricsView = (() => {
     html += tile("TOTAL DOCS", m.total_docs ?? "—");
     html += tile("ARCHIVED", m.archived ?? "—", "good");
     html += tile("REVIEW", m.review ?? "—", "warn");
+    if (m.reconsideration) {
+      html += tile("RECONSIDER", m.reconsideration, "warn");
+    }
     html += tile("FAILED", m.failed ?? "—", m.failed ? "bad" : "");
     html += tile("IN FLIGHT", m.in_flight ?? "—");
     html += tile("LLM CALLS", Mailroom.fmt.tokens(m.llm_calls));
@@ -199,6 +270,37 @@ const MetricsView = (() => {
         m.avg_hallucination_rate <= 0.05 ? "good" : "bad");
       html += tile("FIELD PRESENCE", pct(m.avg_expected_field_presence));
     }
+    if (m.avg_extraction_verified_precision != null) {
+      html += tile("VERIFIED PRECISION", pct(m.avg_extraction_verified_precision),
+        m.avg_extraction_verified_precision >= 0.8 ? "good" : "warn");
+    }
+    if (m.avg_content_topic_accuracy != null) {
+      html += tile("TOPIC ACC", pct(m.avg_content_topic_accuracy));
+    }
+    if (m.avg_content_topic_f1_macro != null) {
+      html += tile("TOPIC F1", pct(m.avg_content_topic_f1_macro));
+    }
+    if (m.avg_sentiment_accuracy != null) {
+      html += tile("SENTIMENT ACC", pct(m.avg_sentiment_accuracy));
+    }
+    if (m.avg_sentiment_f1_macro != null) {
+      html += tile("SENTIMENT F1", pct(m.avg_sentiment_f1_macro));
+    }
+    if (m.avg_maud_question_accuracy != null) {
+      html += tile("MAUD Q ACC", pct(m.avg_maud_question_accuracy));
+    }
+    if (m.avg_maud_question_macro_accuracy != null) {
+      html += tile("MAUD Q MACRO", pct(m.avg_maud_question_macro_accuracy));
+    }
+    if (m.avg_maud_clause_presence != null) {
+      html += tile("MAUD CLAUSE", pct(m.avg_maud_clause_presence));
+    }
+    if (m.avg_maud_valid_class_rate != null) {
+      html += tile("MAUD VALID", pct(m.avg_maud_valid_class_rate));
+    }
+    if (m.avg_maud_category_accuracy != null) {
+      html += tile("MAUD CATEGORY", pct(m.avg_maud_category_accuracy));
+    }
     if (m.avg_run_duration_s != null) {
       html += tile("AVG RUN DURATION", Mailroom.fmt.latency(m.avg_run_duration_s));
     }
@@ -210,6 +312,7 @@ const MetricsView = (() => {
     }
     if (vBars.length) html += bars("JUDGE VERDICTS", vBars, "#5f9e6e");
     if (docBars.length) html += bars("DOC TYPES", docBars, "#d9a866");
+    if (subclassBars.length) html += bars("DOC SUBCLASSES", subclassBars, "#8aa3c0");
     if (rawRuns && rawRuns.length) html += trendBars(rawRuns);
     gridEl.innerHTML = html || `<div class="hint mono">NO METRICS YET</div>`;
   }
@@ -217,6 +320,7 @@ const MetricsView = (() => {
   // V-27: default window matches the floor's MAILROOM_RECENT_WINDOW (7d) —
   // the old 1h default showed zeros whenever no runs happened in the hour.
   async function refresh(since = 604800) {
+    gridEl.innerHTML = `<div class="hint mono">LOADING METRICS FROM LANGFUSE…</div>`;
     try {
       let data;
       let rawRuns = [];
@@ -228,7 +332,7 @@ const MetricsView = (() => {
         // Also fetch raw runs for the trend chart (optional — but V-18: a
         // failure must be visible, not silently swallowed)
         try {
-          const tdata = await Mailroom.api.traces(Math.max(since, 21600), 200);
+          const tdata = await Mailroom.api.traces(since, 200);
           rawRuns = tdata.runs || [];
         } catch (e) {
           console.warn("[mailroom] trend data unavailable:", e.message || e);

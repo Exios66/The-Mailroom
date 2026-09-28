@@ -16,6 +16,9 @@ const Main = (() => {
   let lastSnapshot = [];
   let lastIds = new Set();
   let byId = new Map();
+  let lastPipeline = { configured: false };
+  let lastFetchedAt = null;
+  let pollIntervalMs = 3000;
   let pollTimer = null;
   let fallbackTimer = null;
   let activeTab = "floor";
@@ -56,6 +59,7 @@ const Main = (() => {
     if (!langfuseOk && !demoMode) {
       setLamp("red");
       sourceLabelEl.textContent = "SOURCE: OFFLINE";
+      sourceLabelEl.className = "st-bad mono";
       statusLeftEl.textContent = "MAILROOM CLOSED — NO LANGFUSE CONNECTION";
       statusLeftEl.className = "st-bad mono";
       closedEl.hidden = false;
@@ -64,6 +68,7 @@ const Main = (() => {
     } else if (demoMode && !langfuseOk) {
       setLamp("gold");
       sourceLabelEl.textContent = "SOURCE: DEMO MODE";
+      sourceLabelEl.className = "st-warn mono";
       statusLeftEl.textContent = "MAILROOM DEMO — SIMULATED PIPELINE RUNNING";
       statusLeftEl.className = "st-warn mono";
       closedEl.hidden = true;
@@ -72,6 +77,7 @@ const Main = (() => {
     } else if (demoMode && langfuseOk) {
       setLamp("gold");
       sourceLabelEl.textContent = "SOURCE: DEMO MODE (LANGFUSE UP)";
+      sourceLabelEl.className = "st-warn mono";
       statusLeftEl.textContent = "MAILROOM DEMO — SIMULATED PIPELINE (LANGFUSE AVAILABLE)";
       statusLeftEl.className = "st-warn mono";
       closedEl.hidden = true;
@@ -80,12 +86,24 @@ const Main = (() => {
     } else {
       setLamp(wsOk ? "green" : "gold");
       sourceLabelEl.textContent = "SOURCE: LANGFUSE";
+      sourceLabelEl.className = wsOk ? "st-good mono" : "st-warn mono";
       statusLeftEl.textContent = "MAILROOM LIVE — WATCHING LANGFUSE";
       statusLeftEl.className = "st-good mono";
       closedEl.hidden = true;
       Floor.setSource(wsOk ? "green" : "gold");
       stopDemo();
     }
+  }
+
+  function pipelineStrip(ops) {
+    if (!ops || !ops.configured) return "";
+    const w = ops.watcher === "live" ? "WATCHER LIVE"
+      : ops.watcher === "stale" ? "WATCHER STALE"
+      : ops.watcher === "missing" ? "WATCHER DOWN"
+      : "WATCHER ?";
+    const inbox = ops.inbox_pending == null ? "?" : String(ops.inbox_pending);
+    const paused = ops.ingestion_paused ? " · PAUSED" : "";
+    return ` · ${w} · INBOX ${inbox}${paused}`;
   }
 
   function startDemo() {
@@ -168,11 +186,15 @@ const Main = (() => {
     }));
   }
 
-  function applySnapshot(runs) {
-    // V-27: a non-empty snapshot proves the backend is serving even when the
-    // async health check hasn't resolved yet — dropping it left a blank floor
-    // until the next poll tick. Health checks keep correcting the flag after.
-    if (runs && runs.length) langfuseOk = true;
+  function applySnapshot(runs, stale = false) {
+    // V-27: a non-empty FRESH snapshot proves the backend is serving even when
+    // the async health check hasn't resolved yet. A stale one (source down,
+    // last-good floor) must not flip the lamp back on — that made the screen
+    // alternate OPEN/CLOSED every health tick.
+    if (runs && runs.length && !stale && !langfuseOk) {
+      langfuseOk = true;
+      applySource();
+    }
     if (!langfuseOk && !demoMode) return;
     lastSnapshot = runs;
     const ids = new Set(runs.map((r) => r.trace_id));
@@ -200,6 +222,25 @@ const Main = (() => {
     renderStatus();
   }
 
+  function applyPipeline(ops) {
+    if (!ops) return;
+    const prev = lastPipeline || {};
+    lastPipeline = ops;
+    if (ops.configured && prev.watcher && prev.watcher !== ops.watcher) {
+      ConsoleView.log(`watcher ${prev.watcher} → ${ops.watcher}`, ops.watcher === "live" ? "c-ok" : "c-warn");
+    }
+    const prevInbox = prev.inbox_pending;
+    if (ops.configured && typeof ops.inbox_pending === "number"
+        && ops.inbox_pending !== prevInbox) {
+      if (ops.inbox_pending > 0) {
+        ConsoleView.log(`inbox pending: ${ops.inbox_pending}`, "c-dim");
+      } else if (typeof prevInbox === "number" && prevInbox > 0) {
+        ConsoleView.log("inbox empty", "c-dim");
+      }
+    }
+    renderStatus();
+  }
+
   function renderStatus() {
     const envs = new Set();
     for (const r of lastSnapshot) {
@@ -207,32 +248,75 @@ const Main = (() => {
       if (env) envs.add(env);
     }
     const envTxt = envs.size ? ` · ENV: ${[...envs].sort().join(",")}` : "";
-    statusRightEl.textContent = `RUNS: ${lastSnapshot.length}${envTxt}`;
+    const pipe = pipelineStrip(lastPipeline);
+    let updated = "";
+    if (lastFetchedAt) {
+      const t = new Date(lastFetchedAt);
+      if (!Number.isNaN(t.getTime())) updated = ` · UPDATED ${t.toLocaleTimeString()}`;
+    }
+    statusRightEl.textContent = `RUNS: ${lastSnapshot.length}${envTxt}${pipe}${updated}`;
+  }
+
+  async function loadMeta() {
+    try {
+      Mailroom.meta = await Mailroom.api.meta();
+      const poll = Mailroom.meta && Mailroom.meta.poll_interval_s;
+      if (typeof poll === "number" && poll > 0) {
+        pollIntervalMs = Math.max(1000, Math.round(poll * 1000));
+        if (fallbackTimer) startFallbackPolling();
+      }
+    } catch (e) {
+      Mailroom.showError(`meta: ${e.message || e}`);
+    }
+  }
+
+  async function loadSnapshotFloor() {
+    try {
+      await loadMeta();
+      applySnapshot((await Mailroom.api.traces(604800, 200)).runs || []);
+    } catch (e2) {
+      Mailroom.showError(`snapshot load: ${e2.message || e2}`);
+    }
+  }
+
+  let liveSeen = false;
+  let liveStarted = false;
+
+  // Start WS + polling fallback the first time health is ok — including
+  // when the FIRST probe failed (the page used to stay blank until reload).
+  function startLive() {
+    if (liveStarted || Mailroom.staticMode) return;
+    liveStarted = true;
+    setTimeout(() => {
+      if (!wsOk && !Mailroom.staticMode) startFallbackPolling();
+    }, 8000);
+    Mailroom.connectWS(onMessage);
   }
 
   async function checkHealth() {
     if (Mailroom.staticMode) { applySource(); return true; }
     try {
       const h = await Mailroom.api.health();
+      liveSeen = true;
       // Source-agnostic "ok" (multi/phoenix sources) with langfuse fallback.
       langfuseOk = !!(h.ok ?? h.langfuse);
+      if (langfuseOk && !Mailroom.meta) await loadMeta();
     } catch (err) {
-      ConsoleView.log(`health check failed: ${err.message || err}`, "c-bad");
-      // GH Pages: no live API reachable — fall back to bundled snapshots.
-      const enabled = await Mailroom.enableStaticMode();
+      // GH Pages / no live API: fall back to bundled snapshots. A missing
+      // /api/health is expected here — do NOT paint it as an error banner
+      // or red console line; that was the Pages boot flash. Once a live API
+      // has answered, a transient failure is an outage (MAILROOM CLOSED),
+      // never a permanent switch to static mode.
+      const enabled = !liveSeen && await Mailroom.enableStaticMode();
       if (enabled) {
         langfuseOk = true;
+        ConsoleView.log(`no live API (${err.message || err}) — serving bundled snapshot`, "c-dim");
         ConsoleView.banner("SNAPSHOT MODE — SERVING BUNDLED DATA");
-        try {
-          const m = await Mailroom.api.meta();
-          Mailroom.meta = m;
-          applySnapshot((await Mailroom.api.traces(1800, 200)).runs || []);
-        } catch (e2) {
-          Mailroom.showError(`snapshot load: ${e2.message || e2}`);
-        }
+        await loadSnapshotFloor();
         applySource();
         return true;
       }
+      ConsoleView.log(`health check failed: ${err.message || err}`, "c-bad");
       langfuseOk = false;
     }
     applySource();
@@ -250,35 +334,45 @@ const Main = (() => {
       }
       applySource();
     } else if (msg.type === "snapshot") {
-      applySnapshot(msg.runs || []);
+      applySnapshot(msg.runs || [], !!msg.stale);
+      if (msg.pipeline) applyPipeline(msg.pipeline);
+      if (msg.fetched_at) lastFetchedAt = msg.fetched_at;
+      if (typeof msg.poll_interval_s === "number" && msg.poll_interval_s > 0) {
+        pollIntervalMs = Math.max(1000, Math.round(msg.poll_interval_s * 1000));
+        if (fallbackTimer) startFallbackPolling();
+      }
       // V-14: surface staleness + last-updated so a frozen floor with a green
       // lamp is distinguishable from a live one.
       if (msg.stale) {
         sourceLabelEl.textContent = "SOURCE: LANGFUSE (STALE)";
         sourceLabelEl.className = "st-warn mono";
       }
-      if (msg.fetched_at) {
-        const t = new Date(msg.fetched_at);
-        statusRightEl.textContent =
-          (statusRightEl.textContent || "") + ` · UPDATED ${t.toLocaleTimeString()}`;
-      }
+      renderStatus();
     }
   }
 
+  let fallbackPollMs = 0;
+
   function startFallbackPolling() {
-    if (fallbackTimer) return;
-    fallbackTimer = setInterval(async () => {
+    const tick = async () => {
       if (!langfuseOk || wsOk) return;
       try {
-        const data = await Mailroom.api.traces(1800, 200);
-        applySnapshot(data.runs || []);
+        const data = await Mailroom.api.traces(604800, 200);
+        applySnapshot(data.runs || [], data.source === "langfuse-cache");
+        try {
+          applyPipeline(await Mailroom.api.pipeline());
+        } catch (_e) { /* pipeline URL optional */ }
       } catch (err) {
         const msg = err.message || String(err);
         ConsoleView.log(`poll fallback failed: ${msg}`, "c-warn");
         Mailroom.showError(`fallback poll: ${msg}`);
       }
-    }, 10000);
-    ConsoleView.log("polling /api/traces as fallback", "c-dim");
+    };
+    if (fallbackTimer && fallbackPollMs === pollIntervalMs) return;
+    if (fallbackTimer) clearInterval(fallbackTimer);
+    fallbackPollMs = pollIntervalMs;
+    fallbackTimer = setInterval(tick, pollIntervalMs);
+    ConsoleView.log(`polling /api/traces as fallback (${pollIntervalMs}ms)`, "c-dim");
   }
 
   function switchView(name) {
@@ -312,10 +406,6 @@ const Main = (() => {
 
     ConsoleView.banner("THE MAILROOM — LLM-MAILROOM VISUAL ENGINE");
 
-    Mailroom.api.meta()
-      .then((m) => { Mailroom.meta = m; })
-      .catch((e) => { Mailroom.showError(`meta: ${e.message || e}`); });
-
     // Deep-linkable tab state: ?view=review|sessions|history|metrics|console
     const requestedView = new URLSearchParams(location.search).get("view");
 
@@ -339,7 +429,7 @@ const Main = (() => {
     }
     setInterval(() => {
       if (activeTab === "review") {
-        ReviewView.refresh().catch((e) => Mailroom.showError(`review: ${e.message || e}`));
+        ReviewView.refresh({ background: true }).catch((e) => Mailroom.showError(`review: ${e.message || e}`));
       }
       if (activeTab === "sessions") {
         SessionsView.refresh().catch((e) => Mailroom.showError(`sessions: ${e.message || e}`));
@@ -354,29 +444,27 @@ const Main = (() => {
 
     document.getElementById("closed-retry").addEventListener("click", () => {
       ConsoleView.log("retrying connection…", "c-dim");
-      checkHealth();
+      checkHealth().then((ok) => { if (ok) startLive(); });
     });
 
-    // Demo mode toggle (D key)
+    // Demo envelopes are opt-in via ?demo=1 and only when Langfuse is down.
+    // The D key used to fabricate a live floor (and collided with Debug).
+    const demoRequested = new URLSearchParams(location.search).get("demo") === "1";
     document.addEventListener("keydown", (ev) => {
-      if (ev.key === "d" || ev.key === "D") {
+      if (ev.target && ["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName)) return;
+      if (demoRequested && (ev.key === "d" || ev.key === "D") && !langfuseOk) {
         demoMode = !demoMode;
         ConsoleView.log(`DEMO MODE ${demoMode ? "ON" : "OFF"}`, demoMode ? "c-ok" : "c-warn");
         applySource();
       }
     });
 
-    setInterval(checkHealth, 5000);
-    // WS starts only once the first health probe resolves: in snapshot mode
-    // there is no /ws endpoint to hold open (GH Pages), so don't spin a
-    // reconnect loop against static hosting.
-    checkHealth().then((ok) => {
-      if (!ok) return;
-      setTimeout(() => {
-        if (!wsOk && !Mailroom.staticMode) startFallbackPolling();
-      }, 8000);
-      if (!Mailroom.staticMode) Mailroom.connectWS(onMessage);
-    });
+    // WS starts only once a health probe succeeds: in snapshot mode there is
+    // no /ws endpoint to hold open (GH Pages), so don't spin a reconnect loop
+    // against static hosting.
+    const probe = () => checkHealth().then((ok) => { if (ok) startLive(); });
+    setInterval(probe, 5000);
+    probe();
 
     if (requestedView && tabEls.some((t) => t.dataset.view === requestedView)) {
       switchView(requestedView);

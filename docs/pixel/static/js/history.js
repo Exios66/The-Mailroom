@@ -8,6 +8,9 @@ const HistoryView = (() => {
   let runsCache = [];
 
   function chip(run) {
+    if (run.needs_human && run.stage !== "review") {
+      return `<span class="chip stage-review">RECONSIDER</span>`;
+    }
     let cls = "";
     if (["review"].includes(run.stage)) cls = "stage-review";
     else if (run.stage === "failed") cls = "stage-failed";
@@ -15,7 +18,7 @@ const HistoryView = (() => {
     else if (["judge_verify", "arbiter"].includes(run.stage)) cls = "stage-judge";
     else if (["report", "catalog", "archive"].includes(run.stage)) cls = "stage-report";
     else if (["extract", "retry_extract", "boss"].includes(run.stage)) cls = "stage-extract";
-    else if (["inbox", "ingest", "classify", "retry_classify", "review_classify", "unknown"].includes(run.stage)) cls = "stage-intake";
+    else if (["inbox", "intake", "classify", "retry_classify", "review_classify", "unknown"].includes(run.stage)) cls = "stage-intake";
     return `<span class="chip ${cls}">${Mailroom.esc((run.stage || "unknown").toUpperCase())}</span>`;
   }
 
@@ -75,7 +78,7 @@ const HistoryView = (() => {
         <span class="run-file">${Mailroom.esc(r.filename || r.trace_id)}</span>
         ${chip(r)}
         ${verdictChip(r)}
-        <span style="color:var(--paper-dim)">${Mailroom.esc(r.doc_type || "—")}</span>
+        <span style="color:var(--paper-dim)">${Mailroom.esc(r.doc_type || "—")}${r.doc_subclass || r.contract_subtype ? ` / ${Mailroom.esc(r.doc_subclass || r.contract_subtype)}` : ""}</span>
         <span style="color:var(--gold)">${cost}</span>
         <span style="color:var(--paper-dim)">${toks}</span>
         <span class="run-when" style="display:flex;gap:6px;align-items:center;justify-content:flex-end">
@@ -114,12 +117,14 @@ const HistoryView = (() => {
       if (tab) tab.click();
     } catch (err) {
       ConsoleView.log(`replay failed: ${err.message || err}`, "c-bad");
+      Mailroom.showError(`replay: ${err.message || err}`);
     }
   }
 
   async function refresh() {
+    listEl.innerHTML = `<div class="hint mono">LOADING RUN HISTORY FROM LANGFUSE…</div>`;
     try {
-      const data = await Mailroom.api.traces(21600, 200);
+      const data = await Mailroom.api.traces(604800, 200);
       runsCache = data.runs || [];
       renderHistory(runsCache);
       return data;
@@ -132,7 +137,10 @@ const HistoryView = (() => {
   if (refreshBtn) {
     refreshBtn.addEventListener("click", () => {
       ConsoleView.log("refreshing history…", "c-dim");
-      refresh();
+      refresh().catch((e) => {
+        Mailroom.showError(`history: ${e.message || e}`);
+        ConsoleView.log(`history refresh failed: ${e.message || e}`, "c-bad");
+      });
     });
   }
 
