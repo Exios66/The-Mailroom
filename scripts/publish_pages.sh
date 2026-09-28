@@ -108,6 +108,7 @@ STASH=""
 if [[ "$SKIP_EXPORT" -eq 1 && -d site/data ]]; then
   STASH="$(mktemp -d)"
   cp -R site/data "$STASH/data"
+  [[ -d site/debug ]] && cp -R site/debug "$STASH/debug"
 fi
 
 echo "== staging site shell (pixel console -> /pixel/) =="
@@ -144,6 +145,7 @@ HTML
 
 if [[ -n "$STASH" ]]; then
   cp -R "$STASH/data" site/data
+  [[ -d "$STASH/debug" ]] && cp -R "$STASH/debug" site/debug
   rm -rf "$STASH"
 fi
 
@@ -218,12 +220,41 @@ for legacy in index.html .nojekyll static data debug .env .DS_Store mailroom_ui 
 done
 if [[ "$KEEP_REMOTE_DATA" -eq 1 && -d "$CLONE/docs/data" ]]; then
   mv "$CLONE/docs/data" "$TMP/live-data"
+  if [[ -f "$CLONE/docs/debug/build-info.json" ]]; then
+    cp "$CLONE/docs/debug/build-info.json" "$TMP/live-build-info.json"
+  fi
 fi
 rm -rf "$CLONE/docs"
 mkdir -p "$CLONE/docs"
 rsync -a --exclude '.git' site/ "$CLONE/docs/"
 if [[ -d "$TMP/live-data" ]]; then
   mv "$TMP/live-data" "$CLONE/docs/data"
+  if [[ -f "$TMP/live-build-info.json" && ! -f "$CLONE/docs/debug/build-info.json" ]]; then
+    mkdir -p "$CLONE/docs/debug"
+    cp "$TMP/live-build-info.json" "$CLONE/docs/debug/build-info.json"
+  fi
+fi
+
+# --skip-export republishes the site code over a reused snapshot: stamp
+# build-info with this commit (so --status reports IN SYNC) while keeping
+# the snapshot's own provenance. Wiping docs/ used to drop the file, and
+# --status then reported UNKNOWN forever.
+if [[ "$SKIP_EXPORT" -eq 1 ]]; then
+  mkdir -p "$CLONE/docs/debug"
+  python3 - "$CLONE/docs/debug/build-info.json" "$HEAD_SHA" <<'PY'
+import json, sys
+from datetime import datetime, timezone
+path, sha = sys.argv[1], sys.argv[2]
+try:
+    info = json.load(open(path))
+except (OSError, ValueError):
+    info = {}
+if info.get("git_sha") not in (None, sha):
+    info.setdefault("data_git_sha", info["git_sha"])
+    info.setdefault("data_generated_at", info.get("generated_at"))
+info.update(git_sha=sha, generated_at=datetime.now(timezone.utc).isoformat(), data_reused=True)
+json.dump(info, open(path, "w"), indent=2)
+PY
 fi
 
 # Final guard: never push secrets or env files to a public-serving branch.
