@@ -76,7 +76,7 @@ mailroom-hosted           # → public Observatory on 0.0.0.0 (container-ready)
 mailroom-tui              # typed-command REPL (floor/corpus/repos/inspect)
 pip install -e ".[operator]"  # optional: operator desk (auth / archive / observer)
 pip install -e ".[ui]"        # marker only; React desk still needs Node
-mailroom-observer         # bin watcher (or MAILROOM_OBSERVER=1 on mailroom-web)
+mailroom-observer         # standalone bin watcher — or MAILROOM_OBSERVER=1 on mailroom-web (never both)
 # optional React desk: cd ui && npm install && npm run build  →  /desk
 ```
 
