@@ -559,7 +559,14 @@ def test_schema_mirror_covers_upstream_contract():
     assert ps.DOC_CLASSES["insurance_claim"] == "Insurance Claim"
     assert ps.DOC_CLASSES["merger_agreement"] == "Merger Agreement"
     assert ps.SPECIALIST_BY_DOC_CLASS["insurance_claim"] == "insurance_claims_specialist"
-    assert ps.SPECIALIST_BY_DOC_CLASS["merger_agreement"] == "contracts_specialist"
+    # llm-mailroom #64: MAUD has its own specialist + MergerAgreementExtraction.
+    assert ps.SPECIALIST_BY_DOC_CLASS["merger_agreement"] == "merger_agreement_specialist"
+    assert "merger_agreement_specialist" in ps.AGENTS
+    assert "effective_time" in ps.EXTRACTION_FIELD_KEYS_BY_CLASS["merger_agreement"]
+    assert "cuad_clauses" not in ps.EXTRACTION_FIELD_KEYS_BY_CLASS["merger_agreement"]
+    assert ps.SPAN_STAGE_MAP["intake-ml-triage"] == Stage.INTAKE
+    assert ps.observation_type_for("intake-ml-triage") == "span"
+    assert ps.PipelineSchema().thresholds_for("correspondence")["low"] == 0.85
     assert "license" in ps.DOC_SUBCLASS_BY_CLASS["contract"]
     assert "cuad_clauses" in ps.EXTRACTION_FIELD_KEYS_BY_CLASS["contract"]
     assert "key_obligations" not in ps.EXTRACTION_FIELD_KEYS_BY_CLASS["contract"]
@@ -831,3 +838,19 @@ def test_list_recent_runs_honors_trace_names_env(monkeypatch):
     runs = ls.list_recent_runs(StubSource(), since=datetime.now(timezone.utc), limit=10)
     assert sorted(calls) == ["docclass_classification", "document-pipeline"]
     assert [r.trace_id for r in runs] == ["t2", "t1"]
+
+
+def test_intake_ml_triage_span_is_intake_on_both_sdk_shapes():
+    """llm-mailroom #85 M6a: the ModernBERT triage SPAN (always emitted,
+    fail-open) must land on INTAKE — never an `unknown` stage — for v2/v3
+    snake_case and v4 camelCase observations alike."""
+    triage = {"available": False, "reason": "flag_off", "route": None,
+              "triage_class": None, "confidence": None, "latency_ms": 0.4}
+    for trace in (make_trace("t-bert", ml_triage_output=triage),
+                  make_trace_v4("t-bert-v4", ml_triage_output=triage)):
+        run = interpret_trace(trace, trace["observations"], trace["scores"])
+        span = next(s for s in run.spans if s.name == "intake-ml-triage")
+        assert span.observation_type == "SPAN"
+        assert span.output == triage
+        assert run.stage != Stage.UNKNOWN
+        assert run.routing_path[0] == "intake"
