@@ -6,6 +6,15 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Fixed
+
+- `scripts/publish_pages.sh --skip-export` wiped `docs/debug/build-info.json`
+  on `gh-pages`, so `--status` (and the main → gh-pages hook) reported
+  `UNKNOWN` forever. A data-reusing publish now carries the live file over
+  and stamps it with the current commit (`data_reused: true`), keeping the
+  snapshot's own provenance as `data_git_sha` / `data_generated_at`; the
+  local `--skip-export` stash also keeps `site/debug`.
+
 ## [0.5.0] - 2026-09-28
 
 > Upstream resync to llm-mailroom 959bb0b + full audit fixes
