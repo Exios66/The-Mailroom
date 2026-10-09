@@ -6,6 +6,19 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- **Phoenix source reads mailroom-reloaded runs.** `mailroom.document` roots
+  and `mailroom.node.{ingest,bert_primary,sort,extract,verify,boss,
+  human_review,report_catalog_archive}` spans map to the floor stations and
+  Langfuse observation types (`RELOADED_NODE_STAGES` /
+  `RELOADED_STATUS_STAGES` in `pipeline_schema.py`); the root's
+  `mailroom.status|doc_id|filename|run_id|doc_type` attributes populate the
+  trace input/output/session when no `input.value` / `output.value` is set
+  (explicit values win; nothing is fabricated). `parked` -> REVIEW siding;
+  repeated `sort` / `extract` spans fold into retry stages. Tests:
+  `make_reloaded_trace` + `tests/test_phoenix_source.py`.
+
 ## [0.5.1] - 2026-09-28
 
 > Operator desk: one bin watcher + Docker production path (hub #117/#118)
