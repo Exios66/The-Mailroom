@@ -189,6 +189,16 @@ Langfuse-shaped dicts `interpret_trace` consumes; unmapped spans degrade to
 unknown staging per the breakage map), and `MultiSource` (fan-out reads,
 per-trace isolation, aggregated health).
 
+mailroom-reloaded (the CrewAI-Flows pipeline) is read through the same
+Phoenix source: its `mailroom.document` root and `mailroom.node.<node>` spans
+map to stations via `RELOADED_NODE_STAGES` in `pipeline_schema.py`, and the
+root's `mailroom.status` / `mailroom.doc_id` / `mailroom.filename` /
+`mailroom.run_id` / `mailroom.doc_type` attributes fill the trace input,
+output and session (`parked` shows on the REVIEW siding; consecutive repeated
+`sort` / `extract` spans fold into the retry stages). Only attributes the
+pipeline actually set are lifted. Set `MAILROOM_PHOENIX_PROJECT` to the
+mailroom-reloaded project (eval runs use `eval-<run_id>`).
+
 Debug surfaces for agents: pixel-console ring at
 `window.__MAILROOM_DEBUG__` (`dump()` / `export()`, enabled verbosely by
 `?debug=1` or the CONSOLE tab's DEBUG toggle); Observatory ring at
