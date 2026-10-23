@@ -402,6 +402,10 @@ class PollHub:
                 chosen = apply_light_identity(full, run) if full is not None else run
                 payload = floor_payload(chosen)
                 self._details[run.trace_id] = (now, payload, fp)
+                if full is None:
+                    # A failed/light fetch cannot renew a prior successful
+                    # enrichment. Retry within the next poll's normal budget.
+                    self._enriched_fp.pop(run.trace_id, None)
                 if full is not None:
                     self._enriched_fp[run.trace_id] = fp
                     try:

@@ -16,7 +16,7 @@ from operator_desk import db
 from operator_desk.auth import create_access_token
 from server.main import create_app
 from server.poller import PollHub
-from tests.fake_langfuse import FakeClient, Obj, make_trace
+from tests.fake_langfuse import FakeClient, FakeList, Obj, make_trace
 
 
 def trace(tid='doc', **kw):
@@ -286,3 +286,44 @@ def test_actual_repl_wires_editor_history_to_command_context():
     output=io.StringIO()
     console._repl_loop(argparse.Namespace(),Console(file=output,color_system=None),keys,queue.Queue())
     assert console._ctx.history==['echo fixture-history','history','quit']
+
+
+@pytest.mark.parametrize("stage,ttl_key,ttl", [("review", "review_ttl", 15), ("archived", "detail_ttl", 60)])
+def test_failed_expired_detail_retries_after_provider_recovers(monkeypatch, stage, ttl_key, ttl):
+    """A failed refresh cannot renew the prior successful enrichment marker."""
+    row = make_trace("retry", stage=stage, verdict="CORRECT",
+                     base_time=datetime.now(timezone.utc)-timedelta(minutes=5))
+    src = source(row)
+    trace_api = src.client.api.trace
+    list_traces = trace_api.list
+
+    def light(**kwargs):
+        return FakeList(data=[{k: v for k, v in trace.items() if k not in ("scores", "observations")}
+                              for trace in list_traces(**kwargs).data])
+
+    monkeypatch.setattr(trace_api, "list", light)
+    hub = PollHub(src, **{ttl_key: ttl})
+    assert hub._fetch()[0]["verdict"] == "CORRECT"
+    timestamp, payload, fingerprint = hub._details["retry"]
+    hub._details["retry"] = (timestamp-ttl-1, payload, fingerprint)
+    score_api = src.client.api.scores_v3
+    fetch_scores = score_api.get_many_v3
+    failed_calls, recovered_calls = [], []
+
+    def fail(**kwargs):
+        failed_calls.append(kwargs)
+        raise LangfuseUnavailable("expired-refresh fixture outage")
+
+    monkeypatch.setattr(score_api, "get_many_v3", fail)
+    assert hub._fetch()[0]["verdict"] is None
+    assert len(failed_calls) == 1
+    row["scores"] = [score for score in row["scores"] if score.name != "mailroom-pipeline-judge"] + [
+        Obj(name="mailroom-pipeline-judge", value="MISS", data_type="CATEGORICAL")]
+
+    def recovered(**kwargs):
+        recovered_calls.append(kwargs)
+        return fetch_scores(**kwargs)
+
+    monkeypatch.setattr(score_api, "get_many_v3", recovered)
+    assert hub._fetch()[0]["verdict"] == "MISS"
+    assert len(recovered_calls) == 1

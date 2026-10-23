@@ -8,6 +8,8 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Fixed
 
+- Failed refreshes of previously enriched review/archived rows remain eligible
+  for retry on the next budgeted poll instead of renewing successful-detail TTL.
 - Validate operator completion payloads through pure producer schemas in sibling
   and pinned-contract modes, preserving import isolation and loud failures.
 
