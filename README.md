@@ -54,7 +54,7 @@ board, one discussion log, and one trace contract:
 | --- | --- | --- |
 | [llm-mailroom](https://github.com/Exios66/llm-mailroom) | LangGraph state machine processing legal documents through specialist LLM agents (classify → extract → report → archive); pin `@959bb0bce152` / **0.7.1+** (main after v0.7.1) (package `mailroom` 0.7.1) | **Upstream** — its Langfuse project is this visualizer's sole data source; optional `pip install -e ".[pipeline]"` imports `pipeline.review_resolve` |
 | [llm-entity-extraction](https://github.com/Exios66/llm-entity-extraction) | Prompt-experiment loop (prompt versions × models, paired-bootstrap ablations) | Breeds the pipeline's sorter/specialist prompts; hosts the shared kanban board + governance log for the whole chain |
-| [llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring) | Deterministic, field-type-aware scoring engine (`@v0.16.0`) | Upstream governed dependency of both pipeline repos |
+| [llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring) | Canonical scoring engine (`@v0.23.1`) | Upstream engine for pipeline and sandbox; visualizer offline evaluation uses optional `[eval]` |
 | [Enron-Evaluation-Environment](https://github.com/Exios66/Enron-Evaluation-Environment) | EDA + pipeline-ready correspondence dataset (CMU Enron corpus) | Corpus feed for the pipeline's `correspondence` doc class |
 | [claims-data-eda](https://github.com/Exios66/claims-data-eda) | Insurance-claims candidate-corpus EDA (CMS DE-SynPUF direction) | Candidate corpus feed for the `insurance_claim` doc class |
 | [atticus-investigation](https://github.com/Exios66/atticus-investigation) | LegalBench classification prompt-engineering pipeline | Eval sibling — same methodology family, LegalBench focus |
@@ -457,8 +457,8 @@ The-Mailroom does not own the trace contract it renders — it **mirrors** it
 from the upstream pipeline. This is the repo's #1 maintenance duty: when
 `llm-mailroom` changes span names, observation types (`NODE_OBSERVATION_TYPES`:
 chain / agent / evaluator / retriever / generation / span), node order, the
-agent roster, live doc classes (5 extract classes + `merger_agreement` alias +
-`unknown` routing token), Hub subclasses, confidence thresholds, or
+agent roster, live doc classes (five extract classes, including distinct `merger_agreement`,
+plus the `unknown` routing token), Hub subclasses, confidence thresholds, or
 judge score names (`mailroom-pipeline-judge`, `mailroom-pipeline-quality`),
 this repo must update `mailroom_ui/pipeline_schema.py` and
 `mailroom_ui/trace_interpreter.py` in the same change window.

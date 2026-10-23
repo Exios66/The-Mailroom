@@ -6,6 +6,10 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Changed
+
+- Offline evaluation delegates class/subclass quality, confusion, failure and row metrics to the canonical Dojo v0.23.1 engine through the optional `[eval]` extra. Ordinary display and producer-contract imports stay lazy; missing scoring dependencies fail with an install instruction.
+
 ### Fixed
 
 - Reuse exact-hash default-admin password safety checks across requests, with
