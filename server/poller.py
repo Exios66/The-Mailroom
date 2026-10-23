@@ -283,9 +283,15 @@ class PollHub:
                 self.stale = runs is None
                 payload = self._snapshot_message(stale=self.stale)
                 await self._broadcast(payload)
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception as exc:
                 self.stale = True
                 log.warning("poller iteration failed: %s", exc)
+                # Existing clients need the same outage state as reconnects,
+                # even when a gathered I/O task raises before normal broadcast.
+                try:
+                    await self._broadcast(self._snapshot_message(stale=True))
+                except Exception as broadcast_exc:
+                    log.warning("poller outage broadcast failed: %s", broadcast_exc)
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.interval)
             except asyncio.TimeoutError:
