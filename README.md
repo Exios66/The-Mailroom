@@ -25,6 +25,24 @@ listing, live per-row `doc_text` + ground truth) and a **constellation
 repo browser** (`repos …` — every mirror package plus the hub copies and
 derived graph sites).
 
+When the configured producer health response includes a valid `dojo_update`,
+the live Observatory, pixel console, and existing TUI ops header show a
+nonblocking **Dojo update available for pipeline** notice. Installed/available
+versions describe the engine loaded by that producer, independently of this
+visualizer's optional local `[eval]` engine. The notice labels the cached
+check time and stale results; its fixed
+[Dojo release link](https://github.com/Exios66/llm-dojo-scoring/releases/latest)
+does not certify the current release page against cached knowledge.
+
+This uses the existing `/api/pipeline` and `/ws` pipeline payloads, with no
+release checks in the viewer. Absent, unknown, unavailable, disabled, current,
+or malformed metadata shows no upgrade notice; a missing producer snapshot
+or disconnected transport clears the old notice. Versions use a bounded
+canonical PEP 440 subset (64 characters; numeric releases, optional installed
+prerelease/dev/local suffixes, stable post releases). Other shapes fail soft.
+The static terminal site and optional React desk do not consume this producer
+ops payload and have no advisory. No upgrades or pin changes are automatic.
+
 Agent skills (Langfuse / Phoenix / Braintrust / Ollama / Modal / Hugging Face
 plus pixel, Observatory, live floor, schema sync, Pages, TUI, operator desk):
 [`.cursor/skills/README.md`](.cursor/skills/README.md).

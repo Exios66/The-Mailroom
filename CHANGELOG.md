@@ -6,6 +6,13 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- Cache-only Dojo release awareness from producer health through the existing
+  pipeline ops bridge. Observatory, pixel console and TUI show loaded producer
+  versions, cached/stale qualification and a fixed release link; invalid or
+  absent advisories leave health unchanged and clear previous notices.
+
 ### Changed
 
 - Offline evaluation delegates class/subclass quality, confusion, failure and row metrics to the canonical Dojo v0.23.1 engine through the optional `[eval]` extra. Ordinary display and producer-contract imports stay lazy; missing scoring dependencies fail with an install instruction.
