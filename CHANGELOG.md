@@ -6,6 +6,29 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Fixed
+
+- Failed refreshes of previously enriched review/archived rows remain eligible
+  for retry on the next budgeted poll instead of renewing successful-detail TTL.
+- Validate operator completion payloads through pure producer schemas in sibling
+  and pinned-contract modes, preserving import isolation and loud failures.
+
+- Public operator login checks every persisted admin for the documented
+  default password even after seed environment settings change. Existing
+  accounts are never reset implicitly.
+- Parked and terminal detail refreshes respect their TTL and bypass the
+  source run cache, while retaining the cold-start enrichment budget.
+  Reconnect snapshots retain outage status and the last successful fetch time.
+- Only the poller writes the canonical outage floor snapshot; filtered or
+  limited trace reads cannot replace it. The TUI refuses stale/cache reads
+  as live data, and its history command shares the editor's bounded history.
+- Operator source failures propagate as errors instead of successful zero
+  metrics. Archive verification requires an expected checksum and explains
+  unverified/mismatched results in the operator desk.
+- Corpus catalogs retain independent ground-truth row offsets, and the
+  terminal checks live filenames before rendering text or ground truth.
+  Multi-source windows sort the deduplicated union before applying the limit.
+
 ### Added
 
 - **Phoenix source reads mailroom-reloaded runs.** `mailroom.document` roots
