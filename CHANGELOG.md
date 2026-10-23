@@ -8,6 +8,11 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Fixed
 
+- Reuse exact-hash default-admin password safety checks across requests, with
+  serialized misses and immediate hash-change invalidation. Poller iteration
+  exceptions broadcast stale snapshots to already-connected clients while
+  retaining the last successful rows and fetch timestamp.
+
 - Failed refreshes of previously enriched review/archived rows remain eligible
   for retry on the next budgeted poll instead of renewing successful-detail TTL.
 - Validate operator completion payloads through pure producer schemas in sibling

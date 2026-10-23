@@ -12,6 +12,8 @@ import hmac
 import json
 import logging
 import os
+import threading
+from functools import lru_cache
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -77,6 +79,15 @@ def _configured_secret() -> str:
     ).strip()
 
 
+_ADMIN_HASH_LOCK = threading.RLock()
+
+
+@lru_cache(maxsize=256)
+def _uses_default_admin_password(stored_hash: str) -> bool:
+    """Cache only an exact stored hash; password rotation changes the key."""
+    return verify_password(DEFAULT_ADMIN_PASSWORD, stored_hash)
+
+
 def insecure_config_reasons() -> list[str]:
     """Local-dev defaults that make operator auth forgeable when public."""
     reasons: list[str] = []
@@ -90,9 +101,13 @@ def insecure_config_reasons() -> list[str]:
     except Exception:  # store unavailable: assume the worst
         rows = []
         reasons.append("operator store unreadable")
-    for row in rows:
-        if verify_password(DEFAULT_ADMIN_PASSWORD, row["password_hash"]):
-            reasons.append(f"operator user {row['username']!r} still has the default password")
+    # Serialize cache misses so concurrent anonymous requests cannot repeat
+    # the same expensive KDF. Read current rows every time; rotations and
+    # added admins therefore invalidate by their exact new stored hashes.
+    with _ADMIN_HASH_LOCK:
+        for row in rows:
+            if _uses_default_admin_password(row["password_hash"]):
+                reasons.append(f"operator user {row['username']!r} still has the default password")
     return reasons
 
 
