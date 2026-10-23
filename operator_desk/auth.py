@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from .db import lookup_user, migrate, verify_password, write_audit
+from .db import admin_users, lookup_user, migrate, verify_password, write_audit
 
 log = logging.getLogger("mailroom.operator.auth")
 
@@ -83,18 +83,16 @@ def insecure_config_reasons() -> list[str]:
     secret = _configured_secret()
     if not secret or secret == DEFAULT_JWT_SECRET:
         reasons.append("MAILROOM_OPERATOR_JWT_SECRET is unset (public default secret)")
-    password = os.environ.get("MAILROOM_OPERATOR_ADMIN_PASSWORD")
-    if password is None or password.strip() in ("", DEFAULT_ADMIN_PASSWORD):
-        # Env unset means the seeded admin (if still present) uses the
-        # published default unless it was rotated in the store.
-        username = os.environ.get("MAILROOM_OPERATOR_ADMIN_USER", "admin").strip() or "admin"
-        try:
-            row = lookup_user(username)
-        except Exception:  # store unavailable: assume the worst
-            row = None
-            reasons.append("operator store unreadable")
-        if row is not None and verify_password(DEFAULT_ADMIN_PASSWORD, row["password_hash"]):
-            reasons.append(f"operator user {username!r} still has the default password")
+    # Seed environment values never rotate existing accounts. Check the
+    # actual admins even if a later restart changes the seed name/password.
+    try:
+        rows = admin_users()
+    except Exception:  # store unavailable: assume the worst
+        rows = []
+        reasons.append("operator store unreadable")
+    for row in rows:
+        if verify_password(DEFAULT_ADMIN_PASSWORD, row["password_hash"]):
+            reasons.append(f"operator user {row['username']!r} still has the default password")
     return reasons
 
 

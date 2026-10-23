@@ -431,6 +431,18 @@ adds `MAILROOM_OPERATOR_*` (JWT, admin seed, ingest token) plus
 > writes need the origin listed in `MAILROOM_CORS_ORIGINS`; the TUI sends
 > `MAILROOM_OPERATOR_TOKEN`. See `docs/operator-desk.md`.
 
+Admin environment settings seed an empty operator store; they do not rotate
+accounts in an existing volume. A public login stays locked while any stored
+admin still has the documented default password. Archive verification without
+an expected checksum reports an unverified result with a reason.
+
+The poller owns the shared outage floor snapshot. Filtered trace reads do not
+replace it; reconnect frames retain stale status and the last successful fetch
+time. The TUI shows a closed floor when both WS and HTTP offer only stale/cache
+data. Its `history` command shares the last 200 submitted editor commands and
+prints the most recent 40.
+
+
 > [!IMPORTANT]
 > `pipeline_schema.py` is cached at process level — editing `taxonomy.yaml`
 > (or pointing `MAILROOM_TAXONOMY` at the pipeline's copy) requires a server
