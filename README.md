@@ -151,7 +151,7 @@ plus pixel, Observatory, live floor, schema sync, Pages, TUI, operator desk):
 
 ```bash
 pip install -e ".[dev]"
-pip install -e ".[pipeline]"  # optional: import llm-mailroom @ 60cd5fad0c7a616ec575857841bb9897b9e8c3ed (0.8.1, main after v0.7.1)
+pip install -e ".[pipeline]"  # producer adapter; omit for a display-only install
 cp .env.example .env      # add LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY
 mailroom-web              # → http://127.0.0.1:8001  (pixel-art console)
                           #    Observatory is also at /live on the same server
@@ -552,7 +552,7 @@ adds `MAILROOM_OPERATOR_*` (JWT, admin seed, ingest token) plus
 > `MAILROOM_OPERATOR_AUTH=1` (the default), the hosted edition and any
 > non-loopback `MAILROOM_HOST` require reviewer+ login for review resolve
 > and inbox upload. Login is refused until
-> `MAILROOM_OPERATOR_JWT_SECRET` is set and the admin password is rotated
+> `MAILROOM_OPERATOR_JWT_SECRET` (or `JWT_SECRET`) is set and the admin password is rotated
 > away from `changeme`. Defaults require explicit loopback-only
 > `MAILROOM_OPERATOR_ALLOW_DEV_DEFAULTS=1`; otherwise operator access stays disabled.
 > `MAILROOM_OPERATOR_AUTH=0` explicitly bypasses operator role checks and
