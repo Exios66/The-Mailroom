@@ -548,13 +548,16 @@ adds `MAILROOM_OPERATOR_*` (JWT, admin seed, ingest token) plus
 `MAILROOM_PHOENIX_PROJECT`, `MAILROOM_CORS_ORIGINS`, and `MAILROOM_DEBUG`.
 
 > [!WARNING]
-> **Public deploys fail closed (0.5.0).** On the hosted edition or any
-> non-loopback `MAILROOM_HOST`, review resolve and inbox upload need an
-> operator login (reviewer+), and login is refused until
+> **Public deploys fail closed (0.5.0).** When
+> `MAILROOM_OPERATOR_AUTH=1` (the default), the hosted edition and any
+> non-loopback `MAILROOM_HOST` require reviewer+ login for review resolve
+> and inbox upload. Login is refused until
 > `MAILROOM_OPERATOR_JWT_SECRET` is set and the admin password is rotated
 > away from `changeme`. Defaults require explicit loopback-only
 > `MAILROOM_OPERATOR_ALLOW_DEV_DEFAULTS=1`; otherwise operator access stays disabled.
-> Read-only display is unaffected. Cross-origin browser
+> `MAILROOM_OPERATOR_AUTH=0` explicitly bypasses operator role checks and
+> the reviewer-login requirement for public writes; it is a local-trust
+> development setting. Read-only display is unaffected. Cross-origin browser
 > writes need the origin listed in `MAILROOM_CORS_ORIGINS`; the TUI sends
 > `MAILROOM_OPERATOR_TOKEN`. See `docs/operator-desk.md`.
 
