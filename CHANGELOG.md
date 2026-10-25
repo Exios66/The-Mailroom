@@ -20,6 +20,9 @@ All notable changes to The-Mailroom are documented here, following
   HMAC key and invalidate issued tokens. Clarify the loopback development-opt-in
   and explicit `MAILROOM_OPERATOR_AUTH=0` exceptions in the operator docs, and
   document the supported `JWT_SECRET` alias.
+- DMR-113: advance the reviewed producer pin to pipeline `4c274a4` and the eval
+  pin to the interim post-v0.24.2 Dojo commit `718e326` (explicit zero-token
+  usage fix); both remain immutable SHAs.
 
 - DMR-111: require explicit loopback development opt-in for published operator
   credentials, leave unconfigured displays readable without seeding a default
