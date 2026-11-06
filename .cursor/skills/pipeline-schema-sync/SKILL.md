@@ -6,15 +6,29 @@ description: Keep The-Mailroom topology mirror in sync with llm-mailroom (pipeli
 # Pipeline schema sync
 
 **When:** `llm-mailroom` changes nodes, `taxonomy.yaml`, span names, observation
-types, agent roster, doc classes, subclasses, or score names.  
-**Always update in one change:** schema + interpreter + tests + CHANGELOG.
+types, agent roster, doc classes, subclasses, or score names.
 
-## Mirror set
+Pipeline facts are no longer hand-copied. The pipeline publishes a generated
+display contract (`contract/mailroom-contract.json`, ADR-001) and this repo
+vendors it:
 
-| File | Upstream |
+```bash
+python scripts/bump_producer_pin.py <40-char sha> --version <x.y.z> --checkout ../llm-mailroom
+python -m pytest tests/test_contract_conformance.py tests/test_bump_producer_pin.py
+```
+
+The bump moves the pin everywhere except history, copies the contract into
+`mailroom_ui/contract/`, and records provenance in `contract/source.json`.
+Then fix every gap `contract_gaps()` reports (floor stage, phase, agent label,
+read score) in one change: schema + interpreter + tests + CHANGELOG.
+
+## Still local (visualizer decisions)
+
+| File | What |
 | --- | --- |
-| `mailroom_ui/pipeline_schema.py` | `src/graph/routing.py`, `src/config/taxonomy.yaml`, `src/observability/tracing.py` |
-| `mailroom_ui/trace_interpreter.py` | span names, metadata/input/output, `type` / v4 `observationType`, score names |
+| `mailroom_ui/pipeline_schema.py` | `SPAN_STAGE_MAP`, `STAGE_PHASE`, `NODE_ORDER`, agent labels, `READ_SCORE_NAMES` |
+| `mailroom_ui/trace_interpreter.py` | metadata/input/output, `type` / v4 `observationType` handling |
+| `hosted/js/app.js` | `SPAN_STAGE` for live envelopes (checked by the conformance test) |
 | `tests/fake_langfuse.py` | v2/v3 `make_trace` **and** v4 `make_trace_v4` |
 
 Live override: `MAILROOM_TAXONOMY` → absolute path to the pipeline taxonomy.
@@ -30,14 +44,14 @@ Cached at process level — **restart** after edits.
 | New env/tag | Filters in `.env` miss runs |
 | New observation type | Node hidden or filed as generation |
 
-Keep topology/display catalogs as copied constants. Offline evaluation uses
+Offline evaluation uses
 Dojo through optional `[eval]` (`@4740d768`, Dojo v0.24.2); do not duplicate its scoring engine
 or make the live display path import it.
 
 Producer **code** pin (separate from the topology mirror): extra `[pipeline]`
 installs dist `mailroom` `@1a1ec3dfb4e71f615f5d34f6198f9d06fd8c26dd` (0.8.1, reviewed source adoption). Import only through
 `mailroom_ui/producer.py` (`pipeline.review_resolve`, `schemas.manifest`).
-Never import `api.main`. Bump `MAILROOM_GIT_SHA` and `pyproject.toml` together.
+Never import `api.main`. Move the pin only with `scripts/bump_producer_pin.py`.
 
 ## Related
 

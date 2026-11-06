@@ -382,6 +382,9 @@ def derive_stage(
     return Stage.INBOX
 
 
+_RETRY_STAGES = (Stage.RETRY_CLASSIFY, Stage.RETRY_EXTRACT)
+
+
 def build_routing_path(spans: list[NodeSpan]) -> list[str]:
     """Stable node sequence incl. retries (consecutive repeats).
 
@@ -407,8 +410,12 @@ def build_routing_path(spans: list[NodeSpan]) -> list[str]:
             if retry is not None and retry not in staged:
                 staged.append(retry)
             continue
-        staged.append(stage)
         prev = stage
+        if stage in _RETRY_STAGES and stage in staged:
+            # A span mapped straight to a retry station (the classification
+            # arbiter) after a repeat already added it: one station, once.
+            continue
+        staged.append(stage)
     staged.sort(key=lambda s: NODE_ORDER.index(s) if s in NODE_ORDER else 99)
     return [s.value for s in staged]
 

@@ -40,7 +40,11 @@ def _project_key() -> str:
     host = (os.environ.get("LANGFUSE_HOST") or os.environ.get("LANGFUSE_BASE_URL") or "").strip()
     public = (os.environ.get("LANGFUSE_PUBLIC_KEY") or "").strip()
     phoenix = "|".join((os.environ.get(k) or "").strip() for k in ("PHOENIX_ENDPOINT", "MAILROOM_PHOENIX_PROJECT"))
-    source = (os.environ.get("MAILROOM_SOURCE") or "langfuse").strip().lower()
+    from .source_registry import selector_key
+
+    source = selector_key()
+    if source == "langfuse,phoenix":
+        source = "both"  # keep pre-registry cache directories valid
     digest = hashlib.sha256(f"{source}|{host}|{public}|{phoenix}".encode("utf-8")).hexdigest()
     return digest[:12]
 

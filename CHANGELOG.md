@@ -6,6 +6,60 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Changed (M1)
+
+- `mailroom_ui/pipeline_schema.py` reads pipeline facts from the generated
+  display contract the pipeline publishes (ADR-001), vendored at
+  `mailroom_ui/contract/mailroom-contract.json`: graph nodes and spans,
+  observation types, agents, document classes (labels, specialists, fields,
+  subclasses), failure classes, score aliases and confidence thresholds. Only
+  visualizer decisions (floor stage, phase, labels) stay local. This picks up
+  the `gmail_triage` and `relations` agents, the `certificate_of_formation`
+  and correspondence `other` subclasses, and the `arbitrate-classification`
+  span (interim: on the re-classify station until it gets its own stage).
+- The vendored contract is provisional: it comes from llm-mailroom#165's head
+  and will be re-vendored from its merge commit when the pin moves (A-7).
+
+### Added (M1)
+
+- `scripts/bump_producer_pin.py`: one command moves the producer pin in every
+  non-history file, vendors the contract and records provenance in
+  `contract/source.json`; `--check` fails on any stale pin reference.
+- `contract_gaps()` and `tests/test_contract_conformance.py`: every contract
+  node, span, agent and read score must have a floor mapping, and every name
+  the visualizer maps must still exist upstream (a renamed span fails CI).
+  The Observatory's own `SPAN_STAGE` table is checked too.
+
+- Trace-source registry (ADR-006, T-4): `MAILROOM_SOURCE` takes a
+  comma-separated list of adapter names (`both` still means
+  `langfuse,phoenix`). Langfuse and Phoenix are built in; other backends
+  register in code or through the `mailroom.sources` entry-point group. The
+  server, snapshot export and trace cache all build sources through it, and
+  `/api/debug/source` lists the registered adapters.
+- Source conformance kit (T-5, `tests/source_conformance.py`): golden
+  document traces (archived, review with re-classify and arbitration,
+  aborted) rendered into each backend's raw shape must interpret into the
+  same run; every registered adapter needs a renderer.
+
+- CircleCI (H-2, `.circleci/config.yml`): a `python` job (pin and contract
+  provenance check, full pytest) and a `desk` job (React desk build and
+  `npm audit` at high). `contract/source.json` now records the vendored
+  contract's sha256, so a hand edit fails `bump_producer_pin.py --check`.
+
+### Fixed (M1)
+
+- A5: the producer pin is named consistently; stale `959bb0b` / `3cf9fb9`
+  references in docs, `.env.example` and schema comments are gone.
+- Routing path: a classification arbiter after a reviewer re-classify no
+  longer lists `retry_classify` twice.
+- `bump_producer_pin.py` fetches and checks the contract before it rewrites
+  any pin, and `--check` flags a full SHA that only shares the pin's first
+  seven characters.
+- React desk: `follow-redirects` 1.16.1 → 1.16.2 (GHSA-mrwp-f3q8-3g9p, high),
+  found by the new audit gate.
+- The Observatory floor maps `intake-ml-triage`, `arbitrate-classification`
+  and `classification_arbiter` (they fell through to the inbox).
+
 ### Removed
 
 - Railway deployment (ADR-005). `.railway/` (IaC), `nixpacks.toml` and the

@@ -1,22 +1,53 @@
-"""Mirror of the llm-mailroom pipeline topology.
+"""Pipeline topology and taxonomy for interpreting llm-mailroom traces.
 
-This mirrors graph/build_graph.py + graph/routing.py + config/taxonomy.yaml of
-the llm-mailroom repo so traces can be interpreted without importing that repo.
-If MAILROOM_TAXONOMY points at the live taxonomy.yaml, thresholds/doc classes
-are read from there instead (the topology above is data-driven there too).
+Facts about the pipeline (graph nodes and their spans, observation types,
+agents, document classes with fields and subclasses, failure classes, score
+aliases, confidence thresholds) come from the generated display contract the
+pipeline publishes (ADR-001), vendored at ``mailroom_ui/contract/`` by
+``scripts/bump_producer_pin.py``. This module keeps only what is the
+visualizer's own business: which floor ``Stage`` a span lands on, phases,
+display labels and roles.
+
+If ``MAILROOM_TAXONOMY`` points at a live taxonomy.yaml, thresholds and class
+labels are read from there instead.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+from pathlib import Path
+from typing import Any, Optional
 
 from .models import Phase, Stage
 
 _log = logging.getLogger(__name__)
+
+CONTRACT_PATH = Path(__file__).resolve().parent / "contract" / "mailroom-contract.json"
+SUPPORTED_CONTRACT_MAJOR = 1
+
+
+def load_contract(path: Path | str | None = None) -> dict[str, Any]:
+    """Read the vendored pipeline display contract (fails loudly if absent)."""
+    target = Path(path or os.environ.get("MAILROOM_CONTRACT") or CONTRACT_PATH)
+    contract = json.loads(target.read_text(encoding="utf-8"))
+    major = int(str(contract.get("contract_version", "0")).split(".")[0])
+    if major != SUPPORTED_CONTRACT_MAJOR:
+        raise RuntimeError(
+            f"pipeline contract {target} is version {contract.get('contract_version')}; "
+            f"this visualizer reads major {SUPPORTED_CONTRACT_MAJOR}"
+        )
+    return contract
+
+
+CONTRACT: dict[str, Any] = load_contract()
+CONTRACT_NODES: dict[str, dict[str, str]] = {
+    node["id"]: node for node in CONTRACT["graph"]["nodes"]
+}
+CONTRACT_SPAN_TYPES: dict[str, str] = dict(CONTRACT["spans"])
 
 # Verb-first observation names (traced_node) plus LangGraph node names, so
 # a floor envelope never falls through to INBOX/unknown when the producer
@@ -32,6 +63,9 @@ SPAN_STAGE_MAP: dict[str, Stage] = {
     "classify-document": Stage.CLASSIFY,
     "judge-verify": Stage.JUDGE_VERIFY,
     "arbitrate-verdict": Stage.ARBITER,
+    # Classification arbiter (sorter vs reviewer disagreement). Interim: it
+    # shares the re-classify station until A-4 gives it its own stage.
+    "arbitrate-classification": Stage.RETRY_CLASSIFY,
     "extract-fields": Stage.EXTRACT,
     "route-for-review": Stage.HUMAN_REVIEW,
     "adjudicate-conflict": Stage.BOSS,
@@ -43,6 +77,7 @@ SPAN_STAGE_MAP: dict[str, Stage] = {
     "classify": Stage.CLASSIFY,
     "retry_classify": Stage.RETRY_CLASSIFY,
     "review_classify": Stage.RETRY_CLASSIFY,
+    "classification_arbiter": Stage.RETRY_CLASSIFY,
     "extract": Stage.EXTRACT,
     "retry_extract": Stage.RETRY_EXTRACT,
     "judge_verify": Stage.JUDGE_VERIFY,
@@ -82,29 +117,18 @@ SPAN_STAGE_MAP.update(
     {f"{RELOADED_NODE_PREFIX}{k}": v for k, v in RELOADED_NODE_STAGES.items()}
 )
 
-# Langfuse observation types (llm-mailroom observability/tracing.py
-# NODE_OBSERVATION_TYPES). The data-model docs require the most specific
-# type: chain = one document run; agent = specialist orchestration;
-# evaluator = judge gate; retriever = document reads; generation = LLM
-# result / LegalBench answer; span = remaining units of work.
+# Contract spans that are not floor stations: the per-document root, the
+# LLM result generation and LegalBench answers.
+NON_STATION_SPANS: frozenset[str] = frozenset(
+    {CONTRACT["trace_name"], "pipeline-result", "answer-question"}
+)
+
+# Most specific Langfuse observation type per span (chain = one document run;
+# agent = specialist orchestration; evaluator = judge gate; retriever =
+# document reads; generation = LLM result; span = other units of work).
+# Pipeline spans come from the contract; reloaded spans are local.
 NODE_OBSERVATION_TYPES: dict[str, str] = {
-    "document-pipeline": "chain",
-    "intake-document": "span",
-    "normalize-intake": "span",
-    "intake-ml-triage": "span",
-    "extract-image-text": "retriever",
-    "transcribe-pdf": "retriever",
-    "classify-document": "agent",
-    "extract-fields": "agent",
-    "judge-verify": "evaluator",
-    "arbitrate-verdict": "agent",
-    "route-for-review": "span",
-    "adjudicate-conflict": "agent",
-    "compile-report": "agent",
-    "write-catalog": "span",
-    "archive-document": "span",
-    "pipeline-result": "generation",
-    "answer-question": "generation",
+    **CONTRACT_SPAN_TYPES,
     RELOADED_ROOT_SPAN: "chain",
     f"{RELOADED_NODE_PREFIX}ingest": "span",
     f"{RELOADED_NODE_PREFIX}bert_primary": "span",
@@ -116,18 +140,13 @@ NODE_OBSERVATION_TYPES: dict[str, str] = {
     f"{RELOADED_NODE_PREFIX}report_catalog_archive": "span",
 }
 
-# Graph node names (underscored) that can appear as observation names
-# when a trace is recorded from LangGraph rather than traced_node().
+# Graph node ids (underscored) that appear as observation names when a trace
+# is recorded from LangGraph rather than traced_node(): same type as the
+# node's span. Procedural nodes keep the generic default.
 _NODE_TYPE_ALIASES: dict[str, str] = {
-    "classify": "agent",
-    "retry_classify": "agent",
-    "review_classify": "agent",
-    "extract": "agent",
-    "retry_extract": "agent",
-    "judge_verify": "evaluator",
-    "arbiter": "agent",
-    "boss_escalation": "agent",
-    "compile_report": "agent",
+    node_id: node["observation_type"]
+    for node_id, node in CONTRACT_NODES.items()
+    if node.get("observation_type") in {"agent", "evaluator"}
 }
 
 
@@ -181,12 +200,10 @@ NODE_ORDER: list[Stage] = [
     Stage.ARCHIVE,
 ]
 
-# Agent display roster: key -> (label, role). Mirrors src/agents/ of
-# llm-mailroom @959bb0b (+ langchain_agents/sorter_agent.py for
-# sorter/sorter_reviewer). Every live class has its own specialist (1:1).
-# Retired specialists (court opinions / due diligence / compliance) are gone
-# upstream; the sorter emits `unknown` for those classes.
-AGENTS: dict[str, dict[str, str]] = {
+# Agent display roster: key -> (label, role). Keys come from the contract;
+# labels and roles are local display metadata (unknown agents get a title-
+# cased label so a new pipeline agent still renders).
+_AGENT_DISPLAY: dict[str, dict[str, str]] = {
     "sorter": {"label": "Sorter", "role": "classify"},
     "intake": {"label": "Intake", "role": "prepare"},
     "sorter_reviewer": {"label": "Sorter Reviewer", "role": "review-classify"},
@@ -202,50 +219,35 @@ AGENTS: dict[str, dict[str, str]] = {
     "judge": {"label": "Judge", "role": "evaluate"},
     "pdf_transcriber": {"label": "Transcriber", "role": "intake"},
     "image_extractor": {"label": "Image Extractor", "role": "intake"},
+    "gmail_triage": {"label": "Mail Triage", "role": "triage"},
+    "relations": {"label": "Relations", "role": "relate"},
+}
+AGENTS: dict[str, dict[str, str]] = {
+    key: dict(_AGENT_DISPLAY.get(key) or {"label": key.replace("_", " ").title(), "role": "agent"})
+    for key in CONTRACT["agents"]
 }
 
-# Live taxonomy classes that dispatch to a specialist (llm-mailroom @959bb0b
-# taxonomy.yaml doc_classes — the finalised five-class surface).
-# ``merger_agreement`` is a live MAUD class with its own specialist and
-# schema (not an extract alias of CUAD ``contract``). ``unknown`` is a
-# routing token.
-LIVE_DOC_TYPES: tuple[str, ...] = (
-    "contract",
-    "merger_agreement",
-    "corporate_record",
-    "correspondence",
-    "insurance_claim",
-)
+# Live taxonomy classes, each with its own specialist (contract doc_classes).
+# ``unknown`` is a routing token. Retired classes stay off the roster; the
+# sorter emits ``unknown`` for them.
+_CONTRACT_CLASSES: list[dict[str, Any]] = list(CONTRACT["doc_classes"])
+LIVE_DOC_TYPES: tuple[str, ...] = tuple(dc["key"] for dc in _CONTRACT_CLASSES)
 RETIRED_DOC_TYPES: tuple[str, ...] = ("court_opinion", "due_diligence", "compliance_filing")
-UNKNOWN_DOC_TYPE = "unknown"
-# Sorter / HF labels that extract through a live taxonomy specialist without
-# adding a new doc_class row. Empty — MAUD is a live class.
+UNKNOWN_DOC_TYPE: str = CONTRACT.get("unknown_doc_class") or "unknown"
+# Sorter / HF labels that extract through a live specialist without their own
+# class row. Empty: MAUD is a live class.
 EXTRACT_CLASS_ALIASES: dict[str, str] = {}
 
 DOC_CLASSES: dict[str, str] = {
-    "contract": "Contract / Agreement",
-    "corporate_record": "Corporate Record",
-    "correspondence": "Correspondence",
-    "insurance_claim": "Insurance Claim",
-    "merger_agreement": "Merger Agreement",
-    "unknown": "Unknown",
+    **{dc["key"]: dc["label"] for dc in _CONTRACT_CLASSES},
+    UNKNOWN_DOC_TYPE: "Unknown",
 }
 
 DEFAULT_DOC_CLASSES: dict[str, str] = dict(DOC_CLASSES)
 
-# llm-mailroom pipeline.failures (PR #53) — stamped on aborted state /
-# manifest / audit. Trace output may carry the token, or embed it as
-# ``run aborted [llm_timeout]: …`` in error_message.
-FAILURE_CLASSES: tuple[str, ...] = (
-    "llm_timeout",
-    "llm_auth",
-    "llm_rate_limit",
-    "llm_transient",
-    "io_error",
-    "schema_error",
-    "run_budget",
-    "unexpected",
-)
+# pipeline.failures classes, stamped on aborted state / manifest / audit.
+# Trace output may carry the token, or embed it as ``run aborted [x]: ...``.
+FAILURE_CLASSES: tuple[str, ...] = tuple(CONTRACT["failure_classes"])
 FAILURE_CLASS_LABELS: dict[str, str] = {
     "llm_timeout": "LLM timeout",
     "llm_auth": "LLM auth",
@@ -256,43 +258,18 @@ FAILURE_CLASS_LABELS: dict[str, str] = {
     "run_budget": "run budget",
     "unexpected": "unexpected",
 }
+# Hand-written labels; a contract class without one still renders (derived
+# label below) but shows up in contract_gaps() until someone names it.
+_FAILURE_LABELS_LOCAL: frozenset[str] = frozenset(FAILURE_CLASS_LABELS)
+for _fc in FAILURE_CLASSES:
+    FAILURE_CLASS_LABELS.setdefault(_fc, _fc.replace("_", " "))
 
-# Mirror of llm-mailroom schemas.documents EXTRACTION_SCHEMAS field names
-# (@959bb0b pared checklists; REVIEW Complete rejects foreign specialist keys).
-# ContractExtraction keeps its nullable merger_*/maud_* leftovers so older
-# CUAD payloads still validate.
+# Extraction schema field names per class (contract doc_classes[].fields).
+# REVIEW Complete rejects keys that belong to another specialist.
 _META_EXTRACT_KEYS = frozenset({"confidence", "reasoning", "mock_extraction"})
 EXTRACTION_FIELD_KEYS_BY_CLASS: dict[str, frozenset[str]] = {
-    "contract": frozenset({
-        "document_name", "parties", "effective_date", "term_length",
-        "governing_law", "contract_value", "renewal_terms", "cuad_family",
-        "merger_consideration", "cuad_clauses", "maud_clauses", "reasoning",
-    }),
-    "corporate_record": frozenset({
-        "entity_name", "record_type", "effective_date",
-        "signatories", "jurisdiction", "filing_number",
-        "intent", "subject_matter", "keywords",
-    }),
-    "correspondence": frozenset({
-        "sender", "recipient", "additional_recipients", "communication_type",
-        "communication_date", "demand_amount", "action_items",
-        "urgency", "intent", "subject_matter", "keywords", "confidence",
-    }),
-    "insurance_claim": frozenset({
-        "claim_number", "policy_number", "insurer", "insured_party",
-        "claim_type", "date_of_loss", "date_filed", "claimed_amount",
-        "adjuster", "damages_description", "coverage_determination",
-        "denial_reasons", "supporting_documents",
-        "intent", "subject_matter", "keywords", "claim_checklist", "confidence",
-    }),
+    dc["key"]: frozenset(dc["fields"]) for dc in _CONTRACT_CLASSES
 }
-# MAUD: dedicated MergerAgreementExtraction (llm-mailroom #64) — no CUAD
-# family/clauses, adds effective_time + the shared intent/subject/keywords.
-EXTRACTION_FIELD_KEYS_BY_CLASS["merger_agreement"] = frozenset({
-    "document_name", "parties", "effective_date", "effective_time",
-    "governing_law", "merger_consideration", "maud_clauses",
-    "intent", "subject_matter", "keywords", "reasoning",
-})
 
 _ABORT_CLASS_RE = re.compile(r"run aborted \[([a-z_]+)\]", re.I)
 
@@ -351,46 +328,21 @@ def validate_operator_extraction(doc_type: str, extracted: dict) -> dict:
 
 
 SPECIALIST_BY_DOC_CLASS: dict[str, str] = {
-    "contract": "contracts_specialist",
-    "merger_agreement": "merger_agreement_specialist",
-    "corporate_record": "corporate_records_specialist",
-    "correspondence": "correspondence_specialist",
-    "insurance_claim": "insurance_claims_specialist",
+    dc["key"]: dc["specialist"] for dc in _CONTRACT_CLASSES if dc.get("specialist")
 }
 
-# Hub subclass catalogs (llm-dojo-scoring v0.16.0 mailroom.HUB_SUBCLASS_INVENTORIES
-# + CUAD contract_subtype keys + MAUD consideration types).
-CONTRACT_SUBTYPE_KEYS: tuple[str, ...] = (
-    "affiliate", "agency", "collaboration", "co_branding", "consulting",
-    "development", "distributor", "endorsement", "franchise", "hosting",
-    "ip", "joint_venture", "license", "maintenance", "manufacturing",
-    "marketing", "non_compete_no_solicit", "outsourcing", "promotion",
-    "reseller", "service", "sponsorship", "strategic_alliance", "supply",
-    "transportation",
-)
+# Subclass catalogs per class (contract doc_classes[].subclasses: Hub
+# inventories, CUAD contract subtypes, MAUD consideration types).
 DOC_SUBCLASS_BY_CLASS: dict[str, tuple[str, ...]] = {
-    "contract": CONTRACT_SUBTYPE_KEYS,
-    "merger_agreement": (
-        "all_cash", "all_stock", "mixed_cash_stock",
-        "mixed_cash_stock_election", "other",
-    ),
-    "corporate_record": (
-        "articles_of_incorporation", "board_resolution", "bylaws",
-        "charter_amendment", "indenture", "officer_certificate", "other",
-        "powers_of_attorney", "rights_instrument", "subsidiary_list",
-    ),
-    "correspondence": (
-        "email", "letter", "memo", "notice", "demand", "attorney_demand",
-        "press_release", "meeting_request",
-    ),
-    "insurance_claim": (
-        "pde", "inpatient", "outpatient", "carrier", "property", "auto",
-    ),
+    dc["key"]: tuple(dc.get("subclasses") or ()) for dc in _CONTRACT_CLASSES
 }
+CONTRACT_SUBTYPE_KEYS: tuple[str, ...] = DOC_SUBCLASS_BY_CLASS.get("contract", ())
 
 # Langfuse Cloud rejects score *config* names over 35 characters.
-LANGFUSE_SCORE_NAME_ALIASES: dict[str, str] = {
-    "extraction_overall_verified_precision": "extraction_verified_precision",
+LANGFUSE_SCORE_NAME_ALIASES: dict[str, str] = dict(CONTRACT["scores"]["langfuse_aliases"])
+# Every score config the pipeline registers (name -> data type).
+SCORE_CONFIGS: dict[str, str] = {
+    cfg["name"]: cfg.get("data_type", "NUMERIC") for cfg in CONTRACT["scores"]["configs"]
 }
 _CANONICAL_SCORE_NAMES: dict[str, str] = {
     alias: canonical for canonical, alias in LANGFUSE_SCORE_NAME_ALIASES.items()
@@ -440,13 +392,11 @@ def canonical_score_name(name: str) -> str:
     return _CANONICAL_SCORE_NAMES.get(name, name)
 
 
-# llm-mailroom taxonomy.yaml confidence.by_class (@959bb0b).
+# Confidence thresholds (contract confidence; taxonomy.yaml at the pin).
+_CONFIDENCE: dict[str, Any] = dict(CONTRACT["confidence"])
 DEFAULT_BY_CLASS: dict[str, dict[str, float]] = {
-    "contract": {"high": 0.98, "low": 0.90, "judge_band_high": 0.97},
-    "merger_agreement": {"high": 0.98, "low": 0.90, "judge_band_high": 0.97},
-    "insurance_claim": {"high": 0.98, "low": 0.90, "judge_band_high": 0.97},
-    "corporate_record": {"high": 0.96, "low": 0.86, "judge_band_high": 0.94},
-    "correspondence": {"high": 0.95, "low": 0.85, "judge_band_high": 0.92},
+    key: {k: float(v) for k, v in values.items()}
+    for key, values in (_CONFIDENCE.get("by_class") or {}).items()
 }
 
 
@@ -454,14 +404,14 @@ DEFAULT_BY_CLASS: dict[str, dict[str, float]] = {
 class PipelineSchema:
     """Loaded once per process; configurable thresholds from taxonomy.yaml."""
 
-    # llm-mailroom taxonomy.yaml global confidence defaults (@959bb0b).
-    confidence_high: float = 0.97
-    confidence_low: float = 0.88
-    retry_max: int = 2
-    conflict_threshold: float = 0.3
-    judge_band_high: float = 0.95   # Lane B ambiguous-band ceiling
-    arbiter_retry_max: int = 2
-    judge_max_passes: int = 3
+    # Global confidence defaults from the contract.
+    confidence_high: float = float(_CONFIDENCE["high"])
+    confidence_low: float = float(_CONFIDENCE["low"])
+    retry_max: int = int(_CONFIDENCE["retry_max"])
+    conflict_threshold: float = float(_CONFIDENCE["conflict_threshold"])
+    judge_band_high: float = float(_CONFIDENCE["judge_band_high"])  # Lane B ceiling
+    arbiter_retry_max: int = int(_CONFIDENCE["arbiter_retry_max"])
+    judge_max_passes: int = int(_CONFIDENCE["judge_max_passes"])
     doc_classes: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_DOC_CLASSES))
     # Per-class severity overrides (taxonomy confidence.by_class). The
     # bundled mirror carries them too, so review floors are per-class even
@@ -604,3 +554,76 @@ def normalize_review_subclass(doc_type: Optional[str], value: Optional[str]) -> 
         if "".join(ch for ch in token.lower() if ch.isalnum()) == compact:
             return token
     raise ValueError(f"unknown doc_subclass {value!r} for {kind}")
+
+
+# Score names the visualizer reads by name (interpreter, metrics, eval panels).
+# A pipeline rename of any of these must fail conformance, not render blank.
+READ_SCORE_NAMES: frozenset[str] = frozenset(
+    {
+        "classification_confidence",
+        "extraction_confidence",
+        "llm_call_count",
+        "run_aborted",
+        "run_duration_seconds",
+        "total_tokens",
+        "estimated_cost_usd",
+        *SUITE_EXTRA_SCORES,
+    }
+)
+
+
+def contract_gaps(contract: Optional[dict[str, Any]] = None) -> list[str]:
+    """What the visualizer cannot display in ``contract`` (empty = conformant).
+
+    Checks both directions: every pipeline node, span, agent and class must
+    have a floor mapping and display metadata here, and every pipeline name
+    this module maps or reads must still exist upstream (a rename shows up as
+    a gap, not as a silently unmapped span).
+    """
+    c = contract if contract is not None else CONTRACT
+    gaps: list[str] = []
+    spans = dict(c.get("spans") or {})
+    nodes = {n["id"]: n for n in (c.get("graph") or {}).get("nodes", [])}
+    non_station = {c.get("trace_name"), "pipeline-result", "answer-question"}
+
+    for node_id, node in sorted(nodes.items()):
+        stage = SPAN_STAGE_MAP.get(node_id)
+        if stage is None:
+            gaps.append(f"graph node {node_id!r} has no floor stage")
+            continue
+        # Retry nodes reuse their first-pass span (repeats fold into the retry
+        # stage), so node and span need only share a phase.
+        span = node.get("span")
+        span_stage = SPAN_STAGE_MAP.get(span) if span else None
+        if span_stage is not None and STAGE_PHASE.get(span_stage) != STAGE_PHASE.get(stage):
+            gaps.append(f"node {node_id!r} and its span {span!r} land in different phases")
+        if stage not in STAGE_PHASE:
+            gaps.append(f"stage {stage.value!r} (node {node_id!r}) has no phase")
+        if stage not in NODE_ORDER:
+            gaps.append(f"stage {stage.value!r} (node {node_id!r}) is not in NODE_ORDER")
+    for span in sorted(spans):
+        if span not in SPAN_STAGE_MAP and span not in non_station:
+            gaps.append(f"span {span!r} has no floor stage")
+
+    upstream_names = set(spans) | set(nodes)
+    for name in sorted(SPAN_STAGE_MAP):
+        if name.startswith(RELOADED_NODE_PREFIX):
+            continue
+        if name not in upstream_names:
+            gaps.append(f"mapped span/node {name!r} no longer exists in the pipeline")
+
+    for agent in sorted(c.get("agents") or []):
+        if agent not in _AGENT_DISPLAY:
+            gaps.append(f"agent {agent!r} has no display label")
+    agents = set(c.get("agents") or [])
+    for dc in c.get("doc_classes") or []:
+        if dc.get("specialist") and dc["specialist"] not in agents:
+            gaps.append(f"class {dc['key']!r} specialist {dc['specialist']!r} is not an agent")
+
+    configs = {cfg["name"] for cfg in (c.get("scores") or {}).get("configs", [])}
+    for name in sorted(READ_SCORE_NAMES - configs):
+        gaps.append(f"score {name!r} is read by the visualizer but not registered upstream")
+    for fc in c.get("failure_classes") or []:
+        if fc not in _FAILURE_LABELS_LOCAL:
+            gaps.append(f"failure class {fc!r} has no label")
+    return gaps

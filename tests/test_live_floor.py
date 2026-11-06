@@ -224,14 +224,21 @@ def test_pipeline_ops_reads_top_level_inbox(monkeypatch):
 
 
 def test_server_source_ttl_follows_poll_interval():
-    from pathlib import Path
-
     from server import main as server_main
 
-    text = Path(server_main.__file__).read_text()
-    assert "cache_ttl=ttl" in text
-    assert "poll_cache_ttl=ttl" in text
-    assert "ttl = max(0.0, POLL_INTERVAL)" in text
+    old = server_main.POLL_INTERVAL
+    server_main.POLL_INTERVAL = 1.5
+    try:
+        import os
+
+        prev = os.environ.pop("MAILROOM_SOURCE", None)
+        src = server_main._build_default_source()
+    finally:
+        server_main.POLL_INTERVAL = old
+        if prev is not None:
+            os.environ["MAILROOM_SOURCE"] = prev
+    assert src.cache_ttl == 1.5
+    assert src.poll_cache_ttl == 1.5
 
 
 def test_poller_overlays_light_session_on_reused_trace_id():
