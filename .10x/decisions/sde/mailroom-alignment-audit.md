@@ -9,9 +9,22 @@
 ## M1 started
 - **A-1 (pipeline PR llm-mailroom#165):** `src/scripts/export_contract.py` → `contract/mailroom-contract.json` (contract 1.0.0; 14 nodes, 46 edges, 18 spans, 16 agents, 5 classes, 59 scores). `traced_node` sets `mailroom_span_name`; `intake-ml-triage` added to `NODE_OBSERVATION_TYPES`.
 
+## M1 consumer (built 2026-11-06)
+- **A-2:** `scripts/bump_producer_pin.py` moves the full and short pin in every non-history file, moves the package version only on lines that carry the SHA, vendors the contract and writes `contract/source.json` (commit, versions, sha256, origin, `matches_pin`, note). `--check` fails on stale pin references and on a hand-edited or unexplained provisional contract. A5 fixed: `959bb0b` / `3cf9fb9` references removed.
+- **A-3:** `pipeline_schema.py` derives classes, labels, specialists, fields, subclasses, agents, observation types, failure classes, score aliases/configs and thresholds from the contract. Local: `SPAN_STAGE_MAP`, `STAGE_PHASE`, `NODE_ORDER`, agent display, failure labels, `READ_SCORE_NAMES`. Contract major version is checked at import.
+- **F-2:** `contract_gaps()` checks both directions (contract → floor and floor → contract); tests cover the vendored contract, a renamed span, a new node/agent/failure class, a removed read score, and the Observatory `SPAN_STAGE` table.
+- **T-4:** `mailroom_ui/source_registry.py`; `MAILROOM_SOURCE` is a comma list (`both` alias kept); entry-point group `mailroom.sources`.
+- **T-5:** `tests/source_conformance.py`, with 3 golden traces (archived, review with re-classify + classification arbiter, aborted) rendered for Langfuse and Phoenix; fingerprints match.
+- **H-2:** `.circleci/config.yml` (`python`, `desk`). Token and Playwright steps are added in M3 and M4.
+
 ## Deviations
 - ADR-005 replaced the planned IaC migration with removal.
 - The Phoenix guard was generalised to HF Spaces, which keeps its intent: hosted containers have no local collector.
+
+- A-4 interim: `classification_arbiter` / `arbitrate-classification` land on the re-classify station; a dedicated stage is still planned in M2 (A-4).
+- T-1 (`trace_schema` in the contract) ships with T-2 in M2, so the contract never lists attributes the pipeline does not emit yet.
+- The kit found one backend difference: Langfuse lists the root chain as an observation and Phoenix does not. The fingerprint excludes the root (it is the run, not a station).
+- The vendored contract is from #165's head (`cc28cd4`), not the pin, and says so in `source.json`.
 
 ## Tech debt
 - `tree.html` in llm-mailroom still lists `railway.json` (a generated artifact).
