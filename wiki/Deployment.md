@@ -21,7 +21,7 @@ mailroom-hosted                # Observatory on 0.0.0.0
 
 ---
 
-## Container topology (constellation, llm-mailroom @959bb0b)
+## Container topology (constellation)
 
 The-Mailroom only *reads* traces; every other container belongs to the
 producer or the local sandbox. Ports as shipped:

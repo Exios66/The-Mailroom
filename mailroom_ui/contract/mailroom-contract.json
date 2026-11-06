@@ -1,0 +1,868 @@
+{
+  "agents": [
+    "arbiter",
+    "boss",
+    "contracts_specialist",
+    "corporate_records_specialist",
+    "correspondence_specialist",
+    "gmail_triage",
+    "image_extractor",
+    "insurance_claims_specialist",
+    "intake",
+    "judge",
+    "merger_agreement_specialist",
+    "pdf_transcriber",
+    "relations",
+    "reporter",
+    "sorter",
+    "sorter_reviewer"
+  ],
+  "confidence": {
+    "arbiter_retry_max": 2,
+    "by_class": {
+      "contract": {
+        "high": 0.98,
+        "judge_band_high": 0.97,
+        "low": 0.9
+      },
+      "corporate_record": {
+        "high": 0.96,
+        "judge_band_high": 0.94,
+        "low": 0.86
+      },
+      "correspondence": {
+        "high": 0.95,
+        "judge_band_high": 0.92,
+        "low": 0.85
+      },
+      "insurance_claim": {
+        "high": 0.98,
+        "judge_band_high": 0.97,
+        "low": 0.9
+      },
+      "merger_agreement": {
+        "high": 0.98,
+        "judge_band_high": 0.97,
+        "low": 0.9
+      }
+    },
+    "conflict_threshold": 0.3,
+    "high": 0.97,
+    "judge_band_high": 0.95,
+    "judge_max_passes": 3,
+    "low": 0.88,
+    "retry_max": 2
+  },
+  "contract_version": "1.0.0",
+  "doc_classes": [
+    {
+      "fields": [
+        "contract_value",
+        "cuad_clauses",
+        "cuad_family",
+        "document_name",
+        "effective_date",
+        "governing_law",
+        "maud_clauses",
+        "merger_consideration",
+        "parties",
+        "renewal_terms",
+        "term_length"
+      ],
+      "key": "contract",
+      "label": "Contract / Agreement",
+      "schema": "ContractExtraction",
+      "specialist": "contracts_specialist",
+      "subclasses": [
+        "affiliate",
+        "agency",
+        "collaboration",
+        "co_branding",
+        "consulting",
+        "development",
+        "distributor",
+        "endorsement",
+        "franchise",
+        "hosting",
+        "ip",
+        "joint_venture",
+        "license",
+        "maintenance",
+        "manufacturing",
+        "marketing",
+        "non_compete_no_solicit",
+        "outsourcing",
+        "promotion",
+        "reseller",
+        "service",
+        "sponsorship",
+        "strategic_alliance",
+        "supply",
+        "transportation"
+      ]
+    },
+    {
+      "fields": [
+        "document_name",
+        "effective_date",
+        "effective_time",
+        "governing_law",
+        "intent",
+        "keywords",
+        "maud_clauses",
+        "merger_consideration",
+        "parties",
+        "subject_matter"
+      ],
+      "key": "merger_agreement",
+      "label": "Merger Agreement",
+      "schema": "MergerAgreementExtraction",
+      "specialist": "merger_agreement_specialist",
+      "subclasses": [
+        "all_cash",
+        "all_stock",
+        "mixed_cash_stock",
+        "mixed_cash_stock_election",
+        "other"
+      ]
+    },
+    {
+      "fields": [
+        "effective_date",
+        "entity_name",
+        "filing_number",
+        "intent",
+        "jurisdiction",
+        "keywords",
+        "record_type",
+        "signatories",
+        "subject_matter"
+      ],
+      "key": "corporate_record",
+      "label": "Corporate Record",
+      "schema": "CorporateRecordExtraction",
+      "specialist": "corporate_records_specialist",
+      "subclasses": [
+        "articles_of_incorporation",
+        "bylaws",
+        "certificate_of_formation",
+        "charter_amendment",
+        "powers_of_attorney",
+        "subsidiary_list",
+        "rights_instrument",
+        "indenture",
+        "board_resolution",
+        "officer_certificate",
+        "other"
+      ]
+    },
+    {
+      "fields": [
+        "action_items",
+        "additional_recipients",
+        "communication_date",
+        "communication_type",
+        "demand_amount",
+        "intent",
+        "keywords",
+        "recipient",
+        "sender",
+        "subject_matter",
+        "urgency"
+      ],
+      "key": "correspondence",
+      "label": "Correspondence",
+      "schema": "CorrespondenceExtraction",
+      "specialist": "correspondence_specialist",
+      "subclasses": [
+        "email",
+        "memo",
+        "letter",
+        "notice",
+        "demand",
+        "attorney_demand",
+        "press_release",
+        "meeting_request",
+        "other"
+      ]
+    },
+    {
+      "fields": [
+        "adjuster",
+        "claim_checklist",
+        "claim_number",
+        "claim_type",
+        "claimed_amount",
+        "coverage_determination",
+        "damages_description",
+        "date_filed",
+        "date_of_loss",
+        "denial_reasons",
+        "insured_party",
+        "insurer",
+        "intent",
+        "keywords",
+        "policy_number",
+        "subject_matter",
+        "supporting_documents"
+      ],
+      "key": "insurance_claim",
+      "label": "Insurance Claim",
+      "schema": "InsuranceClaimExtraction",
+      "specialist": "insurance_claims_specialist",
+      "subclasses": [
+        "carrier",
+        "inpatient",
+        "outpatient",
+        "pde",
+        "property",
+        "auto"
+      ]
+    }
+  ],
+  "failure_classes": [
+    "llm_timeout",
+    "llm_auth",
+    "llm_rate_limit",
+    "llm_transient",
+    "io_error",
+    "schema_error",
+    "run_budget",
+    "unexpected"
+  ],
+  "graph": {
+    "edges": [
+      {
+        "conditional": true,
+        "label": null,
+        "source": "__start__",
+        "target": "extract"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "__start__",
+        "target": "intake"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "arbiter",
+        "target": "arbiter"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "arbiter",
+        "target": "compile_report"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "arbiter",
+        "target": "human_review"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "arbiter",
+        "target": "retry_extract"
+      },
+      {
+        "conditional": false,
+        "label": null,
+        "source": "archive",
+        "target": "__end__"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "boss_escalation",
+        "target": "boss_escalation"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "boss_escalation",
+        "target": "compile_report"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "boss_escalation",
+        "target": "human_review"
+      },
+      {
+        "conditional": false,
+        "label": null,
+        "source": "catalog_write",
+        "target": "archive"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "classification_arbiter",
+        "target": "extract"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "classification_arbiter",
+        "target": "human_review"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "classify",
+        "target": "classify"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "classify",
+        "target": "extract"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "classify",
+        "target": "human_review"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "classify",
+        "target": "retry_classify"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "classify",
+        "target": "review_classify"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "compile_report",
+        "target": "catalog_write"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "compile_report",
+        "target": "human_review"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "extract",
+        "target": "boss_escalation"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "extract",
+        "target": "compile_report"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "extract",
+        "target": "extract"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "extract",
+        "target": "human_review"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "extract",
+        "target": "judge_verify"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "extract",
+        "target": "retry_extract"
+      },
+      {
+        "conditional": true,
+        "label": "failed",
+        "source": "human_review",
+        "target": "__end__"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "human_review",
+        "target": "extract"
+      },
+      {
+        "conditional": false,
+        "label": null,
+        "source": "intake",
+        "target": "classify"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "judge_verify",
+        "target": "arbiter"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "judge_verify",
+        "target": "compile_report"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "judge_verify",
+        "target": "human_review"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "judge_verify",
+        "target": "judge_verify"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "retry_classify",
+        "target": "extract"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "retry_classify",
+        "target": "human_review"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "retry_classify",
+        "target": "retry_classify"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "retry_classify",
+        "target": "review_classify"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "retry_extract",
+        "target": "boss_escalation"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "retry_extract",
+        "target": "compile_report"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "retry_extract",
+        "target": "human_review"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "retry_extract",
+        "target": "judge_verify"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "retry_extract",
+        "target": "retry_extract"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "review_classify",
+        "target": "classification_arbiter"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "review_classify",
+        "target": "extract"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "review_classify",
+        "target": "human_review"
+      },
+      {
+        "conditional": true,
+        "label": null,
+        "source": "review_classify",
+        "target": "review_classify"
+      }
+    ],
+    "end": "__end__",
+    "nodes": [
+      {
+        "id": "arbiter",
+        "observation_type": "agent",
+        "span": "arbitrate-verdict"
+      },
+      {
+        "id": "archive",
+        "observation_type": "span",
+        "span": "archive-document"
+      },
+      {
+        "id": "boss_escalation",
+        "observation_type": "agent",
+        "span": "adjudicate-conflict"
+      },
+      {
+        "id": "catalog_write",
+        "observation_type": "span",
+        "span": "write-catalog"
+      },
+      {
+        "id": "classification_arbiter",
+        "observation_type": "agent",
+        "span": "arbitrate-classification"
+      },
+      {
+        "id": "classify",
+        "observation_type": "agent",
+        "span": "classify-document"
+      },
+      {
+        "id": "compile_report",
+        "observation_type": "agent",
+        "span": "compile-report"
+      },
+      {
+        "id": "extract",
+        "observation_type": "agent",
+        "span": "extract-fields"
+      },
+      {
+        "id": "human_review",
+        "observation_type": "span",
+        "span": "route-for-review"
+      },
+      {
+        "id": "intake",
+        "observation_type": "span",
+        "span": "intake-document"
+      },
+      {
+        "id": "judge_verify",
+        "observation_type": "evaluator",
+        "span": "judge-verify"
+      },
+      {
+        "id": "retry_classify",
+        "observation_type": "agent",
+        "span": "classify-document"
+      },
+      {
+        "id": "retry_extract",
+        "observation_type": "agent",
+        "span": "extract-fields"
+      },
+      {
+        "id": "review_classify",
+        "observation_type": "agent",
+        "span": "classify-document"
+      }
+    ],
+    "start": "__start__"
+  },
+  "pipeline_version": "0.9.1",
+  "scores": {
+    "configs": [
+      {
+        "data_type": "NUMERIC",
+        "name": "amount_exactness"
+      },
+      {
+        "data_type": "BOOLEAN",
+        "name": "class_correct"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "classification_attempts"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "classification_confidence"
+      },
+      {
+        "categories": [
+          "correct",
+          "ambiguous",
+          "incorrect"
+        ],
+        "data_type": "CATEGORICAL",
+        "name": "classification_correct"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "classification_quality"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "completeness"
+      },
+      {
+        "categories": [
+          "complete",
+          "partial",
+          "incomplete"
+        ],
+        "data_type": "CATEGORICAL",
+        "name": "completeness_label"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "confidence_calibration_error"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "content_topic_accuracy"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "content_topic_f1_macro"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "determination_consistency"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "entity_list_f1"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "entity_list_precision"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "entity_list_recall"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "estimated_cost_usd"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "expected_field_presence"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_attempts"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_category_presence"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_confidence"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_correctness"
+      },
+      {
+        "categories": [
+          "accurate",
+          "partial",
+          "inaccurate"
+        ],
+        "data_type": "CATEGORICAL",
+        "name": "extraction_correctness_label"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_f1"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_f2"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_field_score"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_hallucination_rate"
+      },
+      {
+        "data_type": "BOOLEAN",
+        "name": "extraction_needs_judge_review"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_overall_score"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_overall_verified_precision"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_precision"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "extraction_recall"
+      },
+      {
+        "data_type": "BOOLEAN",
+        "name": "guardrail_triggered"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "intake_changed_rate"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "intake_collapsed_blanks"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "intake_hyphen_unwraps"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "intake_messy_rate"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "intake_prep_completeness"
+      },
+      {
+        "data_type": "TEXT",
+        "name": "judge_notes"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "legalbench_accuracy"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "legalbench_calibration_error"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "legalbench_macro_f1"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "legalbench_n_questions"
+      },
+      {
+        "data_type": "TEXT",
+        "name": "legalbench_task"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "llm_call_count"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "maud_category_accuracy"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "maud_clause_presence"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "maud_question_accuracy"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "maud_question_macro_accuracy"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "maud_valid_class_rate"
+      },
+      {
+        "data_type": "BOOLEAN",
+        "name": "parse_error"
+      },
+      {
+        "data_type": "BOOLEAN",
+        "name": "run_aborted"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "run_duration_seconds"
+      },
+      {
+        "data_type": "BOOLEAN",
+        "name": "schema_valid"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "sentiment_accuracy"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "sentiment_f1_macro"
+      },
+      {
+        "data_type": "BOOLEAN",
+        "name": "stage_completed"
+      },
+      {
+        "data_type": "BOOLEAN",
+        "name": "stage_correct"
+      },
+      {
+        "data_type": "BOOLEAN",
+        "name": "success_rate"
+      },
+      {
+        "data_type": "NUMERIC",
+        "name": "total_tokens"
+      }
+    ],
+    "langfuse_aliases": {
+      "extraction_overall_verified_precision": "extraction_verified_precision"
+    }
+  },
+  "spans": {
+    "adjudicate-conflict": "agent",
+    "answer-question": "generation",
+    "arbitrate-classification": "agent",
+    "arbitrate-verdict": "agent",
+    "archive-document": "span",
+    "classify-document": "agent",
+    "compile-report": "agent",
+    "document-pipeline": "chain",
+    "extract-fields": "agent",
+    "extract-image-text": "retriever",
+    "intake-document": "span",
+    "intake-ml-triage": "span",
+    "judge-verify": "evaluator",
+    "normalize-intake": "span",
+    "pipeline-result": "generation",
+    "route-for-review": "span",
+    "transcribe-pdf": "retriever",
+    "write-catalog": "span"
+  },
+  "trace_name": "document-pipeline",
+  "unknown_doc_class": "unknown"
+}

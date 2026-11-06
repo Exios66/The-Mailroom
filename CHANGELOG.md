@@ -6,6 +6,37 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Changed (M1)
+
+- `mailroom_ui/pipeline_schema.py` reads pipeline facts from the generated
+  display contract the pipeline publishes (ADR-001), vendored at
+  `mailroom_ui/contract/mailroom-contract.json`: graph nodes and spans,
+  observation types, agents, document classes (labels, specialists, fields,
+  subclasses), failure classes, score aliases and confidence thresholds. Only
+  visualizer decisions (floor stage, phase, labels) stay local. This picks up
+  the `gmail_triage` and `relations` agents, the `certificate_of_formation`
+  and correspondence `other` subclasses, and the `arbitrate-classification`
+  span (interim: on the re-classify station until it gets its own stage).
+- The vendored contract is provisional: it comes from llm-mailroom#165's head
+  and will be re-vendored from its merge commit when the pin moves (A-7).
+
+### Added (M1)
+
+- `scripts/bump_producer_pin.py`: one command moves the producer pin in every
+  non-history file, vendors the contract and records provenance in
+  `contract/source.json`; `--check` fails on any stale pin reference.
+- `contract_gaps()` and `tests/test_contract_conformance.py`: every contract
+  node, span, agent and read score must have a floor mapping, and every name
+  the visualizer maps must still exist upstream (a renamed span fails CI).
+  The Observatory's own `SPAN_STAGE` table is checked too.
+
+### Fixed (M1)
+
+- A5: the producer pin is named consistently; stale `959bb0b` / `3cf9fb9`
+  references in docs, `.env.example` and schema comments are gone.
+- The Observatory floor maps `intake-ml-triage`, `arbitrate-classification`
+  and `classification_arbiter` (they fell through to the inbox).
+
 ### Removed
 
 - Railway deployment (ADR-005). `.railway/` (IaC), `nixpacks.toml` and the

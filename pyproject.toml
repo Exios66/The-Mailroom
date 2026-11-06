@@ -57,6 +57,9 @@ mailroom-observer = "operator_desk.observer:run"
 [tool.setuptools.packages.find]
 include = ["mailroom_ui*", "server*", "tui*", "operator_desk*"]
 
+[tool.setuptools.package-data]
+mailroom_ui = ["contract/*.json"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

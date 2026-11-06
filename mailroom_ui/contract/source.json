@@ -1,0 +1,8 @@
+{
+  "contract_version": "1.0.0",
+  "fetched_from": "git checkout (pipe-contract)",
+  "matches_pin": false,
+  "note": "Provisional: llm-mailroom#165 head; re-vendor from its merge commit (A-7).",
+  "pipeline_commit": "cc28cd451818d62ad8ff7fba42f9c9c7c564745a",
+  "pipeline_version": "0.9.1"
+}

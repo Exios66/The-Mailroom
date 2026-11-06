@@ -66,7 +66,8 @@ def _isolated(tmp_path, mode, code):
     # and its pure contract boundary into an isolated layout for each mode.
     isolated_root = tmp_path / "visualizer"
     for relative in ("mailroom_ui/__init__.py", "mailroom_ui/producer.py",
-                     "mailroom_ui/pipeline_schema.py", "mailroom_ui/models.py", "scripts/__init__.py",
+                     "mailroom_ui/pipeline_schema.py", "mailroom_ui/models.py",
+                     "mailroom_ui/contract/mailroom-contract.json", "scripts/__init__.py",
                      "scripts/export_corpus_catalog.py"):
         target = isolated_root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
