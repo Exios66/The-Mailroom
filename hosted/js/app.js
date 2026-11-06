@@ -1017,7 +1017,7 @@ const App = (() => {
 
   /**
    * Refresh the floor over HTTP. A trace request failure clears it and shows
-   * an alert unless the socket is live or a newer snapshot has arrived.
+   * an alert unless a newer snapshot has arrived.
    */
   async function refreshTraces() {
     if (tracesInFlight) return;
@@ -1025,7 +1025,7 @@ const App = (() => {
     const revision = floorRevision;
     try {
       const data = await Obs.api.traces(604800, 200);
-      if (socketLive || revision !== floorRevision) return;
+      if (revision !== floorRevision) return;
       sourceOffline = false;
       applyRuns(data.runs || []);
       showAlert("");
@@ -1037,10 +1037,14 @@ const App = (() => {
       dbg("traces", { where: "floor", count: (data.runs || []).length });
       try {
         const ops = await Obs.api.pipeline();
+        if (revision !== floorRevision) return;
         if (!socketLive) applyPipelineOps(ops);
-      } catch (_e) { if (!socketLive) applyPipelineOps(null); /* producer unavailable */ }
+      } catch (_e) {
+        if (revision !== floorRevision) return;
+        if (!socketLive) applyPipelineOps(null); /* producer unavailable */
+      }
     } catch (err) {
-      if (socketLive || revision !== floorRevision) return;
+      if (revision !== floorRevision) return;
       applyPipelineOps(null);
       sourceOffline = true;
       applyRuns([]);
