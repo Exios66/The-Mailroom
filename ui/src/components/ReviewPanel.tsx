@@ -21,7 +21,7 @@ export default function ReviewPanel() {
   const resolveMutation = useMutation({
     mutationFn: ({ doc, resolution }: { doc: Document; resolution: 'approved' | 'rejected' }) => {
       let extracted_data: Record<string, unknown> | undefined
-      if (disposition === 'complete') {
+      if (disposition === 'complete' && extractedData.trim()) {
         let parsed: unknown
         try { parsed = JSON.parse(extractedData) }
         catch { throw new Error('Complete needs valid extracted_data JSON.') }
@@ -184,7 +184,7 @@ export default function ReviewPanel() {
               <button
                 type="button"
                 onClick={() => resolveMutation.mutate({ doc: selectedDoc, resolution: 'rejected' })}
-                disabled={resolveMutation.isPending}
+                disabled={resolveMutation.isPending || disposition === 'complete'}
                 className="flex-1 flex items-center justify-center gap-2 py-2 rounded-md bg-red-600 text-white text-sm font-medium disabled:opacity-50"
               >
                 <XCircle className="h-4 w-4" />

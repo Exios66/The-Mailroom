@@ -141,6 +141,9 @@ async def test_reconnect_retains_outage_and_last_success_timestamp(monkeypatch):
 @pytest.mark.parametrize('path',['/status','/throughput','/distribution'])
 def test_operator_total_outage_is_503_and_real_empty_is_200(monkeypatch,path):
     src=source()
+    hub=PollHub(src, interval=60, window=21600, limit=100)
+    hub.stale=False  # Exercise direct source reads from a fresh, empty hub.
+    monkeypatch.setattr('server.main.PollHub', lambda *args, **kwargs: hub)
     client=TestClient(create_app(src))
     headers={'Authorization':'Bearer '+create_access_token('fixture','viewer')}
     assert client.get('/v1/ops'+path,headers=headers).status_code==200

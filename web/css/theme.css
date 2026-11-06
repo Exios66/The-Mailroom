@@ -680,6 +680,7 @@ dialog.operator-login menu { display: flex; gap: 8px; justify-content: flex-end;
 .history-row { grid-template-columns: minmax(0,2fr) 96px 130px 100px 90px 90px 120px; }
 @media (max-width: 1000px) {
   .run-row.history-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .history-row .run-classification { min-width: 0; overflow-wrap: anywhere; }
   .history-row .run-file, .history-row .run-when { grid-column: 1 / -1; }
   .history-row .run-when { flex-wrap: wrap; }
 }

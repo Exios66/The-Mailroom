@@ -604,6 +604,7 @@ const App = (() => {
     el.innerHTML = `<p class="empty">Loading history…</p>`;
     try {
       const data = await Obs.api.traces(604800, 200);
+      if (version !== staleSnapshotVersion) return;
       const rows = (data.runs || []).map((r) => `<tr>
         <th scope="row"><button type="button" class="row-btn" data-trace="${Obs.esc(r.trace_id)}">${Obs.esc(r.filename || r.trace_id)}</button></th>
         <td>${Obs.esc((r.stage || "—").replaceAll("_", " "))}</td>
@@ -1011,9 +1012,13 @@ const App = (() => {
     }
   }
 
+  let staleSnapshotVersion = 0;
+
   async function refreshTraces() {
+    const version = staleSnapshotVersion;
     try {
       const data = await Obs.api.traces(604800, 200);
+      if (version !== staleSnapshotVersion) return;
       applyRuns(data.runs || []);
       showAlert("");
       if (!socketLive) setSource("live", "Live · HTTP polling while reconnecting");
@@ -1023,9 +1028,15 @@ const App = (() => {
       }
       dbg("traces", { where: "floor", count: (data.runs || []).length });
       try {
-        applyPipelineOps(await Obs.api.pipeline());
-      } catch (_e) { applyPipelineOps(null); /* producer unavailable */ }
+        const pipeline = await Obs.api.pipeline();
+        if (version !== staleSnapshotVersion) return;
+        applyPipelineOps(pipeline);
+      } catch (_e) {
+        if (version !== staleSnapshotVersion) return;
+        applyPipelineOps(null); /* producer unavailable */
+      }
     } catch (err) {
+      if (version !== staleSnapshotVersion) return;
       applyPipelineOps(null);
       applyRuns([]);
       setSource("down", "MAILROOM CLOSED — no Langfuse connection");
@@ -1098,6 +1109,7 @@ const App = (() => {
         setSource("stale", "Socket disconnected — polling while reconnecting");
       }
     } else if (msg.type === "snapshot") {
+      if (msg.stale) staleSnapshotVersion++;
       applyRuns(msg.stale ? [] : (msg.runs || []));
       applyPipelineOps(msg.pipeline);
       applyPollInterval(msg.poll_interval_s);

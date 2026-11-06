@@ -192,6 +192,7 @@ const Main = (() => {
       runs = [];
       applySource();
     }
+    if (stale && demoMode) return;
     // V-27: a FRESH snapshot proves the backend is serving even when
     // the async health check hasn't resolved yet. A stale one (source down,
     // last-good floor) must not flip the lamp back on — that made the screen

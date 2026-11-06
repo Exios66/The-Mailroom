@@ -67,16 +67,16 @@ export default function Sidebar({ user, onLogout, currentPath, dark, onToggleDar
           {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           {dark ? 'Light mode' : 'Dark mode'}
         </button>
-        <div className="flex items-center justify-between">
-          <div className="text-sm">
-            <p className="font-medium">{user?.username}</p>
+        <div className="flex min-w-0 items-center justify-between">
+          <div className="min-w-0 text-sm">
+            <p className="truncate font-medium">{user?.username}</p>
             <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
           </div>
           <button
             type="button"
             onClick={onLogout}
             aria-label="Log out"
-            className="p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            className="shrink-0 p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
             <LogOut className="h-4 w-4" />
           </button>
