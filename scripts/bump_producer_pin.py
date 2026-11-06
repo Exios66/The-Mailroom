@@ -24,7 +24,8 @@ Usage::
     # CI / tests: fail on a stale pin reference or a hand-edited contract
     python scripts/bump_producer_pin.py --check
 
-Without ``--checkout`` the contract is fetched from raw.githubusercontent.com.
+Without ``--checkout``, symbolic refs are resolved through GitHub's commit API
+before the contract is fetched from raw.githubusercontent.com at that SHA.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ import json
 import re
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -134,10 +136,26 @@ def fetch_contract(ref: str, checkout: Path | None) -> tuple[bytes, str, str]:
             capture_output=True,
         ).stdout
         return blob, sha, f"git checkout ({checkout.name})"
-    url = RAW_URL.format(ref=ref)
+    sha = ref
+    if not _SHA_RE.fullmatch(sha):
+        # Resolve once, then fetch by SHA so a moving branch cannot change the
+        # blob between the provenance lookup and the download.
+        commit_url = (
+            "https://api.github.com/repos/Exios66/llm-mailroom/commits/"
+            + urllib.parse.quote(ref, safe="")
+        )
+        request = urllib.request.Request(
+            commit_url, headers={"Accept": "application/vnd.github+json"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as resp:  # noqa: S310 - fixed host
+            commit = json.load(resp)
+        sha = commit.get("sha") if isinstance(commit, dict) else None
+        if not isinstance(sha, str) or not _SHA_RE.fullmatch(sha):
+            raise SystemExit("GitHub did not resolve the contract ref to a full commit SHA")
+    url = RAW_URL.format(ref=sha)
     with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 - fixed host
         blob = resp.read()
-    return blob, ref, url
+    return blob, sha, url
 
 
 def load_contract(ref: str, checkout: Path | None) -> tuple[dict, bytes, str, str]:

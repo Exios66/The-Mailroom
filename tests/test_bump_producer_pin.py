@@ -161,3 +161,69 @@ def test_vendoring_preserves_the_fetched_contract_bytes(repo):
     source = json.loads((vis / "mailroom_ui/contract/source.json").read_text())
     import hashlib
     assert source["sha256"] == hashlib.sha256(expected).hexdigest()
+
+
+@pytest.mark.parametrize("ref", ["main", "v0.9.1", "release/contract"])
+def test_remote_symbolic_refs_record_resolved_commit_and_fetch_immutable_blob(repo, monkeypatch, ref):
+    """A mutable ref is never stored as provenance or used for the blob fetch."""
+    import io
+    import urllib.parse
+
+    vis, pipe, _ = repo
+    expected = (pipe / "contract/mailroom-contract.json").read_bytes()
+    urls = []
+
+    def response(request, **kwargs):
+        url = request if isinstance(request, str) else request.full_url
+        urls.append(url)
+        if len(urls) == 1:
+            assert url.endswith("/commits/" + urllib.parse.quote(ref, safe=""))
+            return io.BytesIO(json.dumps({"sha": NEW}).encode())
+        assert url == bump.RAW_URL.format(ref=NEW)
+        return io.BytesIO(expected)
+
+    monkeypatch.setattr(bump.urllib.request, "urlopen", response)
+    assert bump.main([NEW, "--version", "0.9.2", "--contract-ref", ref]) == 0
+    assert len(urls) == 2
+    source = json.loads((vis / "mailroom_ui/contract/source.json").read_text())
+    assert source["pipeline_commit"] == NEW
+    assert source["matches_pin"] is True
+    assert source["fetched_from"] == bump.RAW_URL.format(ref=NEW)
+    assert (vis / "mailroom_ui/contract/mailroom-contract.json").read_bytes() == expected
+    assert bump.verify_vendored() == []
+
+
+def test_remote_full_sha_needs_no_resolution(repo, monkeypatch):
+    import io
+
+    _, pipe, _ = repo
+    expected = (pipe / "contract/mailroom-contract.json").read_bytes()
+    urls = []
+
+    def response(url, **kwargs):
+        urls.append(url)
+        assert url == bump.RAW_URL.format(ref=NEW)
+        return io.BytesIO(expected)
+
+    monkeypatch.setattr(bump.urllib.request, "urlopen", response)
+    assert bump.fetch_contract(NEW, None) == (expected, NEW, bump.RAW_URL.format(ref=NEW))
+    assert len(urls) == 1
+
+
+def test_invalid_remote_resolution_leaves_pin_and_contract_untouched(repo, monkeypatch):
+    import io
+
+    vis, _, _ = repo
+    urls = []
+
+    def response(request, **kwargs):
+        urls.append(request)
+        return io.BytesIO(b'{"sha": "main"}')
+
+    monkeypatch.setattr(bump.urllib.request, "urlopen", response)
+    with pytest.raises(SystemExit, match="full commit SHA"):
+        bump.main([NEW, "--version", "0.9.2", "--contract-ref", "main"])
+    assert len(urls) == 1
+    assert OLD in (vis / "mailroom_ui/producer.py").read_text()
+    assert not (vis / "mailroom_ui/contract/mailroom-contract.json").exists()
+    assert not (vis / "mailroom_ui/contract/source.json").exists()

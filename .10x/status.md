@@ -26,7 +26,7 @@ can supply the Observatory. No local simulator or canned live fallback.
 
 ## Validation
 
-PR #66 follow-up: 576 passed, 2 skipped; optional desk type-check/build passed;
+PR #66 at `2730a62`: 577 passed, 2 skipped; optional desk type-check/build passed;
 manual browser checks include Phoenix, a custom registry adapter and injected
-transport races. M2 A-7: 577 passed, 2 skipped with the actual Dojo 0.27.2 engine; pin check,
+transport races. M2 A-7 including remote-ref resolution: 583 passed, 2 skipped with the actual Dojo 0.27.2 engine; pin check,
 source conformance and exact upstream-byte comparison passed.

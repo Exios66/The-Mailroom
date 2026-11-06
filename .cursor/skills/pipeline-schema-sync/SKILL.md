@@ -45,7 +45,7 @@ Cached at process level — **restart** after edits.
 | New observation type | Node hidden or filed as generation |
 
 Offline evaluation uses
-Dojo through optional `[eval]` (`@4740d768`, Dojo v0.24.2); do not duplicate its scoring engine
+Dojo through optional `[eval]` (`@1cd4aba76d82`, Dojo v0.27.2); do not duplicate its scoring engine
 or make the live display path import it.
 
 Producer **code** pin (separate from the topology mirror): extra `[pipeline]`

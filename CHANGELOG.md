@@ -8,6 +8,9 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Changed (M2: A-7)
 
+- Resolve remote branch/tag contract refs to a full commit before fetching the
+  blob, keeping provenance and `matches_pin` correct even if the ref moves.
+
 - Adopt llm-mailroom 0.9.1 at merged contract commit `65523a220954` and
   re-vendor the display contract with matching immutable provenance, removing
   the provisional #165-head exception. Align the optional offline evaluation
