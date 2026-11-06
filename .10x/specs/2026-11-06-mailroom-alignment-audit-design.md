@@ -187,7 +187,7 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 - A-6 Roster: `gmail_triage`, `relations`; regenerate `prompt_registry.py`. *0.5 d*
 - A-7 Bump the pin to the then-current pipeline `main` (v0.9.1 or later); align the `[eval]` Dojo pin to v0.27.2 and rerun the eval goldens. *0.5 d*
 - A-8 Add unmapped-span handling and the health counter. *0.5 d*
-- A-10 Drift check against the producer that will be deployed, not only the pin: a scheduled CircleCI job fetches `contract/mailroom-contract.json` from llm-mailroom `main` and the latest release tag, runs `contract_gaps` against each, and fails (and opens the pin-bump task) when a span or node was renamed or added. *0.5 d*
+- A-10 Drift check against the producer that will be deployed, not only the pin: a scheduled CircleCI job fetches `contract/mailroom-contract.json` from llm-mailroom `main` and the latest release tag, runs `contract_gaps` against each, and fails (and opens the pin-bump task) when a span or node was renamed or added. Before rollout, the producer's deploy job runs the same `contract_gaps` check on the candidate commit's contract against the contract The-Mailroom has vendored, and stops the deploy when a span or node would be unmapped on the floor, until the visualizer pin is bumped. *1 d*
 - A-11 `build_routing_path` keeps stations in occurrence order with repeat counts, instead of sorting by `NODE_ORDER` and keeping one retry; tests for judge → arbiter → judge with several retries. Floor v2 (D-3) draws loops and ×N badges from it. *0.5 d*
 - A-9 Fix A9 (`AuditChain.tsx` fields), with the nesting by `kind`/`parent_id` from pipeline task F1 behind a feature check. *0.5 d*
 
@@ -254,7 +254,7 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 |---|---|---|---|
 | **M0 Stop the bleeding** | F-1, A-9, H-1 | 2 d | Suite green; audit chain correct; no Railway config left in either repo |
 | **M1 Contract** | A-1, A-2, A-3, F-2, H-2, T-1, T-4, T-5 | 7.5 d | CI fails on a deliberately renamed span; every source adapter passes the conformance kit |
-| **M2 Catch-up** | A-4–A-8, A-10, A-11, T-2, T-3, T-6, B-1–B-4, F-3, G-4 | 11 d | Golden traces for every route render with zero unmapped spans; release v0.6.0 |
+| **M2 Catch-up** | A-4–A-8, A-10, A-11, T-2, T-3, T-6, B-1–B-4, F-3, G-4 | 11.5 d | Golden traces for every route render with zero unmapped spans; release v0.6.0 |
 | **M3 Design system** | D-1, D-2, G-2 | 3 d | One token source; palette validator green |
 | **M4 Floor v2, Observatory map, review desk tab** | D-3–D-8, C-1–C-4, F-4, I-1, I-2 | 14–16 d | Screenshots at 1440 px and 390 px; keyboard path to the inspector; release v1.0.0 |
 | **M5 Ops panels (optional)** | E-1, E-2, G-1, G-3 | 3 d | Public `/live` shows no operator-only field (tested) |
