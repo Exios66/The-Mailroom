@@ -21,7 +21,7 @@ Usage::
     # vendor the contract only (e.g. from an open PR head), pin unchanged
     python scripts/bump_producer_pin.py --contract-only --contract-ref <ref> --checkout ../llm-mailroom
 
-    # CI / tests: fail if any non-history file still names an old pin
+    # CI / tests: fail on a stale pin reference or a hand-edited contract
     python scripts/bump_producer_pin.py --check
 
 Without ``--checkout`` the contract is fetched from raw.githubusercontent.com.
@@ -30,6 +30,7 @@ Without ``--checkout`` the contract is fetched from raw.githubusercontent.com.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -146,8 +147,10 @@ def vendor_contract(ref: str, checkout: Path | None, pin: str, note: str | None)
     if "contract_version" not in contract or "graph" not in contract:
         raise SystemExit("fetched file is not a mailroom display contract")
     CONTRACT_DIR.mkdir(parents=True, exist_ok=True)
-    CONTRACT_PATH.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    body = json.dumps(contract, indent=2, sort_keys=True) + "\n"
+    CONTRACT_PATH.write_text(body, encoding="utf-8")
     source = {
+        "sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
         "pipeline_commit": sha,
         "pipeline_version": contract.get("pipeline_version"),
         "contract_version": contract["contract_version"],
@@ -158,6 +161,24 @@ def vendor_contract(ref: str, checkout: Path | None, pin: str, note: str | None)
         source["note"] = note
     SOURCE_PATH.write_text(json.dumps(source, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return source
+
+
+def contract_digest() -> str:
+    return hashlib.sha256(CONTRACT_PATH.read_bytes()).hexdigest()
+
+
+def verify_vendored() -> list[str]:
+    """Offline: the vendored contract is byte-identical to what was fetched."""
+    problems = []
+    if not SOURCE_PATH.exists() or not CONTRACT_PATH.exists():
+        return ["no vendored contract; run bump_producer_pin.py"]
+    source = json.loads(SOURCE_PATH.read_text(encoding="utf-8"))
+    if source.get("sha256") != contract_digest():
+        problems.append("mailroom-contract.json was edited by hand; re-run bump_producer_pin.py")
+    pin, _ = current_pin()
+    if source.get("pipeline_commit") != pin and not source.get("note"):
+        problems.append("contract comes from another commit than the pin and has no note")
+    return problems
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -174,9 +195,9 @@ def main(argv: list[str] | None = None) -> int:
     old, old_ver = current_pin()
 
     if args.check:
-        bad = stale_references(old)
+        bad = [f"stale pin: {line}" for line in stale_references(old)] + verify_vendored()
         for line in bad:
-            print(f"stale pin: {line}")
+            print(line)
         return 1 if bad else 0
 
     pin = old

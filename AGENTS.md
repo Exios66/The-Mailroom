@@ -83,6 +83,7 @@ python scripts/publish_space.py --check  # Hugging Face Docker Space payload
 - Tests: `pytest tests/ -v`; coverage via `--cov=. --cov-report=html`.
 - **No linter, formatter, or typechecker is configured — don't invent one.**
 - Frontend is **vanilla HTML/CSS/JS with no build step and no npm** — never introduce a Node toolchain.
+- **CI is CircleCI** (`.circleci/config.yml`; never GitHub Actions). Job `python`: `scripts/bump_producer_pin.py --check` (one pin everywhere; vendored contract byte-identical to what was fetched) then the full pytest suite, including contract and source conformance. Job `desk`: `npm ci`, type-check + build, `npm audit --audit-level=high --omit=dev` for the React desk. The project must be enabled once in the CircleCI UI.
 - **GitHub Pages is deploy-from-branch only** (`scripts/publish_pages.sh` → `gh-pages:/docs`, folder `/docs` selected in Settings → Pages) — never add an Actions workflow for it (account cannot rely on Actions).
 - **main ↔ gh-pages sync**: enable the committed hook once per clone (`git config core.hooksPath hooks`) so pushing main auto-republishes the site; check drift with `scripts/publish_pages.sh --status` (exit 1 = stale). The publisher runs only from `main` — if GitHub Desktop left another branch checked out, switch back first.
 - Config lives in `.env` (see `.env.example`); copy `.env.example` → `.env` and add `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY`.

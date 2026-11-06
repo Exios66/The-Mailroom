@@ -88,13 +88,32 @@ def test_contract_only_keeps_the_pin(repo):
 
 
 def test_check_flags_a_stale_short_sha(repo):
-    vis, _, _ = repo
+    vis, pipe, sha = repo
+    assert bump.main(["--contract-only", "--contract-ref", sha, "--checkout", str(pipe),
+                      "--note", "test"]) == 0
     stale = "959" + "bb0b"  # split so this file does not trip the repo-wide check
     (vis / "docs.md").write_text(f"mirrors llm-mailroom @{stale}\n", encoding="utf-8")
     _git(vis, "add", "docs.md")
     assert bump.main(["--check"]) == 1
     (vis / "docs.md").write_text(f"mirrors llm-mailroom @{OLD[:7]}\n", encoding="utf-8")
     assert bump.main(["--check"]) == 0
+
+
+def test_check_flags_a_hand_edited_contract(repo):
+    vis, pipe, sha = repo
+    assert bump.main(["--contract-only", "--contract-ref", sha, "--checkout", str(pipe),
+                      "--note", "test"]) == 0
+    assert bump.verify_vendored() == []
+    path = vis / "mailroom_ui/contract/mailroom-contract.json"
+    path.write_text(path.read_text().replace('"judge"', '"judge2"'))
+    assert any("edited by hand" in p for p in bump.verify_vendored())
+    assert bump.main(["--check"]) == 1
+
+
+def test_provisional_contract_needs_a_note(repo):
+    vis, pipe, sha = repo
+    assert bump.main(["--contract-only", "--contract-ref", sha, "--checkout", str(pipe)]) == 0
+    assert any("no note" in p for p in bump.verify_vendored())
 
 
 def test_rejects_a_short_sha(repo):
@@ -104,5 +123,7 @@ def test_rejects_a_short_sha(repo):
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 def test_repository_names_one_pin():
-    """A5: no non-history file names a different producer commit."""
+    """A5: no non-history file names a different producer commit, and the
+    vendored contract is byte-identical to what the bump fetched."""
     assert bump.stale_references(bump.current_pin()[0]) == []
+    assert bump.verify_vendored() == []

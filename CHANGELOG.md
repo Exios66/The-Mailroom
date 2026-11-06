@@ -41,10 +41,17 @@ All notable changes to The-Mailroom are documented here, following
   aborted) rendered into each backend's raw shape must interpret into the
   same run; every registered adapter needs a renderer.
 
+- CircleCI (H-2, `.circleci/config.yml`): a `python` job (pin and contract
+  provenance check, full pytest) and a `desk` job (React desk build and
+  `npm audit` at high). `contract/source.json` now records the vendored
+  contract's sha256, so a hand edit fails `bump_producer_pin.py --check`.
+
 ### Fixed (M1)
 
 - A5: the producer pin is named consistently; stale `959bb0b` / `3cf9fb9`
   references in docs, `.env.example` and schema comments are gone.
+- React desk: `follow-redirects` 1.16.1 → 1.16.2 (GHSA-mrwp-f3q8-3g9p, high),
+  found by the new audit gate.
 - The Observatory floor maps `intake-ml-triage`, `arbitrate-classification`
   and `classification_arbiter` (they fell through to the inbox).
 

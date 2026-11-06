@@ -1,0 +1,75 @@
+version: 2.1
+
+# The-Mailroom CI (H-2). CircleCI, not GitHub Actions (AGENTS.md: the account
+# cannot rely on Actions; Pages stays deploy-from-branch). Network-free and
+# key-free: no Langfuse, Phoenix or producer is contacted.
+#
+# Mark "ci/circleci: python" (and "ci/circleci: desk" once the desk tab ships)
+# as required checks on main.
+#
+# Later milestones add: design-token build check (M3), Playwright smoke (M4).
+
+executors:
+  py:
+    docker:
+      - image: cimg/python:3.12
+    resource_class: small
+  node:
+    docker:
+      - image: cimg/node:22.11
+    resource_class: small
+
+jobs:
+  python:
+    executor: py
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - pip-v1-{{ checksum "pyproject.toml" }}
+      - run:
+          name: Install (dev extra)
+          command: pip install -e ".[dev]"
+      - save_cache:
+          key: pip-v1-{{ checksum "pyproject.toml" }}
+          paths:
+            - ~/.cache/pip
+      - run:
+          # One producer pin everywhere, and the vendored pipeline contract is
+          # byte-identical to what bump_producer_pin.py fetched.
+          name: Producer pin and contract provenance
+          command: python scripts/bump_producer_pin.py --check
+      - run:
+          name: Pytest (contract + source conformance included)
+          command: |
+            mkdir -p test-results
+            python -m pytest -q --junitxml=test-results/junit.xml
+      - store_test_results:
+          path: test-results
+
+  desk:
+    executor: node
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - npm-v1-{{ checksum "ui/package-lock.json" }}
+      - run:
+          name: Install React desk deps
+          command: cd ui && npm ci
+      - save_cache:
+          key: npm-v1-{{ checksum "ui/package-lock.json" }}
+          paths:
+            - ~/.npm
+      - run:
+          name: Type-check and build
+          command: cd ui && npm run build
+      - run:
+          name: npm audit (high and above)
+          command: cd ui && npm audit --audit-level=high --omit=dev
+
+workflows:
+  ci:
+    jobs:
+      - python
+      - desk
