@@ -13,3 +13,6 @@ Status: **Planning complete** 2026-11-06.
 
 Each milestone ships as its own PR per repo, stacked on the plan branch.
 CI note (H-2): GitHub Actions is unavailable on this account. CircleCI is the target, and needs the owner to enable the project in CircleCI.
+
+## Re-plan (ADR-006)
+New workstream T (T-1..T-6, about 7 d). M1 rises to 7.5 d and M2 to 9.5 d. B tasks now emit through the T-2 layer.

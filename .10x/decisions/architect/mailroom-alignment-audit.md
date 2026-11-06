@@ -28,3 +28,6 @@ See spec `.10x/specs/2026-11-06-mailroom-alignment-audit-design.md` and ADR-001.
 - ADR-003: React desk at `/desk`, embedded as an Observatory tab; vanilla fallback.
 - ADR-005: Railway removed; HF Space pair.
 - Failure modes: contract missing or invalid → fall back to the bundled mirror and report it on `/api/health`; unknown span → UNMAPPED chip; producer down → review desk read-only, with a banner.
+
+## ADR-006 (2026-11-06)
+Document traces are the displayed events on any backend. The contract gains `trace_schema`; the pipeline emits to every configured sink through an OTel-based layer; the visualizer has a source registry and a conformance kit. Finding: with the Phoenix provider, today's pipeline emits no root or node spans, so a Phoenix-only setup cannot drive the floor.
