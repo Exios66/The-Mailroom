@@ -85,7 +85,9 @@ These subsystems write **nothing to Langfuse**, so under the "Langfuse is the so
 | X1 | Adding ops, relations and matter panels to the **public** `/live` Observatory could expose matter IDs, filenames or operator phone numbers (pager). Each new field needs a public/operator classification. | S2 (forward) |
 | X2 | `ui/` npm tree: Dependabot bumps are merged but `npm audit` is not run anywhere. | S3 |
 | X3 | Test JWT key is 20 bytes (InsecureKeyLengthWarning). Test-only, but worth fixing so the warning can't hide a real one. | S3 |
-| X4 | The operator auth posture (DMR-111/113) is solid; keep it unchanged. | — |
+| X4 | The operator auth posture (DMR-111/113) is solid for writes; keep it unchanged. | — |
+| X5 | The review **read** routes `/api/review/source`, `/api/review/context` and `/api/review/audit` have no operator guard. On a public bind, anyone with a document id, filename or trace id can read parked document text or bytes, fetched with the server's producer token. | S1 |
+| X6 | The public `/api/pipeline` payload passes through producer queue items, including filenames, `matter_id` and `upload_id`. | S2 |
 
 ### 2.6 Deployment and operations (DevOps, SRE)
 
@@ -131,8 +133,8 @@ These subsystems write **nothing to Langfuse**, so under the "Langfuse is the so
 
 ### 5.1 Contract (ADR-001)
 
-- **Producer side (llm-mailroom):** `src/scripts/export_contract.py` builds `contract/mailroom-contract.json` from the live constants: `build_graph` nodes and edges (introspected from the compiled LangGraph), `NODE_OBSERVATION_TYPES`, `taxonomy.yaml` (`doc_classes`, `agents`, `confidence`), `failures.py`, the score names used in `observability/*`, and the Dojo subclass inventories. It carries `contract_version` (semver) and `pipeline_sha`. A CircleCI check fails if the committed file is stale.
-- **Consumer side (The-Mailroom):** `mailroom_ui/contract/mailroom-contract.json` is vendored at the pinned SHA by `scripts/bump_producer_pin.py`, which moves all 9 pin locations in one go (D3). `pipeline_schema.py` loads it and keeps only *display* data: labels, colours and sprites. The source-of-truth rule is unchanged, because the contract describes the trace shape and contains no run data.
+- **Producer side (llm-mailroom):** `src/scripts/export_contract.py` builds `contract/mailroom-contract.json` from the live constants: `build_graph` nodes and edges (introspected from the compiled LangGraph), `NODE_OBSERVATION_TYPES`, `taxonomy.yaml` (`doc_classes`, `agents`, `confidence`), `failures.py`, the score names used in `observability/*`, and the Dojo subclass inventories. It carries `contract_version` (semver) and `pipeline_version`, but not a commit SHA: a file cannot name the commit that contains it, and a SHA regenerated from `HEAD` would make the staleness check fail after every commit. A CircleCI check fails if the committed file is stale.
+- **Consumer side (The-Mailroom):** `mailroom_ui/contract/mailroom-contract.json` is vendored at the pinned SHA by `scripts/bump_producer_pin.py`, which moves all 9 pin locations in one go (D3) and stamps the provenance (pipeline commit, sha256 of the vendored bytes, whether it matches the pin) into `mailroom_ui/contract/source.json`. `pipeline_schema.py` loads it and keeps only *display* data: labels, colours and sprites. The source-of-truth rule is unchanged, because the contract describes the trace shape and contains no run data.
 - **Unknown handling:** a span not in the contract renders as a visible "UNMAPPED: <name>" station chip, increments `/api/health.unmapped_spans`, and logs once (U6).
 
 ### 5.2 Operational state (ADR-002), owner decision required
@@ -185,6 +187,8 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 - A-6 Roster: `gmail_triage`, `relations`; regenerate `prompt_registry.py`. *0.5 d*
 - A-7 Bump the pin to the then-current pipeline `main` (v0.9.1 or later); align the `[eval]` Dojo pin to v0.27.2 and rerun the eval goldens. *0.5 d*
 - A-8 Add unmapped-span handling and the health counter. *0.5 d*
+- A-10 Drift check against the producer that will be deployed, not only the pin: a scheduled CircleCI job fetches `contract/mailroom-contract.json` from llm-mailroom `main` and the latest release tag, runs `contract_gaps` against each, and fails (and opens the pin-bump task) when a span or node was renamed or added. *0.5 d*
+- A-11 `build_routing_path` keeps stations in occurrence order with repeat counts, instead of sorting by `NODE_ORDER` and keeping one retry; tests for judge → arbiter → judge with several retries. Floor v2 (D-3) draws loops and ×N badges from it. *0.5 d*
 - A-9 Fix A9 (`AuditChain.tsx` fields), with the nesting by `kind`/`parent_id` from pipeline task F1 behind a feature check. *0.5 d*
 
 ### T. Backend-neutral document traces (ADR-006) [Architect, Staff Engineer, SDE]
@@ -203,7 +207,7 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 
 ### C. Information architecture and surfaces [CTO, Product Manager]
 - C-1 Record the surface roles (ADR-003). *0.25 d*
-- C-3 Observatory "Review desk" tab that mounts the React desk (same origin, shared operator JWT) and falls back to the vanilla review queue when `ui/dist` is absent. *1 d*
+- C-3 Observatory "Review desk" tab that mounts the React desk (same origin, shared operator JWT) and falls back to the vanilla review queue when `ui/dist` is absent. The hosted image must ship the desk: build `ui/` in a Dockerfile stage, copy `ui/dist` into the image (and stop `.dockerignore` and `publish_space.py` from dropping it), and have the F-4 smoke check load the deployed tab and fail on the vanilla fallback. *1.5 d*
 - C-4 Refocus the React desk on the review tray: queue with filters (class, verdict, review cause, age), document source preview, extraction diff editor validated by `validate_operator_extraction`, disposition actions (resume, record, requeue, complete), audit chain, keyboard shortcuts. Remove or hide desk features that duplicate the Observatory. *3 d*
 - C-2 Observatory navigation: add the Pipeline map tab; group Debug under an operator-only menu. *0.5 d*
 
@@ -231,6 +235,7 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 - G-1 Field-level public/operator classification for every new panel and field; enforce it in the backend serializer, not the client. *0.5 d*
 - G-2 `npm audit` in CI for `ui/`; 32-byte test JWT key. *0.25 d*
 - G-3 Threat-model review of the read-only producer proxy (SSRF via `MAILROOM_PIPELINE_URL`, token scope). *0.5 d*
+- G-4 Close X5 and X6: put the operator reviewer guard on the three review read routes (on a public bind), with tests that anonymous requests to each are refused; serve `/api/pipeline` publicly as counts and liveness only, with queue items behind the operator guard. Ship before the desk tab (C-3) is hosted. *0.5 d*
 
 ### H. Deployment and CI [DevOps]
 - **H-1 Retire Railway (owner decision, ADR-005).** Remove `railway.json` and the Railway-specific listen and observability code, tests and docs from llm-mailroom, and `.railway/`, `tests/test_railway_deploy.py` and the Railway docs from The-Mailroom. Keep the generic platform `PORT` handling. The hosted target is the HF Docker Space pair (Observatory + producer). *1.5 d (two PRs)*
@@ -249,7 +254,7 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 |---|---|---|---|
 | **M0 Stop the bleeding** | F-1, A-9, H-1 | 2 d | Suite green; audit chain correct; no Railway config left in either repo |
 | **M1 Contract** | A-1, A-2, A-3, F-2, H-2, T-1, T-4, T-5 | 7.5 d | CI fails on a deliberately renamed span; every source adapter passes the conformance kit |
-| **M2 Catch-up** | A-4–A-8, T-2, T-3, T-6, B-1–B-4, F-3 | 9.5 d | Golden traces for every route render with zero unmapped spans; release v0.6.0 |
+| **M2 Catch-up** | A-4–A-8, A-10, A-11, T-2, T-3, T-6, B-1–B-4, F-3, G-4 | 11 d | Golden traces for every route render with zero unmapped spans; release v0.6.0 |
 | **M3 Design system** | D-1, D-2, G-2 | 3 d | One token source; palette validator green |
 | **M4 Floor v2, Observatory map, review desk tab** | D-3–D-8, C-1–C-4, F-4, I-1, I-2 | 14–16 d | Screenshots at 1440 px and 390 px; keyboard path to the inspector; release v1.0.0 |
 | **M5 Ops panels (optional)** | E-1, E-2, G-1, G-3 | 3 d | Public `/live` shows no operator-only field (tested) |
