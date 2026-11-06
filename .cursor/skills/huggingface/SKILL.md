@@ -25,7 +25,7 @@ so eval / sync stay light — no full `load_dataset` on the visualizer path.
 | `MAILROOM_HF_DATASET` | default `Lucius-Morningstar/mailroom-dataset` |
 | `MAILROOM_HF_REVISION` | corrected GT commit pin |
 | `MAILROOM_HF_CONFIG` | `ground_truth` |
-| `HF_HOME` / `HF_HUB_CACHE` | producer volume cache (Railway) |
+| `HF_HOME` / `HF_HUB_CACHE` | producer volume cache (persistent volume) |
 
 ## Offline first
 

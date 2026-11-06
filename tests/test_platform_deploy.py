@@ -1,8 +1,8 @@
-"""Railway deploy contract: IaC file, listen port, /health, deploy metadata.
+"""Container deploy contract: listen port, /health, deploy metadata.
 
-Railway retired Config as Code (railway.json) — 2026-08-28 for new projects,
-hard cutoff 2026-12-01. The repo ships Infrastructure as Code instead:
-`.railway/railway.py` (railway_sdk, authoring-only) + the Dockerfile.
+Railway was retired (ADR-005); the hosted target is the Hugging Face Docker
+Space pair. These tests keep the host-agnostic contract and assert that no
+Railway configuration comes back.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def test_listen_port_default(monkeypatch):
 
 
 def test_health_root_is_platform_liveness_without_source():
-    """Railway / Docker probes must not wait on Langfuse."""
+    """Space / Docker probes must not wait on Langfuse."""
 
     class HangingSrc:
         def health(self):
@@ -66,8 +66,7 @@ def test_api_health_still_reports_source():
 
 def test_platform_detection(monkeypatch):
     for envs, expect in [
-        ({"RAILWAY_SERVICE_NAME": "mailroom"}, "railway"),
-        ({"RAILWAY_DEPLOY_ID": "d-1"}, "railway"),
+        ({"RAILWAY_SERVICE_NAME": "mailroom"}, ""),
         ({"RENDER_INSTANCE_ID": "srv-1"}, "render"),
         ({"FLY_APP_NAME": "mailroom"}, "fly"),
         ({"HF_SPACE_ID": "user/mailroom"}, "huggingface"),
@@ -90,29 +89,25 @@ def test_build_sha_reads_baked_env(monkeypatch):
 
 
 def test_health_and_meta_surface_platform_and_sha(monkeypatch):
-    monkeypatch.setenv("RAILWAY_SERVICE_NAME", "mailroom")
+    for k in ("RENDER_INSTANCE_ID", "FLY_APP_NAME", "SPACE_ID"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("HF_SPACE_ID", "user/mailroom-observatory")
     monkeypatch.setenv("MAILROOM_BUILD_SHA", "abc123")
     src = LangfuseSource(client=FakeClient([make_trace("t-meta")]))
     with TestClient(create_app(src)) as c:
         root = c.get("/health").json()
-        assert root["platform"] == "railway"
+        assert root["platform"] == "huggingface"
         assert root["build_sha"] == "abc123"
         meta = c.get("/api/meta").json()
-        assert meta["platform"] == "railway"
+        assert meta["platform"] == "huggingface"
         assert meta["build_sha"] == "abc123"
 
 
-def test_railway_iac_replaces_deprecated_railway_json():
-    """railway.json (Config as Code) is gone — IaC owns the service now."""
-    assert not (REPO_ROOT / "railway.json").exists()
-    text = (REPO_ROOT / ".railway" / "railway.py").read_text(encoding="utf-8")
-    assert "service(" in text
-    assert 'start="python -m server.hosted"' in text
-    assert 'healthcheck="/health"' in text
-    assert "MAILROOM_EDITION" in text
-    assert "MAILROOM_HOST" in text
-    assert "preserve()" in text
-    assert "RAILWAY_GIT_COMMIT_SHA" not in text
+def test_railway_is_retired():
+    """ADR-005: no Railway config, IaC or nixpacks fallback in the tree."""
+    for rel in ("railway.json", "railway.toml", ".railway", "nixpacks.toml"):
+        assert not (REPO_ROOT / rel).exists(), rel
+    assert "RAILWAY" not in (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
 
 
 def test_dockerfile_healthcheck_prefers_platform_port():
@@ -121,11 +116,4 @@ def test_dockerfile_healthcheck_prefers_platform_port():
     assert "os.environ.get('PORT')" in text
     assert "/health" in text
     assert "server.hosted" in text
-    assert "ARG RAILWAY_GIT_COMMIT_SHA" in text
-    assert "MAILROOM_BUILD_SHA" in text
-
-
-def test_nixpacks_fallback_binds_hosted():
-    text = (REPO_ROOT / "nixpacks.toml").read_text(encoding="utf-8")
-    assert "MAILROOM_HOST=0.0.0.0" in text
-    assert "python -m server.hosted" in text
+    assert "ARG MAILROOM_BUILD_SHA" in text

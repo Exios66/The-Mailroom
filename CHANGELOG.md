@@ -6,6 +6,23 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Removed
+
+- Railway deployment (ADR-005). `.railway/` (IaC), `nixpacks.toml` and the
+  Railway platform detection are gone; the hosted target is the Hugging Face
+  Docker Space pair. The image bakes `MAILROOM_BUILD_SHA` from a build arg of
+  the same name instead of `RAILWAY_GIT_COMMIT_SHA`. `tests/test_railway_deploy.py`
+  is now `tests/test_platform_deploy.py` and asserts that no Railway config returns.
+
+### Fixed (M0)
+
+- The React desk audit chain reads the producer's `entry_id` / `event` /
+  `entry_hash` fields (it read `id` / `action` / `hash` and showed "event" and
+  "—"). It also shows `actor` and `detail`, and nests unified-audit-row
+  sub-rows by `parent_id`.
+- `pytest-asyncio` is now in `[dev]`; the suite configures `asyncio_mode = "auto"`
+  and one async regression test failed without it.
+
 ### Fixed
 
 - DMR-111: whitespace-only primary JWT settings no longer hide a valid legacy

@@ -1,9 +1,9 @@
 # Mailroom Observatory — public hosted edition.
-# Works on Hugging Face Spaces (Docker SDK, port 7860), Railway, Fly, Render,
+# Works on Hugging Face Spaces (Docker SDK, port 7860), Fly, Render,
 # or any host that runs a container and injects Langfuse secrets. This is NOT
 # the GitHub Pages snapshot and NOT the local pixel-art console.
 #
-# Prefer platform PORT (Railway/Fly/Render) over the Spaces image default.
+# Prefer platform PORT (Fly/Render/any host) over the Spaces image default.
 # Health: GET /health and GET /api/health.
 
 FROM python:3.11-slim-bookworm AS builder
@@ -30,10 +30,10 @@ FROM python:3.11-slim-bookworm AS runtime
 WORKDIR /app
 
 # Bake the deployed commit so /health and /api/meta can verify the live build.
-# Railway injects RAILWAY_GIT_COMMIT_SHA for GitHub-sourced deploys; the
-# default keeps HF Spaces / Fly / Render builds working unchanged.
-ARG RAILWAY_GIT_COMMIT_SHA=unknown
-ENV MAILROOM_BUILD_SHA=$RAILWAY_GIT_COMMIT_SHA
+# Pass --build-arg MAILROOM_BUILD_SHA=<commit>; the default keeps builds that
+# don't (HF Spaces) working unchanged.
+ARG MAILROOM_BUILD_SHA=unknown
+ENV MAILROOM_BUILD_SHA=$MAILROOM_BUILD_SHA
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \

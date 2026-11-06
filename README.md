@@ -411,7 +411,7 @@ envelopes are opt-in (`?demo=1`) and only when the trace source is down.
 <summary>Hosted Observatory (public URL — not GitHub Pages)</summary>
 
 The Observatory is a **separate live site** meant to be deployed to a real
-host (Railway, Hugging Face Spaces, Fly, Render, Cloud Run, a VPS). It is not the
+host (Hugging Face Spaces, Fly, Render, Cloud Run, a VPS). It is not the
 Pages snapshot and not the pixel-art console.
 
 ```bash
@@ -419,12 +419,12 @@ mailroom-hosted                          # 0.0.0.0:8001  →  / and /live
 docker build -t mailroom-observatory .
 docker run --rm -p 7860:7860 --env-file .env mailroom-observatory
 python scripts/publish_space.py --check  # Hugging Face Docker Space payload
-# Railway: see docs/deployment.md (.railway/railway.py IaC + PORT preference;
+# Other hosts: see docs/deployment.md (platform PORT preference;
 # GET /health = liveness (+ platform, build_sha), GET /api/health = Langfuse)
 ```
 
 Hugging Face Space: SDK **Docker**, root directory **empty** (repo-root
-`Dockerfile`), port **7860**. Railway / Fly inject `$PORT` (preferred over
+`Dockerfile`), port **7860**. Fly and other hosts inject `$PORT` (preferred over
 image `MAILROOM_PORT`). Secrets: `LANGFUSE_PUBLIC_KEY`,
 `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST=https://us.cloud.langfuse.com`
 (`LANGFUSE_BASE_URL` is accepted as an alias). Do not configure the Space
@@ -743,7 +743,7 @@ The TUI talks to this visualizer's display API (`/api/*` + `/ws`), not to the pr
 <details>
 <summary><b>Is the Observatory the same as the GitHub Pages site?</b></summary>
 
-No. The Observatory (`mailroom-hosted`, `/live`) is a live site for a real host such as a Hugging Face Docker Space or Railway. GitHub Pages carries a static edition and the terminal site.
+No. The Observatory (`mailroom-hosted`, `/live`) is a live site for a real host such as a Hugging Face Docker Space. GitHub Pages carries a static edition and the terminal site.
 
 </details>
 

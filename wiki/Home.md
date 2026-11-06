@@ -29,9 +29,8 @@ Full source map: [pipeline sister repositories](https://github.com/Exios66/llm-m
 - **Observatory** (`/live`, `mailroom-hosted`) — public modern accessible desk
   (Pipeline · Review · History · Matters · Metrics · Debug;
   `GET /api/debug/bundle`). Hugging Face Space: Docker + port 7860
-  (`scripts/publish_space.py`, `hosted/SPACE_README.md`). Railway /
-  Fly / Render: see [Deployment](Deployment) (`.railway/railway.py` IaC,
-  platform `PORT` preferred over image `MAILROOM_PORT`)
+  (`scripts/publish_space.py`, `hosted/SPACE_README.md`). Other
+  container hosts: see [Deployment](Deployment) (platform `PORT` preferred over image `MAILROOM_PORT`)
 - **TUI** (`mailroom-tui`) — terminal (floor · review · sessions · metrics ·
   inspect · debug)
 - **GitHub Pages** — static snapshot of the pixel SPA (not the Observatory)

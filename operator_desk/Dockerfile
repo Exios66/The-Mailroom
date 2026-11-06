@@ -4,7 +4,7 @@
 # Built by operator_desk/docker-compose.yml with the repo root as context:
 #   docker build -f operator_desk/Dockerfile .
 #
-# The hosted Observatory image (root Dockerfile: HF Spaces / Railway / Fly)
+# The hosted Observatory image (root Dockerfile: HF Spaces / Fly / any container host)
 # is deliberately separate and unchanged — it never needs Node or ui/, and
 # the Space payload (scripts/publish_space.py) does not ship ui/ at all.
 # Keep the Python base image in step with the root Dockerfile.
