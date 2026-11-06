@@ -20,6 +20,7 @@ export function stageToBin(stage: string | undefined): BinStatus {
   return 'processing'
 }
 
+/** Map a trace run to a desk document, placing runs needing human attention in review. */
 export function runToDocument(run: Record<string, unknown>): Document {
   const stage = String(run.stage || 'unknown')
   const created = String(run.created_at || run.updated_at || '')

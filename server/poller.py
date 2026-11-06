@@ -259,6 +259,10 @@ class PollHub:
         self.clients.discard(ws)
 
     def _snapshot_message(self, *, stale: bool) -> dict[str, Any]:
+        """Build a client snapshot, omitting runs when stale.
+
+        ``fetched_at`` still identifies the last successful fetch, if any.
+        """
         return {
             "type": "snapshot",
             "runs": [] if stale else self.snapshot,
@@ -269,6 +273,7 @@ class PollHub:
         }
 
     async def _run(self) -> None:
+        """Poll until stopped and attempt to broadcast empty stale frames on failure."""
         while not self._stop.is_set():
             try:
                 runs, ops = await asyncio.gather(

@@ -1007,6 +1007,7 @@ const App = (() => {
     refreshTraces();
   }
 
+  /** Apply a positive polling interval in seconds, with a one-second minimum. */
   function applyPollInterval(seconds) {
     if (typeof seconds === "number" && seconds > 0) {
       pollIntervalMs = Math.max(1000, Math.round(seconds * 1000));
@@ -1014,6 +1015,10 @@ const App = (() => {
     }
   }
 
+  /**
+   * Refresh the floor over HTTP. A trace request failure clears it and shows
+   * an alert unless the socket is live or a newer snapshot has arrived.
+   */
   async function refreshTraces() {
     if (tracesInFlight) return;
     tracesInFlight = true;

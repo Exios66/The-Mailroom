@@ -86,6 +86,10 @@ const Main = (() => {
     return ` · ${w} · INBOX ${inbox}${paused}`;
   }
 
+  /**
+   * Update the floor from a snapshot. A stale live snapshot marks the source
+   * offline and clears its runs; static snapshots retain the supplied runs.
+   */
   function applySnapshot(runs, stale = false) {
     if (stale && !Mailroom.staticMode) {
       sourceOk = false;
