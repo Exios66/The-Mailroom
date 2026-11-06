@@ -9,11 +9,17 @@ from pathlib import Path
 @contextmanager
 def engine_calls():
     """Record real engine calls; never stub the scorer being verified."""
+    from llm_dojo_scoring import pipeline_scoring
+
+    # Public exports moved to pipeline.pipeline_scoring in Dojo 0.27.2.
+    # Observe the implementation behind the public API, without stubbing it.
+    engine_module = pipeline_scoring.score_pipeline_rows.__module__
+    assert engine_module.startswith("llm_dojo_scoring.")
     seen = set()
     old = sys.getprofile()
     def profile(frame, event, arg):
         """Observe executed Dojo functions."""
-        if event == "call" and frame.f_globals.get("__name__", "") == "llm_dojo_scoring.pipeline_scoring":
+        if event == "call" and frame.f_globals.get("__name__", "") == engine_module:
             seen.add(frame.f_code.co_name)
     sys.setprofile(profile)
     try:

@@ -147,3 +147,17 @@ def test_repository_names_one_pin():
     vendored contract is byte-identical to what the bump fetched."""
     assert bump.stale_references(bump.current_pin()[0]) == []
     assert bump.verify_vendored() == []
+
+
+def test_vendoring_preserves_the_fetched_contract_bytes(repo):
+    vis, pipe, sha = repo
+    expected = subprocess.run(
+        ["git", "show", f"{sha}:contract/mailroom-contract.json"],
+        cwd=pipe, check=True, capture_output=True,
+    ).stdout
+    assert bump.main([NEW, "--version", "0.9.2", "--contract-ref", sha,
+                      "--checkout", str(pipe)]) == 0
+    assert (vis / "mailroom_ui/contract/mailroom-contract.json").read_bytes() == expected
+    source = json.loads((vis / "mailroom_ui/contract/source.json").read_text())
+    import hashlib
+    assert source["sha256"] == hashlib.sha256(expected).hexdigest()

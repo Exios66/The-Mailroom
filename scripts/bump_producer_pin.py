@@ -140,23 +140,23 @@ def fetch_contract(ref: str, checkout: Path | None) -> tuple[bytes, str, str]:
     return blob, ref, url
 
 
-def load_contract(ref: str, checkout: Path | None) -> tuple[dict, str, str]:
+def load_contract(ref: str, checkout: Path | None) -> tuple[dict, bytes, str, str]:
     """Fetch and validate the contract at ``ref``; writes nothing."""
     blob, sha, origin = fetch_contract(ref, checkout)
     contract = json.loads(blob)
     if "contract_version" not in contract or "graph" not in contract:
         raise SystemExit("fetched file is not a mailroom display contract")
-    return contract, sha, origin
+    return contract, blob, sha, origin
 
 
-def vendor_contract(fetched: tuple[dict, str, str], pin: str, note: str | None) -> dict:
+def vendor_contract(fetched: tuple[dict, bytes, str, str], pin: str, note: str | None) -> dict:
     """Write a contract from ``load_contract`` and its provenance."""
-    contract, sha, origin = fetched
+    contract, body, sha, origin = fetched
     CONTRACT_DIR.mkdir(parents=True, exist_ok=True)
-    body = json.dumps(contract, indent=2, sort_keys=True) + "\n"
-    CONTRACT_PATH.write_text(body, encoding="utf-8")
+    # Provenance identifies the producer's actual blob, including whitespace.
+    CONTRACT_PATH.write_bytes(body)
     source = {
-        "sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        "sha256": hashlib.sha256(body).hexdigest(),
         "pipeline_commit": sha,
         "pipeline_version": contract.get("pipeline_version"),
         "contract_version": contract["contract_version"],

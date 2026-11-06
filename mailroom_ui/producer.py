@@ -7,10 +7,10 @@ checkout is available:
 
     pip install -e ".[pipeline]"
 
-Pin: ``git+https://github.com/Exios66/llm-mailroom.git@1a1ec3dfb4e71f615f5d34f6198f9d06fd8c26dd`` (reviewed source
-with package version 0.8.1 — dedicated
+Pin: ``git+https://github.com/Exios66/llm-mailroom.git@65523a220954d05bdf9b3d6604eb2fe128342f58`` (reviewed source
+with package version 0.9.1 — dedicated
 merger_agreement_specialist, ModernBERT intake-ml-triage span,
-llm-dojo-scoring v0.24.2, mailroom-dataset tag v9.1). The review_resolve /
+llm-dojo-scoring v0.27.2, mailroom-dataset tag v9.1). The review_resolve /
 schemas.manifest contract is unchanged since v0.7.1.
 Bump
 ``MAILROOM_GIT_SHA`` and the extra together.
@@ -34,11 +34,11 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-# Reviewed source dependency adoption — canonical Dojo v0.24.2.
-MAILROOM_GIT_SHA = "1a1ec3dfb4e71f615f5d34f6198f9d06fd8c26dd"
+# Reviewed source dependency adoption — canonical Dojo v0.27.2.
+MAILROOM_GIT_SHA = "65523a220954d05bdf9b3d6604eb2fe128342f58"
 MAILROOM_GIT_URL = "https://github.com/Exios66/llm-mailroom.git"
 MAILROOM_DIST_NAME = "mailroom"
-MAILROOM_DIST_VERSION = "0.8.1"
+MAILROOM_DIST_VERSION = "0.9.1"
 MAILROOM_PEP508 = (
     f"{MAILROOM_DIST_NAME} @ git+{MAILROOM_GIT_URL}@{MAILROOM_GIT_SHA}"
 )

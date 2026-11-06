@@ -1,4 +1,381 @@
 {
+  "contract_version": "1.0.0",
+  "pipeline_version": "0.9.1",
+  "trace_name": "document-pipeline",
+  "graph": {
+    "start": "__start__",
+    "end": "__end__",
+    "nodes": [
+      {
+        "id": "arbiter",
+        "span": "arbitrate-verdict",
+        "observation_type": "agent"
+      },
+      {
+        "id": "archive",
+        "span": "archive-document",
+        "observation_type": "span"
+      },
+      {
+        "id": "boss_escalation",
+        "span": "adjudicate-conflict",
+        "observation_type": "agent"
+      },
+      {
+        "id": "catalog_write",
+        "span": "write-catalog",
+        "observation_type": "span"
+      },
+      {
+        "id": "classification_arbiter",
+        "span": "arbitrate-classification",
+        "observation_type": "agent"
+      },
+      {
+        "id": "classify",
+        "span": "classify-document",
+        "observation_type": "agent"
+      },
+      {
+        "id": "compile_report",
+        "span": "compile-report",
+        "observation_type": "agent"
+      },
+      {
+        "id": "extract",
+        "span": "extract-fields",
+        "observation_type": "agent"
+      },
+      {
+        "id": "human_review",
+        "span": "route-for-review",
+        "observation_type": "span"
+      },
+      {
+        "id": "intake",
+        "span": "intake-document",
+        "observation_type": "span"
+      },
+      {
+        "id": "judge_verify",
+        "span": "judge-verify",
+        "observation_type": "evaluator"
+      },
+      {
+        "id": "retry_classify",
+        "span": "classify-document",
+        "observation_type": "agent"
+      },
+      {
+        "id": "retry_extract",
+        "span": "extract-fields",
+        "observation_type": "agent"
+      },
+      {
+        "id": "review_classify",
+        "span": "classify-document",
+        "observation_type": "agent"
+      }
+    ],
+    "edges": [
+      {
+        "source": "__start__",
+        "target": "extract",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "__start__",
+        "target": "intake",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "arbiter",
+        "target": "arbiter",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "arbiter",
+        "target": "compile_report",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "arbiter",
+        "target": "human_review",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "arbiter",
+        "target": "retry_extract",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "archive",
+        "target": "__end__",
+        "conditional": false,
+        "label": null
+      },
+      {
+        "source": "boss_escalation",
+        "target": "boss_escalation",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "boss_escalation",
+        "target": "compile_report",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "boss_escalation",
+        "target": "human_review",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "catalog_write",
+        "target": "archive",
+        "conditional": false,
+        "label": null
+      },
+      {
+        "source": "classification_arbiter",
+        "target": "extract",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "classification_arbiter",
+        "target": "human_review",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "classify",
+        "target": "classify",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "classify",
+        "target": "extract",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "classify",
+        "target": "human_review",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "classify",
+        "target": "retry_classify",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "classify",
+        "target": "review_classify",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "compile_report",
+        "target": "catalog_write",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "compile_report",
+        "target": "human_review",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "extract",
+        "target": "boss_escalation",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "extract",
+        "target": "compile_report",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "extract",
+        "target": "extract",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "extract",
+        "target": "human_review",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "extract",
+        "target": "judge_verify",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "extract",
+        "target": "retry_extract",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "human_review",
+        "target": "__end__",
+        "conditional": true,
+        "label": "failed"
+      },
+      {
+        "source": "human_review",
+        "target": "extract",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "intake",
+        "target": "classify",
+        "conditional": false,
+        "label": null
+      },
+      {
+        "source": "judge_verify",
+        "target": "arbiter",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "judge_verify",
+        "target": "compile_report",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "judge_verify",
+        "target": "human_review",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "judge_verify",
+        "target": "judge_verify",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "retry_classify",
+        "target": "extract",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "retry_classify",
+        "target": "human_review",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "retry_classify",
+        "target": "retry_classify",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "retry_classify",
+        "target": "review_classify",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "retry_extract",
+        "target": "boss_escalation",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "retry_extract",
+        "target": "compile_report",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "retry_extract",
+        "target": "human_review",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "retry_extract",
+        "target": "judge_verify",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "retry_extract",
+        "target": "retry_extract",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "review_classify",
+        "target": "classification_arbiter",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "review_classify",
+        "target": "extract",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "review_classify",
+        "target": "human_review",
+        "conditional": true,
+        "label": null
+      },
+      {
+        "source": "review_classify",
+        "target": "review_classify",
+        "conditional": true,
+        "label": null
+      }
+    ]
+  },
+  "spans": {
+    "adjudicate-conflict": "agent",
+    "answer-question": "generation",
+    "arbitrate-classification": "agent",
+    "arbitrate-verdict": "agent",
+    "archive-document": "span",
+    "classify-document": "agent",
+    "compile-report": "agent",
+    "document-pipeline": "chain",
+    "extract-fields": "agent",
+    "extract-image-text": "retriever",
+    "intake-document": "span",
+    "intake-ml-triage": "span",
+    "judge-verify": "evaluator",
+    "normalize-intake": "span",
+    "pipeline-result": "generation",
+    "route-for-review": "span",
+    "transcribe-pdf": "retriever",
+    "write-catalog": "span"
+  },
   "agents": [
     "arbiter",
     "boss",
@@ -17,45 +394,12 @@
     "sorter",
     "sorter_reviewer"
   ],
-  "confidence": {
-    "arbiter_retry_max": 2,
-    "by_class": {
-      "contract": {
-        "high": 0.98,
-        "judge_band_high": 0.97,
-        "low": 0.9
-      },
-      "corporate_record": {
-        "high": 0.96,
-        "judge_band_high": 0.94,
-        "low": 0.86
-      },
-      "correspondence": {
-        "high": 0.95,
-        "judge_band_high": 0.92,
-        "low": 0.85
-      },
-      "insurance_claim": {
-        "high": 0.98,
-        "judge_band_high": 0.97,
-        "low": 0.9
-      },
-      "merger_agreement": {
-        "high": 0.98,
-        "judge_band_high": 0.97,
-        "low": 0.9
-      }
-    },
-    "conflict_threshold": 0.3,
-    "high": 0.97,
-    "judge_band_high": 0.95,
-    "judge_max_passes": 3,
-    "low": 0.88,
-    "retry_max": 2
-  },
-  "contract_version": "1.0.0",
   "doc_classes": [
     {
+      "key": "contract",
+      "label": "Contract / Agreement",
+      "schema": "ContractExtraction",
+      "specialist": "contracts_specialist",
       "fields": [
         "contract_value",
         "cuad_clauses",
@@ -69,10 +413,6 @@
         "renewal_terms",
         "term_length"
       ],
-      "key": "contract",
-      "label": "Contract / Agreement",
-      "schema": "ContractExtraction",
-      "specialist": "contracts_specialist",
       "subclasses": [
         "affiliate",
         "agency",
@@ -102,6 +442,10 @@
       ]
     },
     {
+      "key": "merger_agreement",
+      "label": "Merger Agreement",
+      "schema": "MergerAgreementExtraction",
+      "specialist": "merger_agreement_specialist",
       "fields": [
         "document_name",
         "effective_date",
@@ -114,10 +458,6 @@
         "parties",
         "subject_matter"
       ],
-      "key": "merger_agreement",
-      "label": "Merger Agreement",
-      "schema": "MergerAgreementExtraction",
-      "specialist": "merger_agreement_specialist",
       "subclasses": [
         "all_cash",
         "all_stock",
@@ -127,6 +467,10 @@
       ]
     },
     {
+      "key": "corporate_record",
+      "label": "Corporate Record",
+      "schema": "CorporateRecordExtraction",
+      "specialist": "corporate_records_specialist",
       "fields": [
         "effective_date",
         "entity_name",
@@ -138,10 +482,6 @@
         "signatories",
         "subject_matter"
       ],
-      "key": "corporate_record",
-      "label": "Corporate Record",
-      "schema": "CorporateRecordExtraction",
-      "specialist": "corporate_records_specialist",
       "subclasses": [
         "articles_of_incorporation",
         "bylaws",
@@ -157,6 +497,10 @@
       ]
     },
     {
+      "key": "correspondence",
+      "label": "Correspondence",
+      "schema": "CorrespondenceExtraction",
+      "specialist": "correspondence_specialist",
       "fields": [
         "action_items",
         "additional_recipients",
@@ -170,10 +514,6 @@
         "subject_matter",
         "urgency"
       ],
-      "key": "correspondence",
-      "label": "Correspondence",
-      "schema": "CorrespondenceExtraction",
-      "specialist": "correspondence_specialist",
       "subclasses": [
         "email",
         "memo",
@@ -187,6 +527,10 @@
       ]
     },
     {
+      "key": "insurance_claim",
+      "label": "Insurance Claim",
+      "schema": "InsuranceClaimExtraction",
+      "specialist": "insurance_claims_specialist",
       "fields": [
         "adjuster",
         "claim_checklist",
@@ -206,10 +550,6 @@
         "subject_matter",
         "supporting_documents"
       ],
-      "key": "insurance_claim",
-      "label": "Insurance Claim",
-      "schema": "InsuranceClaimExtraction",
-      "specialist": "insurance_claims_specialist",
       "subclasses": [
         "carrier",
         "inpatient",
@@ -220,6 +560,7 @@
       ]
     }
   ],
+  "unknown_doc_class": "unknown",
   "failure_classes": [
     "llm_timeout",
     "llm_auth",
@@ -230,639 +571,298 @@
     "run_budget",
     "unexpected"
   ],
-  "graph": {
-    "edges": [
-      {
-        "conditional": true,
-        "label": null,
-        "source": "__start__",
-        "target": "extract"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "__start__",
-        "target": "intake"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "arbiter",
-        "target": "arbiter"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "arbiter",
-        "target": "compile_report"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "arbiter",
-        "target": "human_review"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "arbiter",
-        "target": "retry_extract"
-      },
-      {
-        "conditional": false,
-        "label": null,
-        "source": "archive",
-        "target": "__end__"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "boss_escalation",
-        "target": "boss_escalation"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "boss_escalation",
-        "target": "compile_report"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "boss_escalation",
-        "target": "human_review"
-      },
-      {
-        "conditional": false,
-        "label": null,
-        "source": "catalog_write",
-        "target": "archive"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "classification_arbiter",
-        "target": "extract"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "classification_arbiter",
-        "target": "human_review"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "classify",
-        "target": "classify"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "classify",
-        "target": "extract"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "classify",
-        "target": "human_review"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "classify",
-        "target": "retry_classify"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "classify",
-        "target": "review_classify"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "compile_report",
-        "target": "catalog_write"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "compile_report",
-        "target": "human_review"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "extract",
-        "target": "boss_escalation"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "extract",
-        "target": "compile_report"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "extract",
-        "target": "extract"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "extract",
-        "target": "human_review"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "extract",
-        "target": "judge_verify"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "extract",
-        "target": "retry_extract"
-      },
-      {
-        "conditional": true,
-        "label": "failed",
-        "source": "human_review",
-        "target": "__end__"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "human_review",
-        "target": "extract"
-      },
-      {
-        "conditional": false,
-        "label": null,
-        "source": "intake",
-        "target": "classify"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "judge_verify",
-        "target": "arbiter"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "judge_verify",
-        "target": "compile_report"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "judge_verify",
-        "target": "human_review"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "judge_verify",
-        "target": "judge_verify"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "retry_classify",
-        "target": "extract"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "retry_classify",
-        "target": "human_review"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "retry_classify",
-        "target": "retry_classify"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "retry_classify",
-        "target": "review_classify"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "retry_extract",
-        "target": "boss_escalation"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "retry_extract",
-        "target": "compile_report"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "retry_extract",
-        "target": "human_review"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "retry_extract",
-        "target": "judge_verify"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "retry_extract",
-        "target": "retry_extract"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "review_classify",
-        "target": "classification_arbiter"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "review_classify",
-        "target": "extract"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "review_classify",
-        "target": "human_review"
-      },
-      {
-        "conditional": true,
-        "label": null,
-        "source": "review_classify",
-        "target": "review_classify"
-      }
-    ],
-    "end": "__end__",
-    "nodes": [
-      {
-        "id": "arbiter",
-        "observation_type": "agent",
-        "span": "arbitrate-verdict"
-      },
-      {
-        "id": "archive",
-        "observation_type": "span",
-        "span": "archive-document"
-      },
-      {
-        "id": "boss_escalation",
-        "observation_type": "agent",
-        "span": "adjudicate-conflict"
-      },
-      {
-        "id": "catalog_write",
-        "observation_type": "span",
-        "span": "write-catalog"
-      },
-      {
-        "id": "classification_arbiter",
-        "observation_type": "agent",
-        "span": "arbitrate-classification"
-      },
-      {
-        "id": "classify",
-        "observation_type": "agent",
-        "span": "classify-document"
-      },
-      {
-        "id": "compile_report",
-        "observation_type": "agent",
-        "span": "compile-report"
-      },
-      {
-        "id": "extract",
-        "observation_type": "agent",
-        "span": "extract-fields"
-      },
-      {
-        "id": "human_review",
-        "observation_type": "span",
-        "span": "route-for-review"
-      },
-      {
-        "id": "intake",
-        "observation_type": "span",
-        "span": "intake-document"
-      },
-      {
-        "id": "judge_verify",
-        "observation_type": "evaluator",
-        "span": "judge-verify"
-      },
-      {
-        "id": "retry_classify",
-        "observation_type": "agent",
-        "span": "classify-document"
-      },
-      {
-        "id": "retry_extract",
-        "observation_type": "agent",
-        "span": "extract-fields"
-      },
-      {
-        "id": "review_classify",
-        "observation_type": "agent",
-        "span": "classify-document"
-      }
-    ],
-    "start": "__start__"
-  },
-  "pipeline_version": "0.9.1",
   "scores": {
     "configs": [
       {
-        "data_type": "NUMERIC",
-        "name": "amount_exactness"
+        "name": "amount_exactness",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "BOOLEAN",
-        "name": "class_correct"
+        "name": "class_correct",
+        "data_type": "BOOLEAN"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "classification_attempts"
+        "name": "classification_attempts",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "classification_confidence"
+        "name": "classification_confidence",
+        "data_type": "NUMERIC"
       },
       {
+        "name": "classification_correct",
+        "data_type": "CATEGORICAL",
         "categories": [
           "correct",
           "ambiguous",
           "incorrect"
-        ],
+        ]
+      },
+      {
+        "name": "classification_quality",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "completeness",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "completeness_label",
         "data_type": "CATEGORICAL",
-        "name": "classification_correct"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "classification_quality"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "completeness"
-      },
-      {
         "categories": [
           "complete",
           "partial",
           "incomplete"
-        ],
+        ]
+      },
+      {
+        "name": "confidence_calibration_error",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "content_topic_accuracy",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "content_topic_f1_macro",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "determination_consistency",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "entity_list_f1",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "entity_list_precision",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "entity_list_recall",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "estimated_cost_usd",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "expected_field_presence",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "extraction_attempts",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "extraction_category_presence",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "extraction_confidence",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "extraction_correctness",
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "extraction_correctness_label",
         "data_type": "CATEGORICAL",
-        "name": "completeness_label"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "confidence_calibration_error"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "content_topic_accuracy"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "content_topic_f1_macro"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "determination_consistency"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "entity_list_f1"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "entity_list_precision"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "entity_list_recall"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "estimated_cost_usd"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "expected_field_presence"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "extraction_attempts"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "extraction_category_presence"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "extraction_confidence"
-      },
-      {
-        "data_type": "NUMERIC",
-        "name": "extraction_correctness"
-      },
-      {
         "categories": [
           "accurate",
           "partial",
           "inaccurate"
-        ],
-        "data_type": "CATEGORICAL",
-        "name": "extraction_correctness_label"
+        ]
       },
       {
-        "data_type": "NUMERIC",
-        "name": "extraction_f1"
+        "name": "extraction_f1",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "extraction_f2"
+        "name": "extraction_f2",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "extraction_field_score"
+        "name": "extraction_field_score",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "extraction_hallucination_rate"
+        "name": "extraction_hallucination_rate",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "BOOLEAN",
-        "name": "extraction_needs_judge_review"
+        "name": "extraction_needs_judge_review",
+        "data_type": "BOOLEAN"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "extraction_overall_score"
+        "name": "extraction_overall_score",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "extraction_overall_verified_precision"
+        "name": "extraction_overall_verified_precision",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "extraction_precision"
+        "name": "extraction_precision",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "extraction_recall"
+        "name": "extraction_recall",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "BOOLEAN",
-        "name": "guardrail_triggered"
+        "name": "guardrail_triggered",
+        "data_type": "BOOLEAN"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "intake_changed_rate"
+        "name": "intake_changed_rate",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "intake_collapsed_blanks"
+        "name": "intake_collapsed_blanks",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "intake_hyphen_unwraps"
+        "name": "intake_hyphen_unwraps",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "intake_messy_rate"
+        "name": "intake_messy_rate",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "intake_prep_completeness"
+        "name": "intake_prep_completeness",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "TEXT",
-        "name": "judge_notes"
+        "name": "judge_notes",
+        "data_type": "TEXT"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "legalbench_accuracy"
+        "name": "legalbench_accuracy",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "legalbench_calibration_error"
+        "name": "legalbench_calibration_error",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "legalbench_macro_f1"
+        "name": "legalbench_macro_f1",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "legalbench_n_questions"
+        "name": "legalbench_n_questions",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "TEXT",
-        "name": "legalbench_task"
+        "name": "legalbench_task",
+        "data_type": "TEXT"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "llm_call_count"
+        "name": "llm_call_count",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "maud_category_accuracy"
+        "name": "maud_category_accuracy",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "maud_clause_presence"
+        "name": "maud_clause_presence",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "maud_question_accuracy"
+        "name": "maud_question_accuracy",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "maud_question_macro_accuracy"
+        "name": "maud_question_macro_accuracy",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "maud_valid_class_rate"
+        "name": "maud_valid_class_rate",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "BOOLEAN",
-        "name": "parse_error"
+        "name": "parse_error",
+        "data_type": "BOOLEAN"
       },
       {
-        "data_type": "BOOLEAN",
-        "name": "run_aborted"
+        "name": "run_aborted",
+        "data_type": "BOOLEAN"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "run_duration_seconds"
+        "name": "run_duration_seconds",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "BOOLEAN",
-        "name": "schema_valid"
+        "name": "schema_valid",
+        "data_type": "BOOLEAN"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "sentiment_accuracy"
+        "name": "sentiment_accuracy",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "sentiment_f1_macro"
+        "name": "sentiment_f1_macro",
+        "data_type": "NUMERIC"
       },
       {
-        "data_type": "BOOLEAN",
-        "name": "stage_completed"
+        "name": "stage_completed",
+        "data_type": "BOOLEAN"
       },
       {
-        "data_type": "BOOLEAN",
-        "name": "stage_correct"
+        "name": "stage_correct",
+        "data_type": "BOOLEAN"
       },
       {
-        "data_type": "BOOLEAN",
-        "name": "success_rate"
+        "name": "success_rate",
+        "data_type": "BOOLEAN"
       },
       {
-        "data_type": "NUMERIC",
-        "name": "total_tokens"
+        "name": "total_tokens",
+        "data_type": "NUMERIC"
       }
     ],
     "langfuse_aliases": {
       "extraction_overall_verified_precision": "extraction_verified_precision"
     }
   },
-  "spans": {
-    "adjudicate-conflict": "agent",
-    "answer-question": "generation",
-    "arbitrate-classification": "agent",
-    "arbitrate-verdict": "agent",
-    "archive-document": "span",
-    "classify-document": "agent",
-    "compile-report": "agent",
-    "document-pipeline": "chain",
-    "extract-fields": "agent",
-    "extract-image-text": "retriever",
-    "intake-document": "span",
-    "intake-ml-triage": "span",
-    "judge-verify": "evaluator",
-    "normalize-intake": "span",
-    "pipeline-result": "generation",
-    "route-for-review": "span",
-    "transcribe-pdf": "retriever",
-    "write-catalog": "span"
-  },
-  "trace_name": "document-pipeline",
-  "unknown_doc_class": "unknown"
+  "confidence": {
+    "high": 0.97,
+    "low": 0.88,
+    "retry_max": 2,
+    "judge_band_high": 0.95,
+    "arbiter_retry_max": 2,
+    "judge_max_passes": 3,
+    "conflict_threshold": 0.3,
+    "by_class": {
+      "contract": {
+        "high": 0.98,
+        "low": 0.9,
+        "judge_band_high": 0.97
+      },
+      "merger_agreement": {
+        "high": 0.98,
+        "low": 0.9,
+        "judge_band_high": 0.97
+      },
+      "insurance_claim": {
+        "high": 0.98,
+        "low": 0.9,
+        "judge_band_high": 0.97
+      },
+      "corporate_record": {
+        "high": 0.96,
+        "low": 0.86,
+        "judge_band_high": 0.94
+      },
+      "correspondence": {
+        "high": 0.95,
+        "low": 0.85,
+        "judge_band_high": 0.92
+      }
+    }
+  }
 }

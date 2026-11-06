@@ -6,6 +6,15 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Changed (M2: A-7)
+
+- Adopt llm-mailroom 0.9.1 at merged contract commit `65523a220954` and
+  re-vendor the display contract with matching immutable provenance, removing
+  the provisional #165-head exception. Align the optional offline evaluation
+  engine with the producer's Dojo v0.27.2 commit `1cd4aba76d82`.
+- Preserve the producer contract's exact bytes when vendoring; the recorded
+  digest now identifies the fetched blob without local JSON reformatting.
+
 ### Fixed (browser audit)
 
 - Probe immediately on socket loss, reject superseded HTTP responses, and
@@ -43,8 +52,8 @@ All notable changes to The-Mailroom are documented here, following
   the `gmail_triage` and `relations` agents, the `certificate_of_formation`
   and correspondence `other` subclasses, and the `arbitrate-classification`
   span (interim: on the re-classify station until it gets its own stage).
-- The vendored contract is provisional: it comes from llm-mailroom#165's head
-  and will be re-vendored from its merge commit when the pin moves (A-7).
+- M1 introduced a provisional contract from llm-mailroom#165; M2 A-7 adopts
+  its merged immutable commit and removes the provenance exception.
 
 ### Added (M1)
 
