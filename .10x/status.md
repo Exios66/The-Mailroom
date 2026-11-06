@@ -1,11 +1,11 @@
 # Status
 
 **Feature:** `mailroom-alignment-audit`
-**Phase:** Phases 1–3 complete (approved 2026-11-06). Phase 4 started: M0.
+**Phase:** Phase 4 (implementation). M0 done; M1 in progress.
 
 ## Milestones
-- [ ] M0 Stop the bleeding (F-1, A-9, H-1)
-- [ ] M1 Contract
+- [x] M0 Stop the bleeding (F-1, A-9, H-1): The-Mailroom #63; llm-mailroom Railway PR
+- [ ] M1 Contract (A-1 producer side: llm-mailroom #165)
 - [ ] M2 Catch-up (v0.6.0)
 - [ ] M3 Design system
 - [ ] M4 Floor v2 + Observatory map + review desk tab (v1.0.0)
