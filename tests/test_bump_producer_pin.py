@@ -116,6 +116,26 @@ def test_provisional_contract_needs_a_note(repo):
     assert any("no note" in p for p in bump.verify_vendored())
 
 
+def test_check_flags_a_full_sha_that_only_shares_the_short_prefix(repo):
+    vis, pipe, sha = repo
+    assert bump.main(["--contract-only", "--contract-ref", sha, "--checkout", str(pipe),
+                      "--note", "test"]) == 0
+    lookalike = OLD[:7] + "c" * 33
+    (vis / "docs.md").write_text(f"mirrors llm-mailroom @{lookalike}\n", encoding="utf-8")
+    _git(vis, "add", "docs.md")
+    assert bump.main(["--check"]) == 1
+
+
+def test_failed_fetch_leaves_the_pin_alone(repo):
+    vis, pipe, sha = repo
+    with pytest.raises(subprocess.CalledProcessError):
+        bump.main([NEW, "--version", "0.9.2", "--contract-ref", "no-such-ref",
+                   "--checkout", str(pipe)])
+    assert OLD in (vis / "mailroom_ui" / "producer.py").read_text()
+    assert OLD in (vis / "pyproject.toml").read_text()
+    assert not (vis / "mailroom_ui" / "contract" / "source.json").exists()
+
+
 def test_rejects_a_short_sha(repo):
     with pytest.raises(SystemExit):
         bump.main(["abc1234"])

@@ -77,8 +77,13 @@ def test_server_uses_the_registry(monkeypatch):
     assert src.source_name == "phoenix"
 
 
-def test_every_registered_adapter_has_a_conformance_renderer():
-    assert set(reg.available_sources()) <= set(RENDERERS)
+def test_every_built_in_adapter_has_a_conformance_renderer():
+    """Built-ins are checked here; an installed plugin runs ``assert_conformant``
+    in its own tests, so its absence from ``RENDERERS`` must not fail ours."""
+    built_in = {name for name, desc in reg.available_sources().items()
+                if not desc.startswith("plugin ")}
+    assert built_in == {"langfuse", "phoenix"}
+    assert built_in <= set(RENDERERS)
 
 
 def test_golden_traces_use_only_contract_names():
@@ -95,7 +100,7 @@ def test_reference_renderer_interprets_the_golden_routes():
     assert by_id["gold-archived"]["stage"] == "archived"
     assert by_id["gold-archived"]["total_tokens"] == 4600
     assert by_id["gold-review"]["stage"] == "review"
-    assert "retry_classify" in by_id["gold-review"]["routing_path"]
+    assert by_id["gold-review"]["routing_path"].count("retry_classify") == 1
     assert by_id["gold-aborted"]["stage"] == "failed"
     assert by_id["gold-aborted"]["failure_class"] == "llm_timeout"
 

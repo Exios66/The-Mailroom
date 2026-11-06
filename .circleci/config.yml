@@ -1,8 +1,9 @@
 version: 2.1
 
 # The-Mailroom CI (H-2). CircleCI, not GitHub Actions (AGENTS.md: the account
-# cannot rely on Actions; Pages stays deploy-from-branch). Network-free and
-# key-free: no Langfuse, Phoenix or producer is contacted.
+# cannot rely on Actions; Pages stays deploy-from-branch). Key-free, and the
+# tests contact no Langfuse, Phoenix or producer; installing dependencies
+# (pip, npm ci, npm audit) still needs the package registries.
 #
 # Mark "ci/circleci: python" (and "ci/circleci: desk" once the desk tab ships)
 # as required checks on main.

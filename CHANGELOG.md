@@ -50,6 +50,11 @@ All notable changes to The-Mailroom are documented here, following
 
 - A5: the producer pin is named consistently; stale `959bb0b` / `3cf9fb9`
   references in docs, `.env.example` and schema comments are gone.
+- Routing path: a classification arbiter after a reviewer re-classify no
+  longer lists `retry_classify` twice.
+- `bump_producer_pin.py` fetches and checks the contract before it rewrites
+  any pin, and `--check` flags a full SHA that only shares the pin's first
+  seven characters.
 - React desk: `follow-redirects` 1.16.1 → 1.16.2 (GHSA-mrwp-f3q8-3g9p, high),
   found by the new audit gate.
 - The Observatory floor maps `intake-ml-triage`, `arbitrate-classification`

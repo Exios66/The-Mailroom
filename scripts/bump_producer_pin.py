@@ -87,7 +87,6 @@ def _read(path: Path) -> str | None:
 
 def stale_references(pin: str) -> list[str]:
     """Non-history lines naming an old pin form (short or full) of a mailroom SHA."""
-    short = pin[:7]
     pattern = re.compile(r"llm-mailroom(?:\.git)? ?@ ?([0-9a-f]{7,40})|mailroom`? `?@ ?`?([0-9a-f]{7,40})")
     bad = []
     for path in _tracked_files():
@@ -97,7 +96,7 @@ def stale_references(pin: str) -> list[str]:
         for lineno, line in enumerate(text.splitlines(), 1):
             for match in pattern.finditer(line):
                 ref = match.group(1) or match.group(2)
-                if not (pin.startswith(ref) or ref.startswith(short)):
+                if not pin.startswith(ref):  # any prefix of the pin, short or full
                     bad.append(f"{path.relative_to(ROOT)}:{lineno}: {ref}")
     return bad
 
@@ -141,11 +140,18 @@ def fetch_contract(ref: str, checkout: Path | None) -> tuple[bytes, str, str]:
     return blob, ref, url
 
 
-def vendor_contract(ref: str, checkout: Path | None, pin: str, note: str | None) -> dict:
+def load_contract(ref: str, checkout: Path | None) -> tuple[dict, str, str]:
+    """Fetch and validate the contract at ``ref``; writes nothing."""
     blob, sha, origin = fetch_contract(ref, checkout)
     contract = json.loads(blob)
     if "contract_version" not in contract or "graph" not in contract:
         raise SystemExit("fetched file is not a mailroom display contract")
+    return contract, sha, origin
+
+
+def vendor_contract(fetched: tuple[dict, str, str], pin: str, note: str | None) -> dict:
+    """Write a contract from ``load_contract`` and its provenance."""
+    contract, sha, origin = fetched
     CONTRACT_DIR.mkdir(parents=True, exist_ok=True)
     body = json.dumps(contract, indent=2, sort_keys=True) + "\n"
     CONTRACT_PATH.write_text(body, encoding="utf-8")
@@ -204,12 +210,15 @@ def main(argv: list[str] | None = None) -> int:
     if not args.contract_only:
         if not args.sha or not _SHA_RE.match(args.sha):
             parser.error("a full 40-char commit SHA is required (or pass --contract-only)")
-        changed = move_pin(old, args.sha, old_ver, args.version)
         pin = args.sha
-        for path in changed:
-            print(f"pin moved: {path.relative_to(ROOT)}")
 
-    source = vendor_contract(args.contract_ref or pin, args.checkout, pin, args.note)
+    # Fetch before writing anything, so a failed fetch leaves the old pin and
+    # the old contract together instead of a new pin beside a stale contract.
+    fetched = load_contract(args.contract_ref or pin, args.checkout)
+    if pin != old:
+        for path in move_pin(old, pin, old_ver, args.version):
+            print(f"pin moved: {path.relative_to(ROOT)}")
+    source = vendor_contract(fetched, pin, args.note)
     print(f"contract vendored from {source['pipeline_commit']} ({source['fetched_from']})")
     if not source["matches_pin"]:
         print("warning: vendored contract does not come from the pinned commit", file=sys.stderr)
