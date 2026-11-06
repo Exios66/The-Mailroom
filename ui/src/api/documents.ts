@@ -33,7 +33,7 @@ export function runToDocument(run: Record<string, unknown>): Document {
     confidence: Number(
       run.extraction_confidence ?? run.classification_confidence ?? 0,
     ),
-    status: stageToBin(stage),
+    status: run.needs_human ? 'review' : stageToBin(stage),
     stage,
     created_at: created,
     updated_at: String(run.updated_at || created),

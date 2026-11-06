@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { reviewApi } from '@/api/review'
 import { useState } from 'react'
@@ -14,11 +15,23 @@ export default function ReviewPanel() {
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null)
   const [comment, setComment] = useState('')
   const [disposition, setDisposition] = useState<ReviewResolution['disposition']>('resume')
+  const [extractedData, setExtractedData] = useState('')
   const queryClient = useQueryClient()
 
   const resolveMutation = useMutation({
-    mutationFn: ({ doc, resolution }: { doc: Document; resolution: 'approved' | 'rejected' }) =>
-      reviewApi.resolve(doc, { resolution, comment, disposition }),
+    mutationFn: ({ doc, resolution }: { doc: Document; resolution: 'approved' | 'rejected' }) => {
+      let extracted_data: Record<string, unknown> | undefined
+      if (disposition === 'complete') {
+        let parsed: unknown
+        try { parsed = JSON.parse(extractedData) }
+        catch { throw new Error('Complete needs valid extracted_data JSON.') }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('Complete needs an extracted_data JSON object.')
+        }
+        extracted_data = parsed as Record<string, unknown>
+      }
+      return reviewApi.resolve(doc, { resolution, comment, disposition, extracted_data })
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['review-queue'] })
       void queryClient.invalidateQueries({ queryKey: ['queue'] })
@@ -57,7 +70,14 @@ export default function ReviewPanel() {
             <button
               type="button"
               key={doc.trace_id || doc.doc_id}
-              onClick={() => setSelectedDoc(doc)}
+              onClick={() => {
+                setSelectedDoc(doc)
+                setDisposition(doc.stage === 'review' ? 'resume' : 'record')
+                setComment('')
+                setExtractedData('')
+                resolveMutation.reset()
+              }}
+              disabled={resolveMutation.isPending}
               className={`w-full text-left p-4 rounded-lg border transition-all ${
                 selectedDoc?.doc_id === doc.doc_id
                   ? 'border-primary bg-primary/5'
@@ -109,22 +129,40 @@ export default function ReviewPanel() {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Disposition</label>
+              <label htmlFor="review-disposition" className="text-sm font-medium">Disposition</label>
               <select
+                id="review-disposition"
+                disabled={resolveMutation.isPending}
                 value={disposition}
                 onChange={(e) => setDisposition(e.target.value as ReviewResolution['disposition'])}
                 className="w-full mt-1 px-3 py-2 rounded-md border border-input bg-background text-sm"
               >
-                <option value="resume">resume</option>
+                <option value="resume" disabled={selectedDoc.stage !== 'review'}>resume</option>
                 <option value="record">record</option>
                 <option value="requeue">requeue</option>
-                <option value="complete">complete</option>
+                <option value="complete" disabled={selectedDoc.stage !== 'review'}>complete</option>
               </select>
             </div>
 
+            {disposition === 'complete' && (
+              <div>
+                <label htmlFor="review-extracted-data" className="text-sm font-medium">Extracted data (JSON object)</label>
+                <textarea
+                  id="review-extracted-data"
+                  value={extractedData}
+                  onChange={(e) => setExtractedData(e.target.value)}
+                  disabled={resolveMutation.isPending}
+                  className="w-full mt-1 px-3 py-2 rounded-md border border-input bg-background text-sm font-mono"
+                  rows={6}
+                  placeholder='{"field": "reviewed value"}'
+                />
+              </div>
+            )}
             <div>
-              <label className="text-sm font-medium">Review comment</label>
+              <label htmlFor="review-comment" className="text-sm font-medium">Review comment</label>
               <textarea
+                id="review-comment"
+                disabled={resolveMutation.isPending}
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 className="w-full mt-1 px-3 py-2 rounded-md border border-input bg-background text-sm"
@@ -155,7 +193,9 @@ export default function ReviewPanel() {
             </div>
             {resolveMutation.isError && (
               <p className="text-sm text-destructive">
-                Resolve failed — producer must be configured on the visualizer.
+                {axios.isAxiosError(resolveMutation.error)
+                  ? String(resolveMutation.error.response?.data?.detail || resolveMutation.error.response?.data?.error || resolveMutation.error.message)
+                  : resolveMutation.error.message}
               </p>
             )}
           </div>

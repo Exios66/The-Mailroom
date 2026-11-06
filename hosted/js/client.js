@@ -85,8 +85,7 @@ const Obs = (() => {
       body: JSON.stringify(creds),
     });
     if (!res.ok) {
-      await readError(res, "/v1/auth/login", "Obs.login").catch((e) => dbg("login-failed", { message: e.message }));
-      return false;
+      await readError(res, "/v1/auth/login", "Obs.login");
     }
     const body = await res.json();
     setOperatorToken(body.access_token || "");

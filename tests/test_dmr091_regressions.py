@@ -95,9 +95,8 @@ def test_get_never_replaces_poller_canonical_snapshot(monkeypatch,query):
     assert load_traces()==before
     monkeypatch.setattr(src.client.api.trace,'list',offline)
     response=client.get('/api/traces')
-    assert response.status_code==200
-    assert {r['trace_id'] for r in response.json()['runs']}=={'parked','done'}
-    assert response.json()['source']=='langfuse-cache'
+    assert response.status_code==503
+    assert load_traces()==before  # export remains available, never a live fallback
 
 
 @pytest.mark.asyncio
@@ -115,6 +114,7 @@ async def test_reconnect_retains_outage_and_last_success_timestamp(monkeypatch):
     await hub._run()
     first=messages[-1]
     assert first['stale'] is False
+    live_list = src.client.api.trace.list
     monkeypatch.setattr(src.client.api.trace,'list',offline)
     hub._stop.clear()
     await hub._run()
@@ -128,7 +128,14 @@ async def test_reconnect_retains_outage_and_last_success_timestamp(monkeypatch):
     await hub.connect(ws)
     assert ws.message['stale'] is True
     assert ws.message['fetched_at']==first['fetched_at']
-    assert ws.message['runs']==first['runs']
+    assert first['runs']
+    assert failed['runs']==[]
+    assert ws.message['runs']==[]
+    monkeypatch.setattr(src.client.api.trace, 'list', live_list)
+    hub._stop.clear()
+    await hub._run()
+    assert messages[-1]['stale'] is False
+    assert messages[-1]['runs'] == first['runs']
 
 
 @pytest.mark.parametrize('path',['/status','/throughput','/distribution'])

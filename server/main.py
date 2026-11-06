@@ -43,10 +43,7 @@ from mailroom_ui.review_actions import (
     review_context,
 )
 from mailroom_ui.trace_cache import (
-    CACHE_SOURCE,
     cache_status,
-    load_run,
-    load_traces,
     persist_metrics,
     persist_run,
     snapshot_bundle,
@@ -238,16 +235,6 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             payload["mailroom"] = producer_status()
             payload["operator"] = operator_status()
             payload["cache"] = cache
-            if not payload.get("ok") and cache.get("has_snapshot"):
-                # The lamp stays lit so the floor keeps its last snapshot, but
-                # the payload says plainly that the live source is down.
-                payload["ok"] = True
-                payload["stale"] = True
-                payload["degraded"] = True
-                payload["live_ok"] = False
-                payload["source"] = CACHE_SOURCE
-                payload["cached_at"] = cache.get("cached_at")
-                payload["cached_trace_count"] = cache.get("cached_trace_count")
         return payload
 
     @app.get("/api/health")
@@ -274,23 +261,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         stage: Optional[str] = None,
         environment: Optional[str] = None,
     ):
-        try:
-            runs = _recent(src, since, limit)
-        except TraceSourceUnavailable:
-            cached = load_traces()
-            if cached:
-                rows = list(cached.get("runs") or [])
-                if stage:
-                    rows = [r for r in rows if r.get("stage") == stage]
-                if environment:
-                    rows = [r for r in rows if r.get("environment") == environment]
-                return {
-                    "count": len(rows),
-                    "source": CACHE_SOURCE,
-                    "cached_at": cached.get("cached_at"),
-                    "runs": rows[:limit],
-                }
-            raise
+        runs = _recent(src, since, limit)
         if stage:
             runs = [r for r in runs if r.stage.value == stage]
         if environment:
@@ -306,17 +277,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
 
     @app.get("/api/traces/{trace_id}")
     def trace_detail(trace_id: str):
-        # Live source first: the disk snapshot used to win whenever it held
-        # spans, so late scores (offline judge, eval_pipeline) never reached
-        # the inspector — even across restarts. The snapshot is only the
-        # outage fallback, and says so.
-        try:
-            run = src.get_run(trace_id)
-        except TraceSourceUnavailable:
-            cached = load_run(trace_id)
-            if cached:
-                return {**cached, "source": CACHE_SOURCE, "stale": True}
-            raise
+        run = src.get_run(trace_id)
         if run is None:
             return JSONResponse(status_code=404, content={"error": "trace not found"})
         detail = _serialize(run, full=True)
@@ -778,7 +739,7 @@ def _desk_runs(src, hub: PollHub, *, since_seconds: int, limit: int) -> list[Pip
     cutoff = _utcnow() - timedelta(seconds=since_seconds)
     cached = [r for r in (hub.runs or [])
               if (r.updated_at or r.created_at or cutoff) >= cutoff]
-    if cached:
+    if cached and not hub.stale:
         return cached[:limit]
     # Never N+1 Langfuse here. A 50-doc window used to hang SESSIONS/REVIEW
     # for minutes while the poller was still filling hub.runs. Light list

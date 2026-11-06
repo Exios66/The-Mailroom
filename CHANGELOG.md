@@ -6,6 +6,18 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Fixed (browser audit)
+
+- Start HTTP fallback after late WebSocket disconnects in both live consoles;
+  retune Observatory fallback when the server changes its poll interval.
+- Close live floors on source outages even with a warm export cache; keep
+  explicit snapshot downloads available for diagnosis.
+- Keep pixel History filenames and replay controls usable on narrow screens.
+- Optional desk: validate Complete extraction JSON, default finished reviews
+  to Record, preserve producer error details and show objective review causes
+  on pipeline cards. Make mobile navigation leave room for the document view.
+- Preserve login rejection feedback and accept producer audit `at` timestamps.
+
 ### Changed (M1)
 
 - `mailroom_ui/pipeline_schema.py` reads pipeline facts from the generated

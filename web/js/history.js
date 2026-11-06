@@ -74,7 +74,7 @@ const HistoryView = (() => {
       const when = Mailroom.fmt.dateTime(r.updated_at || r.created_at);
       const cost = r.cost_usd ? `$${Number(r.cost_usd).toFixed(4)}` : "—";
       const toks = r.total_tokens ? Number(r.total_tokens).toLocaleString() : "—";
-      return `<div class="run-row" data-trace="${Mailroom.esc(r.trace_id)}" style="grid-template-columns:minmax(0,2fr) 96px 130px 100px 90px 90px 120px">
+      return `<div class="run-row history-row" data-trace="${Mailroom.esc(r.trace_id)}">
         <span class="run-file">${Mailroom.esc(r.filename || r.trace_id)}</span>
         ${chip(r)}
         ${verdictChip(r)}

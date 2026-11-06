@@ -76,8 +76,9 @@ remain at `/static`. REVIEW resolve and Inbox enqueue (`POST /v1/upload`)
 need `MAILROOM_PIPELINE_URL` on a **reachable** producer — `127.0.0.1:8000`
 only works when the visualizer and producer share a host. A Space
 Observatory must use the public producer Space URL. Without those knobs
-the desk still shows the live Langfuse floor, with a disk snapshot cache
-(`MAILROOM_TRACE_CACHE_DIR`) so inspect does not stall on `get_run`.
+the desk still shows the live Langfuse floor. The disk snapshot cache
+(`MAILROOM_TRACE_CACHE_DIR`) supports explicit export downloads; live trace
+reads fail and the floor closes when the source is unavailable.
 
 ### Any Docker host (Fly, Render, Cloud Run, a VPS)
 

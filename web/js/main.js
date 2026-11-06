@@ -187,15 +187,20 @@ const Main = (() => {
   }
 
   function applySnapshot(runs, stale = false) {
-    // V-27: a non-empty FRESH snapshot proves the backend is serving even when
+    if (stale && !Mailroom.staticMode) {
+      langfuseOk = false;
+      runs = [];
+      applySource();
+    }
+    // V-27: a FRESH snapshot proves the backend is serving even when
     // the async health check hasn't resolved yet. A stale one (source down,
     // last-good floor) must not flip the lamp back on — that made the screen
     // alternate OPEN/CLOSED every health tick.
-    if (runs && runs.length && !stale && !langfuseOk) {
+    if (!stale && !langfuseOk) {
       langfuseOk = true;
       applySource();
     }
-    if (!langfuseOk && !demoMode) return;
+    if (!langfuseOk && !demoMode && !stale) return;
     lastSnapshot = runs;
     const ids = new Set(runs.map((r) => r.trace_id));
     const added = [...ids].filter((id) => !lastIds.has(id));
@@ -320,6 +325,7 @@ const Main = (() => {
       ConsoleView.log(`health check failed: ${err.message || err}`, "c-bad");
       langfuseOk = false;
     }
+    if (!langfuseOk) applySnapshot([], true);
     applySource();
     return langfuseOk;
   }
@@ -331,6 +337,7 @@ const Main = (() => {
         ConsoleView.banner("MAILROOM ONLINE — WATCHING LANGFUSE");
       } else {
         wsOk = false;
+        startFallbackPolling();
         applyPipeline(null);
         ConsoleView.log("connection lost — reconnecting…", "c-warn");
       }
@@ -345,10 +352,7 @@ const Main = (() => {
       }
       // V-14: surface staleness + last-updated so a frozen floor with a green
       // lamp is distinguishable from a live one.
-      if (msg.stale) {
-        sourceLabelEl.textContent = "SOURCE: LANGFUSE (STALE)";
-        sourceLabelEl.className = "st-warn mono";
-      }
+      if (msg.stale) applySource();
       renderStatus();
     }
   }
@@ -366,6 +370,7 @@ const Main = (() => {
         } catch (_e) { applyPipeline(null); /* producer unavailable */ }
       } catch (err) {
         applyPipeline(null);
+        applySnapshot([], true);
         const msg = err.message || String(err);
         ConsoleView.log(`poll fallback failed: ${msg}`, "c-warn");
         Mailroom.showError(`fallback poll: ${msg}`);

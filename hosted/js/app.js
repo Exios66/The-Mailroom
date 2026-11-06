@@ -1007,6 +1007,7 @@ const App = (() => {
   function applyPollInterval(seconds) {
     if (typeof seconds === "number" && seconds > 0) {
       pollIntervalMs = Math.max(1000, Math.round(seconds * 1000));
+      if (fallbackTimer) startFallbackPolling();
     }
   }
 
@@ -1015,6 +1016,7 @@ const App = (() => {
       const data = await Obs.api.traces(604800, 200);
       applyRuns(data.runs || []);
       showAlert("");
+      if (!socketLive) setSource("live", "Live · HTTP polling while reconnecting");
       if (data.source === "langfuse-cache") {
         const age = data.cached_at ? ` · ${data.cached_at}` : "";
         setSource("stale", `SOURCE: CACHE${age}`);
@@ -1025,6 +1027,8 @@ const App = (() => {
       } catch (_e) { applyPipelineOps(null); /* producer unavailable */ }
     } catch (err) {
       applyPipelineOps(null);
+      applyRuns([]);
+      setSource("down", "MAILROOM CLOSED — no Langfuse connection");
       dbg("traces-error", { message: err.message });
       showAlert(`Could not load traces — ${err.message}`);
     }
@@ -1070,11 +1074,13 @@ const App = (() => {
       // Health is about the trace SOURCE; the WebSocket's own open/close
       // events own `socketLive` (flipping it here started duplicate polling
       // next to a still-streaming socket until reload).
-      setSource("down", "Trace source reported offline");
+      applyRuns([]);
+      setSource("down", "MAILROOM CLOSED — no Langfuse connection");
       return false;
     } catch (err) {
       dbg("error", { where: "health", message: err.message });
-      setSource("down", `No live connection — ${err.message}`);
+      applyRuns([]);
+      setSource("down", `MAILROOM CLOSED — ${err.message}`);
       if (!runs.length) {
         showAlert("The Observatory needs the Mailroom API (Langfuse-backed) on this host. This is not the GitHub Pages snapshot.");
       }
@@ -1088,14 +1094,17 @@ const App = (() => {
       if (msg.connected) setSource("live", "Live · WebSocket connected");
       else {
         applyPipelineOps(null);
-        setSource("stale", "Socket disconnected — reconnecting");
+        startFallbackPolling();
+        setSource("stale", "Socket disconnected — polling while reconnecting");
       }
     } else if (msg.type === "snapshot") {
-      applyRuns(msg.runs || []);
+      applyRuns(msg.stale ? [] : (msg.runs || []));
       applyPipelineOps(msg.pipeline);
       applyPollInterval(msg.poll_interval_s);
       if (!socketLive) startFallbackPolling();
-      if (msg.stale) setSource("stale", "Live · last snapshot is stale");
+      setSource(msg.stale ? "down" : "live", msg.stale
+        ? "MAILROOM CLOSED — no Langfuse connection"
+        : "Live · WebSocket connected");
     }
   }
 

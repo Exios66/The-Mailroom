@@ -160,7 +160,9 @@ Hugging Face Spaces: SDK **Docker**, empty root directory, port 7860,
 Langfuse keys as Space secrets (`scripts/publish_space.py`).
 Observatory cards show primary/secondary classification outcomes and a
 headline strip; `GET /api/snapshot` + `MAILROOM_TRACE_CACHE_DIR` cache
-Langfuse-derived JSON (never fabricated). See `hosted/README.md` and
+Langfuse-derived JSON for explicit download (never fabricated). Cached rows
+never substitute for an unavailable live source: live reads fail and the floor
+closes until recovery. See `hosted/README.md` and
 `hosted/SPACE_README.md`.
 
 ## GH Pages edition (static site, no Actions)

@@ -53,7 +53,7 @@ function EntryCard({ entry, index }: { entry: AuditEntry; index: number }) {
           )}
         </span>
         <span className="text-xs text-muted-foreground">
-          {entry.timestamp ? new Date(String(entry.timestamp)).toLocaleString() : ''}
+          {(entry.timestamp || entry.at) ? new Date(String(entry.timestamp || entry.at)).toLocaleString() : ''}
         </span>
       </div>
       {entry.actor && <p className="text-xs text-muted-foreground mb-1">Actor: {String(entry.actor)}</p>}

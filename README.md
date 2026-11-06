@@ -566,10 +566,12 @@ accounts in an existing volume. A public login stays locked while any stored
 admin still has the documented default password. Archive verification without
 an expected checksum reports an unverified result with a reason.
 
-The poller owns the shared outage floor snapshot. Filtered trace reads do not
-replace it; reconnect frames retain stale status and the last successful fetch
-time. The TUI shows a closed floor when both WS and HTTP offer only stale/cache
-data. Its `history` command shares the last 200 submitted editor commands and
+The poller owns the shared export snapshot. Filtered trace reads do not
+replace it. When the trace source is unavailable, live trace reads return 503
+and WebSocket frames carry no runs; pixel, Observatory and TUI close the floor.
+The last successful fetch time and explicit `/api/snapshot` download remain
+available for diagnosis. A lost WebSocket starts HTTP polling while reconnecting.
+The TUI’s `history` command shares the last 200 submitted editor commands and
 prints the most recent 40.
 
 
