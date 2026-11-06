@@ -8,6 +8,20 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Fixed (browser audit)
 
+- Probe immediately on socket loss, reject superseded HTTP responses, and
+  prevent stale session/operator rows during source outages.
+- Keep short mobile layouts scrollable, logout reachable for long usernames,
+  and History classifications wrapped. Complete permits the producer's parked
+  extraction fallback and disables the invalid Reject action.
+- Remove locally generated demo envelopes; demos use trace-backed seed runs.
+- Make outage labels refer to the configured trace source.
+
+- Serialize HTTP floor refreshes and ignore their late results once the socket
+  has recovered, so an older failure cannot clear a newer live floor.
+
+- Preserve the Observatory CLOSED status during socket reconnect attempts until
+  a successful source response confirms recovery.
+
 - Start HTTP fallback after late WebSocket disconnects in both live consoles;
   retune Observatory fallback when the server changes its poll interval.
 - Close live floors on source outages even with a warm export cache; keep

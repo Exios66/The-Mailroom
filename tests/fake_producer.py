@@ -320,6 +320,8 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
             if decision != "approved":
                 raise HTTPException(400, "disposition=complete requires decision=approved")
             extracted = body.get("extracted_data")
+            if extracted is None or extracted == {}:
+                extracted = rec.get("extracted_data")
             if not isinstance(extracted, dict) or not extracted:
                 raise HTTPException(400, "disposition=complete requires extracted_data object")
             kind = rec.get("doc_type")

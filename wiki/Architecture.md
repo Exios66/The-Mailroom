@@ -8,12 +8,12 @@
 ## Overview
 
 The-Mailroom renders every run of the `llm-mailroom` multi-agent
-legal-document pipeline from its Langfuse traces (pixel-art console, hosted
+legal-document pipeline from its configured trace backends (pixel-art console, hosted
 Observatory, TUI REPL, and the GH Pages terminal site).
-**Langfuse is the sole source of truth**: no display value is ever fabricated
-or served from local canned data. The repo is read-only against Langfuse
-(project-scoped API keys, backend proxies everything — the browser never holds
-keys).
+**Trace-backend neutral**: Phoenix and Langfuse are primary adapters; other
+sinks register through `mailroom.sources` and normalize to the same `TraceSource`
+contract. No run value is fabricated or served from local canned data. The
+backend holds all source credentials and proxies reads; browsers never hold keys.
 
 ```
 ┌────────────────────────── Langfuse (US cloud, project llm-mailroom) ──────┐

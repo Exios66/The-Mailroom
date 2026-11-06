@@ -1,6 +1,6 @@
 # AGENTS.md — The-Mailroom
 
-The-Mailroom is the **visual engine** for the `llm-mailroom` multi-agent legal-document pipeline: a pixel-art console (web + planned TUI) that renders every run from its Langfuse traces. **Langfuse is the sole source of truth** — every displayed value is derived from Langfuse traces, observations, scores, and sessions. This repo never fabricates or falls back to locally-canned data. Python 3.11+, no build step.
+The-Mailroom is the **visual engine** for the `llm-mailroom` multi-agent legal-document pipeline. The Observatory and display API are trace-backend neutral: **Phoenix and Langfuse are primary backends**, and other sinks plug into `mailroom_ui.source_registry` via the `TraceSource` contract and source conformance kit. Every displayed run value is derived from the configured backends' traces, observations, scores and sessions. Never fabricate run data or fall back to local canned data. Python 3.11+, no build step.
 
 ## Skills (tool selection)
 
@@ -15,7 +15,7 @@ open exactly one specialty skill. Companion to
 | `mailroom-tool-router` | Choosing among the stacks below |
 | `langfuse` | Default document display (SDK 2.50–4.x) |
 | `apache-phoenix` | Optional `MAILROOM_SOURCE=phoenix\|both` |
-| `braintrust` | Not a display source — do not add one |
+| `braintrust` | External sink tooling; document display requires a registered conformant adapter |
 | `huggingface` | Hub eval/pilot scripts; copied catalogs; offline scoring delegates to the optional Dojo engine |
 | `ollama` | Local LLM lives in sandbox/pipeline, not here |
 | `modal` | Remote GPU lives in sandbox/pipeline, not here |
@@ -90,7 +90,7 @@ python scripts/publish_space.py --check  # Hugging Face Docker Space payload
 
 ## Architecture (not obvious from filenames)
 
-- `mailroom_ui/` — data core (everything reads Langfuse only):
+- `mailroom_ui/` — data core (reads configured trace backends through source adapters):
   - `langfuse_source.py` — Langfuse SDK adapter: `client.api.trace.list/get`, `client.api.observations.get_many`, `client.api.scores.get_many`, `client.api.sessions.list/get`; `TTLCache`; `LangfuseUnavailable`. `list_recent_runs()` uses trace-list responses only (cheap "light" runs for the floor); `get_run()` fetches observations+scores for drill-down.
   - `trace_interpreter.py` — `interpret_trace(trace, observations?, scores?)` → `PipelineRun`. Accepts **both v2/v3 snake_case and v4 camelCase** observation shapes (see SDK tolerance). Light runs (no observations arg) have empty span/generation detail. Re-run clustering: deterministic trace ids are reused by pilot/attempt re-runs, so a trace can carry several full runs — observations are clustered by time gaps (`RUN_GAP_S`) and only the latest cluster is kept.
   - `pipeline_schema.py` — topology mirror (see sister-repo section).
@@ -141,11 +141,13 @@ python scripts/publish_space.py --check  # Hugging Face Docker Space payload
   v9.1, pinned revision tag `v9.1` / ed7576b).
 - `scripts/seed_demo.py` — planned (M5): generates demo traces **into Langfuse** (env `demo`), never served directly.
 
-## Langfuse is ALWAYS the source of visualization
+## Configured trace backends are the source of visualization
 
-- Every display value comes from Langfuse via the backend; no local JSON fallbacks anywhere in the display path.
-- Demo/dev data is written **into** Langfuse (the seed script) so even development reads from Langfuse.
-- When Langfuse is unreachable, the UI must show a "MAILROOM CLOSED — no Langfuse connection" state, not stale or canned data.
+- Phoenix and Langfuse are primary adapters; neither is required when another conformant adapter is configured. `MAILROOM_SOURCE` selects one or more registered names; installed `mailroom.sources` entry points can add others.
+- Every run value comes from the configured source adapters through the backend. Keep sink-specific SDK code inside adapters; UI and poller code consume the normalized contract.
+- Demo/dev runs must be written into a trace backend (the current seed script targets Langfuse), never generated inside the display.
+- When all configured sources are unavailable, show **MAILROOM CLOSED — trace source unavailable**, never stale/canned runs. Explicit historical snapshot downloads remain separate from the live floor.
+- A new adapter must pass `tests/source_conformance.py` before being used for document display. Unsupported sinks need an adapter; do not silently route them through Langfuse.
 
 ## Langfuse SDK version tolerance
 

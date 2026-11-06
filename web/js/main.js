@@ -11,7 +11,8 @@ const Main = (() => {
   const closedEl = document.getElementById("closed");
   const tabEls = Array.from(document.querySelectorAll(".tab"));
 
-  let langfuseOk = false;
+  let sourceOk = false;
+  let sourceName = "TRACE";
   let wsOk = false;
   let lastSnapshot = [];
   let lastIds = new Set();
@@ -21,10 +22,9 @@ const Main = (() => {
   let pollIntervalMs = 3000;
   let pollTimer = null;
   let fallbackTimer = null;
+  let fallbackInFlight = false;
+  let floorRevision = 0;
   let activeTab = "floor";
-  let demoMode = false;
-  let demoTimer = null;
-  let demoRuns = [];
 
   function p2(n) { return String(n).padStart(2, "0"); }
 
@@ -39,8 +39,8 @@ const Main = (() => {
   }
 
   function floorSetSource(state) {
-    if (langfuseOk && wsOk) Floor.setSource("green");
-    else if (!langfuseOk) Floor.setSource("red");
+    if (sourceOk && wsOk) Floor.setSource("green");
+    else if (!sourceOk) Floor.setSource("red");
     else Floor.setSource("gold");
   }
 
@@ -53,45 +53,25 @@ const Main = (() => {
       statusLeftEl.className = "st-warn mono";
       closedEl.hidden = true;
       Floor.setSource("gold");
-      stopDemo();
       return;
     }
-    if (!langfuseOk && !demoMode) {
+    if (!sourceOk) {
       setLamp("red");
       sourceLabelEl.textContent = "SOURCE: OFFLINE";
       sourceLabelEl.className = "st-bad mono";
-      statusLeftEl.textContent = "MAILROOM CLOSED — NO LANGFUSE CONNECTION";
+      statusLeftEl.textContent = "MAILROOM CLOSED — TRACE SOURCE UNAVAILABLE";
       statusLeftEl.className = "st-bad mono";
       closedEl.hidden = false;
       Floor.reset();
       Floor.setSource("red");
-    } else if (demoMode && !langfuseOk) {
-      setLamp("gold");
-      sourceLabelEl.textContent = "SOURCE: DEMO MODE";
-      sourceLabelEl.className = "st-warn mono";
-      statusLeftEl.textContent = "MAILROOM DEMO — SIMULATED PIPELINE RUNNING";
-      statusLeftEl.className = "st-warn mono";
-      closedEl.hidden = true;
-      Floor.setSource("gold");
-      startDemo();
-    } else if (demoMode && langfuseOk) {
-      setLamp("gold");
-      sourceLabelEl.textContent = "SOURCE: DEMO MODE (LANGFUSE UP)";
-      sourceLabelEl.className = "st-warn mono";
-      statusLeftEl.textContent = "MAILROOM DEMO — SIMULATED PIPELINE (LANGFUSE AVAILABLE)";
-      statusLeftEl.className = "st-warn mono";
-      closedEl.hidden = true;
-      Floor.setSource("gold");
-      startDemo();
     } else {
       setLamp(wsOk ? "green" : "gold");
-      sourceLabelEl.textContent = "SOURCE: LANGFUSE";
+      sourceLabelEl.textContent = `SOURCE: ${sourceName.toUpperCase()}`;
       sourceLabelEl.className = wsOk ? "st-good mono" : "st-warn mono";
-      statusLeftEl.textContent = "MAILROOM LIVE — WATCHING LANGFUSE";
+      statusLeftEl.textContent = `MAILROOM LIVE — WATCHING ${sourceName.toUpperCase()}`;
       statusLeftEl.className = "st-good mono";
       closedEl.hidden = true;
       Floor.setSource(wsOk ? "green" : "gold");
-      stopDemo();
     }
   }
 
@@ -106,102 +86,21 @@ const Main = (() => {
     return ` · ${w} · INBOX ${inbox}${paused}`;
   }
 
-  function startDemo() {
-    if (demoTimer) return;
-    demoRuns = generateDemoRuns();
-    window.Mailroom = window.Mailroom || {};
-    window.Mailroom.demoRuns = demoRuns;
-    window.Mailroom.demoMode = true;
-    Floor.update(demoRuns);
-    let idx = 0;
-    demoTimer = setInterval(() => {
-      if (!demoMode) return stopDemo();
-      const run = demoRuns[idx % demoRuns.length];
-      run.updated_at = new Date().toISOString();
-      ConsoleView.log(`DEMO ${run.filename} → ${run.stage}${run.verdict ? ` · ${run.verdict}` : ""}`, "c-blue");
-      idx++;
-    }, 3000);
-    ConsoleView.banner("DEMO MODE ACTIVE — SIMULATED PIPELINE");
-  }
-
-  function stopDemo() {
-    if (demoTimer) {
-      clearInterval(demoTimer);
-      demoTimer = null;
-    }
-    // V-10: the demo flag leaked into live mode — window.Mailroom.demoMode was
-    // set in startDemo() but never reset, so metrics.js kept rendering
-    // fabricated demo numbers after Langfuse came up. Single source of truth:
-    // clear the global flag and drop demo runs whenever demo mode ends.
-    if (window.Mailroom) {
-      window.Mailroom.demoMode = false;
-      delete window.Mailroom.demoRuns;
-    }
-    if (!langfuseOk) Floor.reset();
-  }
-
-  function generateDemoRuns() {
-    const stages = [
-      { stage: "archived", phase: "terminal", doc_type: "contract", filename: "contract_service_agreement_03.pdf", verdict: "CORRECT", quality: 0.96, classification_confidence: 0.98, extraction_confidence: 0.94 },
-      { stage: "archived", phase: "terminal", doc_type: "merger_agreement", filename: "maud_merger_agreement_all_stock_42.pdf", verdict: "CORRECT", quality: 0.93, classification_confidence: 0.97, extraction_confidence: 0.91 },
-      { stage: "archived", phase: "terminal", doc_type: "corporate_record", filename: "corporate_bylaws_amendment_04.pdf", verdict: "CORRECT", quality: 0.95, classification_confidence: 0.99, extraction_confidence: 0.97 },
-      { stage: "archived", phase: "terminal", doc_type: "contract", filename: "contract_master_services_agreement_05.pdf", verdict: "PARTIAL", quality: 0.72, classification_confidence: 0.93, extraction_confidence: 0.68 },
-      { stage: "archived", phase: "terminal", doc_type: "correspondence", filename: "correspondence_demand_letter_09.pdf", verdict: "CORRECT", quality: 0.88, classification_confidence: 0.95, extraction_confidence: 0.84 },
-      { stage: "archived", phase: "terminal", doc_type: "insurance_claim", filename: "insurance_claim_fnol_package_01.pdf", verdict: "CORRECT", quality: 0.94, classification_confidence: 0.97, extraction_confidence: 0.95 },
-      { stage: "judge_verify", phase: "extraction", doc_type: "insurance_claim", filename: "insurance_claim_coverage_determination_07.pdf", classification_confidence: 0.96, extraction_confidence: 0.78 },
-      { stage: "arbiter", phase: "extraction", doc_type: "merger_agreement", filename: "maud_merger_agreement_mixed_cash_stock_117.pdf", verdict: "PARTIAL", quality: 0.66, classification_confidence: 0.97, extraction_confidence: 0.74 },
-      { stage: "review", phase: "review", doc_type: "correspondence", filename: "correspondence_internal_memo_04.pdf", review_decision: "human review", escalation_reason: "low extraction confidence on meeting request" },
-      { stage: "failed", phase: "terminal", doc_type: "corporate_record", filename: "corporate_articles_of_incorporation_02.pdf", error_message: "extraction failed: LLM output not valid JSON" },
-      { stage: "classify", phase: "intake_sort", doc_type: "contract", filename: "contract_consulting_agreement_06.pdf", classification_confidence: 0.91 },
-      { stage: "extract", phase: "extraction", doc_type: "corporate_record", filename: "corporate_rights_instrument_08.pdf", extraction_confidence: 0.82 },
-      { stage: "report", phase: "reporting", doc_type: "insurance_claim", filename: "insurance_claim_fnol_package_11.pdf" },
-    ];
-    return stages.map((s, i) => ({
-      trace_id: `demo-run-${i}`,
-      filename: s.filename,
-      matter_id: "DEMO-MATTER",
-      session_id: "DEMO-MATTER",
-      environment: "demo",
-      tags: ["mailroom", "demo", "demo-mode"],
-      attempt: 1,
-      stage: s.stage,
-      phase: s.phase,
-      doc_type: s.doc_type,
-      classification_confidence: s.classification_confidence,
-      extraction_confidence: s.extraction_confidence,
-      review_decision: s.review_decision,
-      escalation_reason: s.escalation_reason,
-      error_message: s.error_message,
-      verdict: s.verdict,
-      quality: s.quality,
-      latency: 8 + Math.random() * 15,
-      llm_call_count: 2 + Math.floor(Math.random() * 4),
-      total_tokens: 3000 + Math.floor(Math.random() * 4000),
-      cost_usd: 0.001 + Math.random() * 0.003,
-      retried: Math.random() > 0.7,
-      needs_human: s.stage === "review",
-      created_at: new Date(Date.now() - i * 60000).toISOString(),
-      updated_at: new Date().toISOString(),
-      routing_path: [],
-    }));
-  }
-
   function applySnapshot(runs, stale = false) {
     if (stale && !Mailroom.staticMode) {
-      langfuseOk = false;
+      sourceOk = false;
       runs = [];
       applySource();
     }
-    if (stale && demoMode) return;
     // V-27: a FRESH snapshot proves the backend is serving even when
     // the async health check hasn't resolved yet. A stale one (source down,
     // last-good floor) must not flip the lamp back on — that made the screen
     // alternate OPEN/CLOSED every health tick.
-    if (!stale && !langfuseOk) {
-      langfuseOk = true;
+    if (!stale && !sourceOk) {
+      sourceOk = true;
       applySource();
     }
-    if (!langfuseOk && !demoMode && !stale) return;
+    if (!sourceOk && !stale) return;
     lastSnapshot = runs;
     const ids = new Set(runs.map((r) => r.trace_id));
     const added = [...ids].filter((id) => !lastIds.has(id));
@@ -305,9 +204,10 @@ const Main = (() => {
     try {
       const h = await Mailroom.api.health();
       liveSeen = true;
+      if (typeof h.source === "string") sourceName = h.source;
       // Source-agnostic "ok" (multi/phoenix sources) with langfuse fallback.
-      langfuseOk = !!(h.ok ?? h.langfuse);
-      if (langfuseOk && !Mailroom.meta) await loadMeta();
+      sourceOk = !!(h.ok ?? h.langfuse);
+      if (sourceOk && !Mailroom.meta) await loadMeta();
     } catch (err) {
       // GH Pages / no live API: fall back to bundled snapshots. A missing
       // /api/health is expected here — do NOT paint it as an error banner
@@ -316,7 +216,7 @@ const Main = (() => {
       // never a permanent switch to static mode.
       const enabled = !liveSeen && await Mailroom.enableStaticMode();
       if (enabled) {
-        langfuseOk = true;
+        sourceOk = true;
         ConsoleView.log(`no live API (${err.message || err}) — serving bundled snapshot`, "c-dim");
         ConsoleView.banner("SNAPSHOT MODE — SERVING BUNDLED DATA");
         await loadSnapshotFloor();
@@ -324,18 +224,18 @@ const Main = (() => {
         return true;
       }
       ConsoleView.log(`health check failed: ${err.message || err}`, "c-bad");
-      langfuseOk = false;
+      sourceOk = false;
     }
-    if (!langfuseOk) applySnapshot([], true);
+    if (!sourceOk) applySnapshot([], true);
     applySource();
-    return langfuseOk;
+    return sourceOk;
   }
 
   function onMessage(msg) {
     if (msg.type === "status") {
       if (msg.connected) {
         wsOk = true;
-        ConsoleView.banner("MAILROOM ONLINE — WATCHING LANGFUSE");
+        ConsoleView.banner("MAILROOM ONLINE — WATCHING TRACE SOURCES");
       } else {
         wsOk = false;
         startFallbackPolling();
@@ -344,6 +244,7 @@ const Main = (() => {
       }
       applySource();
     } else if (msg.type === "snapshot") {
+      floorRevision += 1;
       applySnapshot(msg.runs || [], !!msg.stale);
       applyPipeline(msg.pipeline);
       if (msg.fetched_at) lastFetchedAt = msg.fetched_at;
@@ -362,21 +263,29 @@ const Main = (() => {
 
   function startFallbackPolling() {
     const tick = async () => {
-      if (!langfuseOk || wsOk) return;
+      if (!sourceOk || wsOk || fallbackInFlight) return;
+      fallbackInFlight = true;
+      const revision = floorRevision;
       try {
         const data = await Mailroom.api.traces(604800, 200);
+        if (wsOk || revision !== floorRevision) return;
         applySnapshot(data.runs || [], data.source === "langfuse-cache");
         try {
-          applyPipeline(await Mailroom.api.pipeline());
-        } catch (_e) { applyPipeline(null); /* producer unavailable */ }
+          const ops = await Mailroom.api.pipeline();
+          if (!wsOk) applyPipeline(ops);
+        } catch (_e) { if (!wsOk) applyPipeline(null); /* producer unavailable */ }
       } catch (err) {
+        if (wsOk || revision !== floorRevision) return;
         applyPipeline(null);
         applySnapshot([], true);
         const msg = err.message || String(err);
         ConsoleView.log(`poll fallback failed: ${msg}`, "c-warn");
         Mailroom.showError(`fallback poll: ${msg}`);
+      } finally {
+        fallbackInFlight = false;
       }
     };
+    void tick();
     if (fallbackTimer && fallbackPollMs === pollIntervalMs) return;
     if (fallbackTimer) clearInterval(fallbackTimer);
     fallbackPollMs = pollIntervalMs;
@@ -454,18 +363,6 @@ const Main = (() => {
     document.getElementById("closed-retry").addEventListener("click", () => {
       ConsoleView.log("retrying connection…", "c-dim");
       checkHealth().then((ok) => { if (ok) startLive(); });
-    });
-
-    // Demo envelopes are opt-in via ?demo=1 and only when Langfuse is down.
-    // The D key used to fabricate a live floor (and collided with Debug).
-    const demoRequested = new URLSearchParams(location.search).get("demo") === "1";
-    document.addEventListener("keydown", (ev) => {
-      if (ev.target && ["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName)) return;
-      if (demoRequested && (ev.key === "d" || ev.key === "D") && !langfuseOk) {
-        demoMode = !demoMode;
-        ConsoleView.log(`DEMO MODE ${demoMode ? "ON" : "OFF"}`, demoMode ? "c-ok" : "c-warn");
-        applySource();
-      }
     });
 
     // WS starts only once a health probe succeeds: in snapshot mode there is

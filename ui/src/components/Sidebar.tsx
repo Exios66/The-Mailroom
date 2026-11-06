@@ -58,7 +58,7 @@ export default function Sidebar({ user, onLogout, currentPath, dark, onToggleDar
         })}
       </nav>
 
-      <div className="p-3 md:p-4 border-t border-border flex md:block items-center justify-between md:space-y-3">
+      <div className="p-3 md:p-4 border-t border-border flex md:block items-center justify-between gap-3 md:space-y-3">
         <button
           type="button"
           onClick={onToggleDark}
@@ -69,7 +69,7 @@ export default function Sidebar({ user, onLogout, currentPath, dark, onToggleDar
         </button>
         <div className="flex min-w-0 items-center justify-between">
           <div className="min-w-0 text-sm">
-            <p className="truncate font-medium">{user?.username}</p>
+            <p className="truncate font-medium" title={user?.username}>{user?.username}</p>
             <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
           </div>
           <button

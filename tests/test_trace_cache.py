@@ -93,3 +93,38 @@ def test_aggregate_desks_reject_warm_hub_rows_after_outage(monkeypatch):
     hub.stale = True
     with pytest.raises(TraceSourceUnavailable):
         _desk_runs(src, hub, since_seconds=3600, limit=100)
+
+
+@pytest.mark.parametrize("path", ["/api/sessions/MATTER-001", "/v1/ops/status", "/v1/ops/throughput", "/v1/ops/distribution"])
+def test_session_and_operator_reads_reject_stale_hub_rows(monkeypatch, path):
+    from server import main
+    from operator_desk.auth import create_access_token
+
+    now = datetime.now(timezone.utc) - timedelta(minutes=5)
+    src = LangfuseSource(client=FakeClient([make_trace("warm", base_time=now)]), cache_ttl=0)
+    hub = PollHub(src)
+    assert hub._fetch()
+    hub.stale = False
+    monkeypatch.setattr(main, "PollHub", lambda *args, **kwargs: hub)
+    client = TestClient(main.create_app(src))
+    headers = {"Authorization": "Bearer " + create_access_token("fixture", "viewer")}
+    assert client.get(path, headers=headers).status_code == 200
+
+    def unavailable(**kwargs):
+        raise TraceSourceUnavailable("test outage")
+
+    monkeypatch.setattr(src, "list_traces", unavailable)
+    hub.stale = True
+    response = client.get(path, headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    if path.startswith("/api/sessions/"):
+        assert payload["runs"] == []
+        assert payload["count"] == 0
+    elif path.endswith("/status"):
+        assert payload["total_docs"] == 0
+        assert payload["queue_depth"] == 0
+    elif path.endswith("/throughput"):
+        assert all(row["count"] == 0 for row in payload["history"])
+    else:
+        assert payload["types"] == []

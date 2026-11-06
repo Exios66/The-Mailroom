@@ -1,5 +1,5 @@
 /* Mailroom Observatory client — same-origin API + WebSocket.
- * Langfuse (or the configured source) remains the only display source. */
+ * The configured trace backends are the document display sources. */
 const Obs = (() => {
   function dbg(kind, payload) {
     try {

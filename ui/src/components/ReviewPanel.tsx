@@ -154,7 +154,7 @@ export default function ReviewPanel() {
                   disabled={resolveMutation.isPending}
                   className="w-full mt-1 px-3 py-2 rounded-md border border-input bg-background text-sm font-mono"
                   rows={6}
-                  placeholder='{"field": "reviewed value"}'
+                  placeholder='Leave blank to use the parked extraction'
                 />
               </div>
             )}

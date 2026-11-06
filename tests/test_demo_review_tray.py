@@ -40,6 +40,7 @@ def test_fake_producer_v1_lookup_and_resolve():
 
 def test_fake_producer_complete_requires_extracted_data():
     store = FakeProducerStore()
+    store.documents["doc-claim-fnol"]["extracted_data"] = {}
     with TestClient(create_fake_producer(store)) as c:
         missing = c.post(
             "/v1/review/doc-claim-fnol/resolve",
@@ -122,3 +123,16 @@ def test_demo_review_tray_check_api(capsys):
     out = capsys.readouterr().out
     assert "check-api ok" in out
     assert "complete" in out
+
+
+def test_fake_producer_complete_uses_parked_extraction():
+    store = FakeProducerStore()
+    parked = dict(store.documents["doc-claim-fnol"]["extracted_data"])
+    with TestClient(create_fake_producer(store)) as client:
+        response = client.post(
+            "/v1/review/doc-claim-fnol/resolve", headers=_auth(),
+            json={"decision": "approved", "disposition": "complete"},
+        )
+    assert response.status_code == 200
+    assert store.documents["doc-claim-fnol"]["extracted_data"] == parked
+    assert store.documents["doc-claim-fnol"]["stage"] == "archived"
