@@ -18,3 +18,6 @@ Producer import seam: `mailroom_ui/producer.py` only (`pipeline.review_resolve`,
 
 ## Structural issue
 No machine-checked contract between repos. Every pipeline change requires a manual mirror PR.
+
+## Proposed plan (2026-11-06)
+See spec `.10x/specs/2026-11-06-mailroom-alignment-audit-design.md` and ADR-001..004 (Proposed).

@@ -1,6 +1,8 @@
 # Handoff
 
-**From:** Discovery (all roles) → **To:** Brainstorming (user + CTO/PM)
+**From:** Phase 0 (all roles) → **To:** Owner decision, then Phase 1 (CTO + PM)
 
-Discovery findings live in `.10x/decisions/*/mailroom-alignment-audit.md` (all tagged [DISCOVERED]).
-Next: user confirms findings and picks scope; then write spec `.10x/specs/2026-11-06-mailroom-alignment-audit-design.md`.
+Read the spec's §9 decisions. Once they are answered:
+1. Mark the chosen ADRs Accepted (and the others Superseded or Rejected).
+2. Write the Phase 1 strategy files, then start M0 (F-1, A-9, H-1).
+H-1 is time-boxed by the 2026-12-01 Railway cutoff.
