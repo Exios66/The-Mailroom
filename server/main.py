@@ -205,10 +205,10 @@ def create_app(source: Optional[object] = None) -> FastAPI:
     app.add_middleware(DebugLogMiddleware, recorder=debug_log)
 
     @app.exception_handler(TraceSourceUnavailable)
-    async def langfuse_down_handler(request, exc):
+    async def trace_source_down_handler(request, exc):
         return JSONResponse(
             status_code=503,
-            content={"error": "langfuse unavailable", "detail": str(exc)},
+            content={"error": "trace source unavailable", "detail": str(exc)},
         )
 
     # V-18: any other server error must come back as JSON with a detail the
@@ -341,7 +341,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         # Prefer the poller's already-enriched window. A 50-doc pilot used to
         # N+1 get_session_traces × get_run and time out against Langfuse.
         desk = [
-            r for r in (hub.runs or [])
+            r for r in (hub.runs if not hub.stale else [])
             if (r.session_id or r.matter_id) == session_id
         ]
         if not desk:
@@ -661,7 +661,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             hub.disconnect(ws)
 
     def _operator_runs():
-        if hub.runs:
+        if hub.runs and not hub.stale:
             return list(hub.runs)
         return list_recent_runs(
             src, since=_utcnow() - timedelta(seconds=RECENT_WINDOW), limit=TRACE_LIMIT

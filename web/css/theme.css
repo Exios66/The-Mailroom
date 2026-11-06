@@ -683,3 +683,5 @@ dialog.operator-login menu { display: flex; gap: 8px; justify-content: flex-end;
   .history-row .run-file, .history-row .run-when { grid-column: 1 / -1; }
   .history-row .run-when { flex-wrap: wrap; }
 }
+
+.history-row .history-classification { min-width: 0; overflow-wrap: anywhere; }
