@@ -227,6 +227,10 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         )
 
     def _health_payload():
+        """Return source health with cache and operator diagnostics when available.
+
+        A saved snapshot does not change the source's health status.
+        """
         payload = src.health()
         cache = cache_status()
         if isinstance(payload, dict):
@@ -261,6 +265,11 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         stage: Optional[str] = None,
         environment: Optional[str] = None,
     ):
+        """Return recent live runs, optionally filtered by stage and environment.
+
+        ``since`` is a lookback in seconds. Source unavailability propagates
+        to the app's 503 handler; cached snapshots are not used for this read.
+        """
         runs = _recent(src, since, limit)
         if stage:
             runs = [r for r in runs if r.stage.value == stage]
@@ -277,6 +286,11 @@ def create_app(source: Optional[object] = None) -> FastAPI:
 
     @app.get("/api/traces/{trace_id}")
     def trace_detail(trace_id: str):
+        """Return live trace detail and attempt to save it for snapshot export.
+
+        Return 404 when the trace is absent. Source unavailability propagates
+        to the app's 503 handler rather than returning cached detail.
+        """
         run = src.get_run(trace_id)
         if run is None:
             return JSONResponse(status_code=404, content={"error": "trace not found"})
@@ -731,14 +745,15 @@ def _recent(src: LangfuseSource, since: int, limit: int) -> list[PipelineRun]:
 
 
 def _desk_runs(src, hub: PollHub, *, since_seconds: int, limit: int) -> list[PipelineRun]:
-    """Enriched runs for METRICS / SESSIONS / REVIEW.
+    """Runs for METRICS / SESSIONS / REVIEW.
 
-    The poller already called get_run() for the live window. Reusing that
-    list keeps those desks instant and leaves the inspector able to fetch
-    /api/traces/{id} instead of waiting behind a sequential Langfuse walk.
-    Fall back to the cheap trace-list (light runs) when the poller has not
-    produced a snapshot yet — never enriched_recent_runs, which N+1s get_run
-    and hung a 50-doc SESSIONS load.
+    The poller's live window may contain enriched runs. Reusing that list
+    leaves the inspector able to fetch /api/traces/{id} instead of waiting
+    behind a sequential Langfuse walk.
+    Use the cheap trace-list (light runs) when the poller is stale or has no
+    runs in the requested window. ``since_seconds`` is a lookback in seconds;
+    source errors from the list read propagate to the caller. This avoids
+    enriched_recent_runs, which N+1s get_run and hung a 50-doc SESSIONS load.
     """
     cutoff = _utcnow() - timedelta(seconds=since_seconds)
     cached = [r for r in (hub.runs or [])

@@ -76,6 +76,11 @@ const Obs = (() => {
       dlg.showModal();
     });
   }
+  /**
+   * Prompt for operator credentials and try to store the returned token for this tab.
+   * Returns false on cancellation or a response without a token; login HTTP
+   * errors and fetch failures propagate to the caller.
+   */
   async function operatorLogin() {
     const creds = await askCredentials("This host requires an operator login for review and inbox actions.");
     if (!creds) return false;
