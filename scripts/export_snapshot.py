@@ -86,19 +86,13 @@ def _sessions(runs, limit: int = 50) -> list[dict]:
 
 
 def build_snapshot(source_name: str, since_hours: float, limit: int) -> dict:
-    from mailroom_ui.langfuse_source import LangfuseSource, enriched_recent_runs
+    from mailroom_ui.langfuse_source import enriched_recent_runs
     from mailroom_ui.metrics import compute_metrics
     from mailroom_ui.pipeline_schema import DOC_CLASSES, DOC_SUBCLASS_BY_CLASS, PipelineSchema
-    from mailroom_ui.phoenix_source import PhoenixSource
-    from mailroom_ui.multi_source import MultiSource
+    from mailroom_ui.source_registry import build_source
     from server.poller import floor_payload
 
-    if source_name == "phoenix":
-        src = PhoenixSource()
-    elif source_name in ("both", "multi", "all"):
-        src = MultiSource([LangfuseSource(), PhoenixSource()])
-    else:
-        src = LangfuseSource()
+    src = build_source(source_name)
 
     since_dt = _utcnow() - timedelta(hours=since_hours)
     # Transient cloud blips (read timeouts, 429s) must not silently produce an
@@ -230,8 +224,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     default_source = os.environ.get("MAILROOM_SOURCE", "langfuse")
     ap.add_argument("--source", default=default_source,
-                    choices=["langfuse", "phoenix", "both", "auto"],
-                    help="trace source (default MAILROOM_SOURCE or langfuse)")
+                    help="trace source name or comma-separated list "
+                         "(default MAILROOM_SOURCE or langfuse; 'auto' = MAILROOM_SOURCE)")
     ap.add_argument("--out", default="site/data", help="output dir (default site/data)")
     ap.add_argument("--since-hours", type=float, default=24.0)
     ap.add_argument("--limit", type=int, default=200)
@@ -245,8 +239,9 @@ def main() -> int:
     source_name = args.source
     if source_name == "auto":
         source_name = os.environ.get("MAILROOM_SOURCE", "langfuse")
-    if source_name in ("both", "multi"):
-        source_name = "both"
+    from mailroom_ui.source_registry import selector_key
+
+    source_name = selector_key(source_name)
 
     print(f"exporting snapshot: source={source_name} since={args.since_hours}h limit={args.limit}")
     snap = build_snapshot(source_name, args.since_hours, args.limit)

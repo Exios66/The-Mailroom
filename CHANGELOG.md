@@ -30,6 +30,17 @@ All notable changes to The-Mailroom are documented here, following
   the visualizer maps must still exist upstream (a renamed span fails CI).
   The Observatory's own `SPAN_STAGE` table is checked too.
 
+- Trace-source registry (ADR-006, T-4): `MAILROOM_SOURCE` takes a
+  comma-separated list of adapter names (`both` still means
+  `langfuse,phoenix`). Langfuse and Phoenix are built in; other backends
+  register in code or through the `mailroom.sources` entry-point group. The
+  server, snapshot export and trace cache all build sources through it, and
+  `/api/debug/source` lists the registered adapters.
+- Source conformance kit (T-5, `tests/source_conformance.py`): golden
+  document traces (archived, review with re-classify and arbitration,
+  aborted) rendered into each backend's raw shape must interpret into the
+  same run; every registered adapter needs a renderer.
+
 ### Fixed (M1)
 
 - A5: the producer pin is named consistently; stale `959bb0b` / `3cf9fb9`

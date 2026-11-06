@@ -37,7 +37,9 @@ Canonical default in `.env.example`: **`langfuse`**.
 
 1. **langfuse** — sole source of **document** display (traces → envelopes).
 2. **phoenix** — local Arize Phoenix via `PHOENIX_ENDPOINT` (opt-in).
-3. **both** — `MultiSource` union; still no fabricated rows.
+3. **langfuse,phoenix** (alias **both**) — `MultiSource` union; still no fabricated rows.
+   Any comma list of registered adapters works (`mailroom_ui/source_registry.py`);
+   a new backend must pass `tests/source_conformance.py`.
 4. Unreachable Langfuse → **MAILROOM CLOSED**, not stale/canned data.
 
 Operator liveness (watcher heartbeat, inbox pending) and **human-review

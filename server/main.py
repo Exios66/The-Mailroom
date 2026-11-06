@@ -30,7 +30,6 @@ from mailroom_ui.langfuse_source import (
 )
 from mailroom_ui.metrics import compute_metrics
 from mailroom_ui.models import PipelineRun, SessionSummary
-from mailroom_ui.multi_source import MultiSource
 from mailroom_ui.pipeline_ops import fetch_pipeline_ops
 from mailroom_ui.review_actions import (
     ReviewActionError,
@@ -53,7 +52,7 @@ from mailroom_ui.trace_cache import (
     snapshot_bundle,
 )
 from mailroom_ui.pipeline_schema import DOC_CLASSES, DOC_SUBCLASS_BY_CLASS
-from mailroom_ui.phoenix_source import PhoenixSource
+from mailroom_ui.source_registry import available_sources, build_source, selector_key
 from mailroom_ui.producer import producer_status
 from mailroom_ui.sources import TraceSourceUnavailable
 from mailroom_ui.env import env_float, env_int
@@ -125,19 +124,12 @@ API_ENDPOINTS = API_ENDPOINTS + list(OPERATOR_ENDPOINTS)
 
 
 def _build_default_source() -> object:
-    """MAILROOM_SOURCE selector: langfuse (default) | phoenix | both."""
-    which = os.environ.get("MAILROOM_SOURCE", "langfuse").strip().lower()
+    """MAILROOM_SOURCE: one registered adapter name or a comma-separated list
+    (``langfuse`` default; ``both`` = ``langfuse,phoenix``). See
+    mailroom_ui/source_registry.py."""
     # List/obs TTL follows the poll interval so a just-created trace is
     # visible on the next snapshot instead of sitting behind a longer cache.
-    ttl = max(0.0, POLL_INTERVAL)
-    if which == "phoenix":
-        return PhoenixSource(cache_ttl=ttl)
-    if which in ("both", "multi", "all"):
-        return MultiSource([
-            LangfuseSource(cache_ttl=ttl, poll_cache_ttl=ttl),
-            PhoenixSource(cache_ttl=ttl),
-        ])
-    return LangfuseSource(cache_ttl=ttl, poll_cache_ttl=ttl)
+    return build_source(cache_ttl=max(0.0, POLL_INTERVAL))
 
 
 def create_app(source: Optional[object] = None) -> FastAPI:
@@ -620,7 +612,8 @@ def create_app(source: Optional[object] = None) -> FastAPI:
 
     def _debug_source_payload() -> dict:
         info: dict = {
-            "selector": os.environ.get("MAILROOM_SOURCE", "langfuse"),
+            "selector": selector_key(),
+            "registered_sources": sorted(available_sources()),
             "sources": _source_names(src).split("+"),
             "debug_stdout": debug_log.verbose,
             "poll_interval_s": POLL_INTERVAL,

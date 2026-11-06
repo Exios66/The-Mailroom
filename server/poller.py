@@ -143,10 +143,13 @@ _SEND_TIMEOUT_S = 5.0
 
 def source_names(src: object) -> str:
     """Snapshot provenance: the configured backend(s), e.g. ``langfuse+phoenix``."""
+    def _one(s: object) -> str:
+        return getattr(s, "source_name", None) or type(s).__name__.replace("Source", "").lower()
+
     subs = getattr(src, "sources", None)
     if isinstance(subs, list):
-        return "+".join(type(s).__name__.replace("Source", "").lower() for s in subs)
-    return type(src).__name__.replace("Source", "").lower()
+        return "+".join(_one(s) for s in subs)
+    return _one(src)
 
 
 def poll_enrich_mode() -> str:

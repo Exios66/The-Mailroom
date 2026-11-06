@@ -182,12 +182,26 @@ Data modes (resolved in `web/js/api.js`):
   JSON (`SOURCE: SNAPSHOT`, gold lamp) — never the closed overlay unless
   even snapshots are missing.
 
-Trace sources (server side): `MAILROOM_SOURCE=langfuse | phoenix | both`
-selects between `LangfuseSource`, `PhoenixSource` (local Arize Phoenix via
-`arize-phoenix-client`; OTel/OpenInference spans remapped into the
-Langfuse-shaped dicts `interpret_trace` consumes; unmapped spans degrade to
-unknown staging per the breakage map), and `MultiSource` (fan-out reads,
-per-trace isolation, aggregated health).
+Trace sources (server side, ADR-006): document traces are what the floor
+displays, whichever backend stores them. `MAILROOM_SOURCE` takes one adapter
+name or a comma-separated list (`langfuse` default; `phoenix`;
+`langfuse,phoenix`, also spelled `both`). Adapters live in a registry
+(`mailroom_ui/source_registry.py`): `LangfuseSource` and `PhoenixSource` (local
+Arize Phoenix via `arize-phoenix-client`; OTel/OpenInference spans remapped
+into the Langfuse-shaped dicts `interpret_trace` consumes) are built in, and
+any other backend registers under a name in code or through the
+`mailroom.sources` entry-point group. Several selected sources are merged by
+`MultiSource` (fan-out reads, per-trace isolation, aggregated health). Every
+adapter must pass the source conformance kit (`tests/source_conformance.py`):
+the same golden document traces, rendered into each backend's raw shape, must
+interpret into the same `PipelineRun`. Unmapped spans degrade to unknown
+staging per the breakage map.
+
+Pipeline facts (nodes, spans, observation types, agents, classes, failure
+classes, score aliases, thresholds) come from the generated contract vendored
+at `mailroom_ui/contract/` (ADR-001); `scripts/bump_producer_pin.py` moves the
+producer pin and re-vendors it, and `tests/test_contract_conformance.py`
+fails on anything the floor cannot show.
 
 mailroom-reloaded (the CrewAI-Flows pipeline) is read through the same
 Phoenix source: its `mailroom.document` root and `mailroom.node.<node>` spans
