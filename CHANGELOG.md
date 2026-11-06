@@ -8,6 +8,10 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Fixed (browser audit)
 
+- Keep stale session/operator reads distinct from genuinely empty sources:
+  query the source when the poller is stale and propagate unavailability as
+  503, while preserving successful reads during startup and recovery.
+
 - Probe immediately on socket loss, reject superseded HTTP responses, and
   prevent stale session/operator rows during source outages.
 - Keep short mobile layouts scrollable, logout reachable for long usernames,

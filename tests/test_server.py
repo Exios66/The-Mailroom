@@ -233,9 +233,11 @@ def test_compliance_filing_floor_payload_exposes_subclass_and_intake():
 
 
 def test_session_and_operator_runs_respect_hub_freshness():
-    """A source outage must hide cached rows; recovery reuses the same cache."""
+    """Stale hub rows require a source read; outages cannot masquerade as empty."""
+    import pytest
     from unittest.mock import patch
     from server.poller import PollHub
+    from mailroom_ui.sources import TraceSourceUnavailable
 
     src = LangfuseSource(client=FakeClient(_fresh_traces()))
     hub = PollHub(src, interval=60, window=21600, limit=100)
@@ -245,15 +247,27 @@ def test_session_and_operator_runs_respect_hub_freshness():
     with patch('server.main.PollHub', return_value=hub), patch('server.main.mount_operator') as mount:
         app = create_app(src)
     provider = mount.call_args.kwargs['runs_provider']
-    client = TestClient(app)  # No lifespan: control hub freshness without a polling race.
-    with patch('server.main.list_recent_runs', side_effect=AssertionError('unexpected refetch')), \
-         patch('server.main._session_runs', side_effect=AssertionError('unexpected refetch')):
+    client = TestClient(app)  # No lifespan: control the last poll result.
+    with patch('server.main.list_recent_runs', side_effect=TraceSourceUnavailable('outage')):
         for stale in (True, False, True):
             hub.stale = stale
             response = client.get(f'/api/sessions/{sid}')
-            assert response.status_code == 200
-            payload = response.json()
-            expected = [] if stale else cached
-            assert payload['count'] == len(expected)
-            assert len(payload['runs']) == len(expected)
-            assert provider() == expected
+            if stale:
+                assert response.status_code == 503
+                with pytest.raises(TraceSourceUnavailable):
+                    provider()
+            else:
+                assert response.status_code == 200
+                assert response.json()['count'] == len(cached)
+                assert provider() == cached
+
+    # A stale poller at startup does not hide a healthy source's real rows.
+    hub.stale = True
+    with patch('server.main.list_recent_runs', return_value=cached):
+        assert client.get(f'/api/sessions/{sid}').json()['count'] == len(cached)
+        assert provider() == cached
+    # Real empty data is still a successful response, unlike an outage.
+    with patch('server.main.list_recent_runs', return_value=[]), \
+         patch('server.main._session_runs', return_value=[]):
+        assert client.get(f'/api/sessions/{sid}').json()['runs'] == []
+        assert provider() == []

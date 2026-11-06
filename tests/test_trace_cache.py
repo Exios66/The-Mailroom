@@ -115,16 +115,4 @@ def test_session_and_operator_reads_reject_stale_hub_rows(monkeypatch, path):
 
     monkeypatch.setattr(src, "list_traces", unavailable)
     hub.stale = True
-    response = client.get(path, headers=headers)
-    assert response.status_code == 200
-    payload = response.json()
-    if path.startswith("/api/sessions/"):
-        assert payload["runs"] == []
-        assert payload["count"] == 0
-    elif path.endswith("/status"):
-        assert payload["total_docs"] == 0
-        assert payload["queue_depth"] == 0
-    elif path.endswith("/throughput"):
-        assert all(row["count"] == 0 for row in payload["history"])
-    else:
-        assert payload["types"] == []
+    assert client.get(path, headers=headers).status_code == 503
