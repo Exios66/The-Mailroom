@@ -30,12 +30,24 @@ export interface Matter {
   created_at?: string
 }
 
+// Producer GET /v1/audit/{doc_id} rows (llm-mailroom storage/audit_log.py).
+// `kind` / `parent_id` arrive with the unified audit row (pipeline roadmap M11);
+// `id` / `hash` / `action` are legacy aliases kept for older producers.
 export interface AuditEntry {
-  id?: number | string
+  entry_id?: string
   doc_id?: string
-  hash?: string
+  matter_id?: string
+  event?: string
+  actor?: string
+  detail?: unknown
   prev_hash?: string
+  entry_hash?: string
+  seq?: number
   timestamp?: string
+  kind?: string
+  parent_id?: string | null
+  id?: number | string
+  hash?: string
   action?: string
   [key: string]: unknown
 }

@@ -64,3 +64,17 @@ def test_desk_mounts_when_dist_exists(tmp_path, monkeypatch):
         spa = client.get("/desk/login")
         assert spa.status_code == 200
         assert "operator react desk" in spa.text
+
+
+def test_audit_chain_reads_producer_field_names():
+    """Producer /v1/audit rows carry entry_id / event / entry_hash (llm-mailroom
+    storage/audit_log.py); the desk must read those, with legacy aliases as
+    fallback only, and nest unified-audit-row sub-rows by parent_id."""
+    chain = (ROOT / "ui" / "src" / "components" / "AuditChain.tsx").read_text(encoding="utf-8")
+    types = (ROOT / "ui" / "src" / "types" / "api.ts").read_text(encoding="utf-8")
+    assert "entry.entry_id ?? entry.id" in chain
+    assert "entry.event || entry.action" in chain
+    assert "entry.entry_hash || entry.hash" in chain
+    assert "parent_id" in chain
+    for field in ("entry_id?:", "event?:", "entry_hash?:", "actor?:", "kind?:", "parent_id?:"):
+        assert field in types

@@ -44,7 +44,7 @@ both double-emitted every event (mailroom-issues#118). The standalone
 - TLS: see the commented `listen 443` block in `nginx/nginx.conf`, or put a
   TLS proxy in front (forward `X-Forwarded-Proto`).
 - The hosted Observatory image is the root `Dockerfile` (HF Spaces /
-  Railway / Fly) and is unaffected by this stack.
+  Fly / any container host) and is unaffected by this stack.
 
 ## Related
 

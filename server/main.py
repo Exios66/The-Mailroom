@@ -83,8 +83,6 @@ def _edition() -> str:
 
 def _platform() -> str:
     """Deploy host tag for /health + /api/meta (deploy verification)."""
-    if os.environ.get("RAILWAY_SERVICE_NAME") or os.environ.get("RAILWAY_DEPLOY_ID"):
-        return "railway"
     if os.environ.get("RENDER_INSTANCE_ID"):
         return "render"
     if os.environ.get("FLY_APP_NAME"):
@@ -101,7 +99,7 @@ def _build_sha() -> str:
 
 API_ENDPOINTS = [
     {"method": "GET", "path": "/api/health", "desc": "source reachability (Langfuse / cache)"},
-    {"method": "GET", "path": "/health", "desc": "platform liveness (Railway / Fly / Docker; no Langfuse call)"},
+    {"method": "GET", "path": "/health", "desc": "platform liveness (HF Space / Fly / Docker; no Langfuse call)"},
     {"method": "GET", "path": "/api/traces", "desc": "recent runs (light); ?since=&limit=&stage=&environment="},
     {"method": "GET", "path": "/api/traces/{trace_id}", "desc": "full run detail (spans/generations/scores)"},
     {"method": "GET", "path": "/api/metrics", "desc": "window aggregates; ?since="},
@@ -264,7 +262,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
     def health():
         return _health_payload()
 
-    # Platform probes (Railway / Fly / Render / Docker HEALTHCHECK) expect a
+    # Platform probes (HF Space / Fly / Render / Docker HEALTHCHECK) expect a
     # fast 2xx without depending on Langfuse. MAILROOM CLOSED is a valid UI
     # state — the process is still alive. Use /api/health for source status.
     @app.get("/health")
@@ -844,10 +842,10 @@ def _dt(value) -> Optional[datetime]:
 
 
 def listen_port(default: int = 8001) -> int:
-    """Prefer platform ``PORT`` (Railway / Fly / Render) over ``MAILROOM_PORT``.
+    """Prefer platform ``PORT`` (Fly / Render / any container host) over ``MAILROOM_PORT``.
 
     Hugging Face Spaces and the Observatory image bake ``MAILROOM_PORT=7860``.
-    Listening on that while the edge proxies ``$PORT`` is the usual Railway
+    Listening on that while the edge proxies ``$PORT`` is the usual container-host
     crash-loop failure mode — same contract as llm-mailroom's API.
     """
     platform = (os.environ.get("PORT") or "").strip()
