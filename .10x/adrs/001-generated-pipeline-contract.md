@@ -9,7 +9,7 @@
 The visualizer mirrors pipeline topology by hand (`pipeline_schema.py`, `trace_interpreter.py`, fixtures). The mirror is 80 commits behind and misses `classification_arbiter`, the extraction gate and two agents. The pipeline roadmap adds a scoring node family and `audit_failed` next. Nothing detects drift.
 
 ## Decision
-llm-mailroom exports `contract/mailroom-contract.json` (nodes, edges, span→observation type, agents, classes, subclasses, failure classes, score names, thresholds, `contract_version`, `pipeline_sha`) from its own constants, with a CircleCI staleness check. The-Mailroom vendors the file at the pinned SHA through `scripts/bump_producer_pin.py`, derives topology from it, and keeps only display metadata locally. Unknown spans render as a visible UNMAPPED chip and are counted on `/api/health`.
+llm-mailroom exports `contract/mailroom-contract.json` (nodes, edges, span→observation type, agents, classes, subclasses, failure classes, score names, thresholds, `contract_version`, `pipeline_version`) from its own constants, with a CircleCI staleness check. The-Mailroom vendors the file at the pinned SHA through `scripts/bump_producer_pin.py`, records where the copy came from (pipeline commit, sha256) in `source.json` beside it, derives topology from it, and keeps only display metadata locally. Floor stages and phases are a visualizer concept, so the node→stage and stage→phase mapping stays in `pipeline_schema.py`; a conformance check (`contract_gaps`) fails when a contract node has no stage, phase or `NODE_ORDER` slot, so a new node cannot land unmapped. Unknown spans render as a visible UNMAPPED chip and are counted on `/api/health`.
 
 ## Alternatives Considered
 | Alternative | Pros | Cons | Why Not |
