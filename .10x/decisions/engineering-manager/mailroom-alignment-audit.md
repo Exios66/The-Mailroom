@@ -1,15 +1,15 @@
 # Engineering Manager — mailroom-alignment-audit
 
-Status: Proposed. See spec §6–§7.
+Status: **Planning complete** 2026-11-06.
 
-| Milestone | Est. | Gate |
-|---|---|---|
-| M0 Stop the bleeding (F-1, A-9, H-1) | 1.5 d | Suite green; pipeline on IaC |
-| M1 Contract (A-1..A-3, F-2, H-2) | 5 d | CI fails on a renamed span |
-| M2 Catch-up (A-4..A-8, B-*, F-3) | 5 d | v0.6.0 |
-| M3 Design system (D-1, D-2, G-2) | 3 d | Validator green |
-| M4 Floor v2 + map (D-3..D-8, C-*, F-4, I-*) | 10–12 d | v1.0.0 |
-| M5 Ops panels (E-*, G-1, G-3), optional | 3 d | No operator fields public |
+| Milestone | Tasks | Est. | Repo(s) |
+|---|---|---|---|
+| M0 Stop the bleeding | F-1, A-9, H-1 | 2 d | both |
+| M1 Contract | A-1, A-2, A-3, F-2, H-2 | 5 d | both |
+| M2 Catch-up → v0.6.0 | A-4..A-8, B-1..B-4, F-3 | 5 d | both |
+| M3 Design system | D-1, D-2, G-2 | 3 d | visualizer |
+| M4 Floor v2 + map + review desk → v1.0.0 | D-3..D-8, C-1..C-4, F-4, I-1, I-2 | 14–16 d | visualizer |
+| M5 Ops panels | E-1, E-2, G-1, G-3 | 3 d | visualizer |
 
-Critical path: H-1 (2026-12-01 deadline), then the A-1 pipeline PR, then everything else.
-Cross-repo: A-1, B-1..B-4 and H-1 are llm-mailroom PRs.
+Each milestone ships as its own PR per repo, stacked on the plan branch.
+CI note (H-2): GitHub Actions is unavailable on this account. CircleCI is the target, and needs the owner to enable the project in CircleCI.

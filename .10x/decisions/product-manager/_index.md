@@ -1,4 +1,4 @@
-# product-manager — index
+# Product Manager — index
 
 Active features:
-- `mailroom-alignment-audit` — visualizer ↔ pipeline alignment + UI/visual/deploy audit (Discovery)
+- `mailroom-alignment-audit` — approved; review desk and floor v2 are the user-facing outcomes

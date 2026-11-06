@@ -21,3 +21,10 @@ No machine-checked contract between repos. Every pipeline change requires a manu
 
 ## Proposed plan (2026-11-06)
 See spec `.10x/specs/2026-11-06-mailroom-alignment-audit-design.md` and ADR-001..004 (Proposed).
+
+## Phase 2 design (accepted 2026-11-06)
+- ADR-001 contract: llm-mailroom `src/scripts/export_contract.py` → `contract/mailroom-contract.json`; vendored at `mailroom_ui/contract/`.
+- ADR-002: gate, triage and decision-review telemetry added in the pipeline; process status read from producer HTTP.
+- ADR-003: React desk at `/desk`, embedded as an Observatory tab; vanilla fallback.
+- ADR-005: Railway removed; HF Space pair.
+- Failure modes: contract missing or invalid → fall back to the bundled mirror and report it on `/api/health`; unknown span → UNMAPPED chip; producer down → review desk read-only, with a banner.

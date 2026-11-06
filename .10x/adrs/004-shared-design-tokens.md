@@ -1,6 +1,6 @@
 # ADR-004: Shared design tokens generated in Python
 
-**Status:** Proposed
+**Status:** Accepted (2026-11-06)
 **Date:** 2026-11-06
 **Feature:** mailroom-alignment-audit
 

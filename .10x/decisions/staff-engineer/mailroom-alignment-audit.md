@@ -7,3 +7,8 @@
 
 ## Proposed plan (2026-11-06)
 See spec `.10x/specs/2026-11-06-mailroom-alignment-audit-design.md` and ADR-001..004 (Proposed).
+
+## Standards for this feature
+- One pin-bump command (`scripts/bump_producer_pin.py`) moves the SHA everywhere; tests assert that every location agrees.
+- Generated files (contract, tokens) are committed and checked for freshness in tests.
+- The AGENTS.md "verify manually" frontend rule is replaced by Python Playwright smoke tests (F-4); still no JS test harness.

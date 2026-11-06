@@ -1,8 +1,6 @@
 # Handoff
 
-**From:** Phase 0 (all roles) → **To:** Owner decision, then Phase 1 (CTO + PM)
+**From:** Planning (EM + Senior Engineer) → **To:** SDE (M0)
 
-Read the spec's §9 decisions. Once they are answered:
-1. Mark the chosen ADRs Accepted (and the others Superseded or Rejected).
-2. Write the Phase 1 strategy files, then start M0 (F-1, A-9, H-1).
-H-1 is time-boxed by the 2026-12-01 Railway cutoff.
+Ordered tasks: F-1 → A-9 → H-1 (visualizer) → H-1 (pipeline, separate PR).
+ADRs 001–005 Accepted. Spec §9 records the owner decisions and two interpretations (#2 process status over HTTP, #5 Railway removed).

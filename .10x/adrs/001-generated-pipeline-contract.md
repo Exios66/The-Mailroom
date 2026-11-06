@@ -1,6 +1,6 @@
 # ADR-001: Generated pipeline contract as the alignment mechanism
 
-**Status:** Proposed
+**Status:** Accepted (2026-11-06)
 **Date:** 2026-11-06
 **Feature:** mailroom-alignment-audit
 **Author:** 10x-Team (Architect + Staff Engineer)

@@ -1,6 +1,6 @@
 # The-Mailroom: alignment, UI, graphics, visual design and deployment plan
 
-**Status:** Proposed. Waiting on the owner's decisions (section 9).
+**Status:** Approved 2026-11-06 (owner decisions recorded in §9).
 **Date:** 2026-11-06
 **Feature slug:** `mailroom-alignment-audit`
 **Repos:** The-Mailroom (visualizer, v0.5.1 @ `cab7a41`) and llm-mailroom (pipeline, v0.9.1 + Unreleased @ `da07cc2`)
@@ -151,7 +151,7 @@ Option 2c: don't show ops state.
 | `tui/` | Operator CLI | Contract parity for labels and stages only |
 | `terminal/` (gh-pages) | Static showcase | Snapshot refresh only |
 | `operator_desk/` | Backend module, not a surface | No visual work |
-| `ui/` React desk | **Freeze** (recommended) or retire | Fix A9 only; mark "maintenance mode" |
+| `ui/` React desk | **Review desk tab inside the Observatory** (owner decision) | Refocus on the human review tray; mounted as the Observatory "Review desk" tab when `ui/dist` is built; the vanilla review queue stays as the fallback when it is not |
 
 ### 5.4 Design system and graphics (ADR-004)
 
@@ -194,7 +194,9 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 - B-4 Add the new names to `NODE_OBSERVATION_TYPES` and the contract. *included*
 
 ### C. Information architecture and surfaces [CTO, Product Manager]
-- C-1 Record the surface roles (ADR-003) and put `ui/` into maintenance mode (README banner, `/desk` footer). *0.5 d*
+- C-1 Record the surface roles (ADR-003). *0.25 d*
+- C-3 Observatory "Review desk" tab that mounts the React desk (same origin, shared operator JWT) and falls back to the vanilla review queue when `ui/dist` is absent. *1 d*
+- C-4 Refocus the React desk on the review tray: queue with filters (class, verdict, review cause, age), document source preview, extraction diff editor validated by `validate_operator_extraction`, disposition actions (resume, record, requeue, complete), audit chain, keyboard shortcuts. Remove or hide desk features that duplicate the Observatory. *3 d*
 - C-2 Observatory navigation: add the Pipeline map tab; group Debug under an operator-only menu. *0.5 d*
 
 ### D. Design system and graphics [Senior Engineer, SDE, QA for a11y]
@@ -223,7 +225,7 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 - G-3 Threat-model review of the read-only producer proxy (SSRF via `MAILROOM_PIPELINE_URL`, token scope). *0.5 d*
 
 ### H. Deployment and CI [DevOps]
-- **H-1 (urgent, pipeline repo) Move llm-mailroom from `railway.json` to Railway IaC before 2026-12-01.** Either the pipeline gets its own `.railway/railway.py`, or the visualizer's IaC (which already declares both services) owns both: owner decision. *1 d*
+- **H-1 Retire Railway (owner decision, ADR-005).** Remove `railway.json` and the Railway-specific listen and observability code, tests and docs from llm-mailroom, and `.railway/`, `tests/test_railway_deploy.py` and the Railway docs from The-Mailroom. Keep the generic platform `PORT` handling. The hosted target is the HF Docker Space pair (Observatory + producer). *1.5 d (two PRs)*
 - H-2 CircleCI for The-Mailroom: pytest, contract staleness against the pin, token build check, Playwright smoke (if F-4 is approved), `npm audit`. *1 d*
 - H-3 Release v0.6.0 (alignment) and then **v1.0.0** (floor v2 is a visual-design break, which AGENTS.md says is MAJOR). Refresh the HF Space, gh-pages and the Digital-Mailroom import. *0.5 d each*
 
@@ -237,11 +239,11 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 
 | Milestone | Contents | Est. | Exit criteria |
 |---|---|---|---|
-| **M0 Stop the bleeding** | F-1, A-9, H-1 | 1.5 d | Suite green; audit chain correct; pipeline deploys under IaC |
+| **M0 Stop the bleeding** | F-1, A-9, H-1 | 2 d | Suite green; audit chain correct; no Railway config left in either repo |
 | **M1 Contract** | A-1, A-2, A-3, F-2, H-2 | 5 d | CI fails on a deliberately renamed span |
 | **M2 Catch-up** | A-4–A-8, B-1–B-4, F-3 | 5 d | Golden traces for every route render with zero unmapped spans; release v0.6.0 |
 | **M3 Design system** | D-1, D-2, G-2 | 3 d | One token source; palette validator green |
-| **M4 Floor v2 and Observatory map** | D-3–D-8, C-1, C-2, F-4, I-1, I-2 | 10–12 d | Screenshots at 1440 px and 390 px; keyboard path to the inspector; release v1.0.0 |
+| **M4 Floor v2, Observatory map, review desk tab** | D-3–D-8, C-1–C-4, F-4, I-1, I-2 | 14–16 d | Screenshots at 1440 px and 390 px; keyboard path to the inspector; release v1.0.0 |
 | **M5 Ops panels (optional)** | E-1, E-2, G-1, G-3 | 3 d | Public `/live` shows no operator-only field (tested) |
 
 Dependencies: M1 needs the A-1 pipeline PR merged. M2's B tasks are pipeline PRs. The pipeline's own roadmap stage 2 (scoring nodes) should land after M1, so the scoring stations arrive through the contract with no extra visualizer work. That also completes the pipeline's task F1.
@@ -255,28 +257,27 @@ Dependencies: M1 needs the A-1 pipeline PR merged. M2's B tasks are pipeline PRs
 | The pipeline graph changes during M2–M4 (roadmap stage 2) | High | Contract-driven layout; pin bump is one command |
 | LangGraph introspection is unstable across versions | Medium | The exporter falls back to an explicit node and edge list tested against `build_graph` |
 | Floor v2 scope creep (sprites, animation) | Medium | Fixed sprite list (5); ship the layout first with placeholder glyphs |
-| Railway IaC is still beta (`railway_sdk`) | Medium | Keep `railway.json` until IaC deploys are verified; do a dry `railway config plan` first |
+| Retiring Railway leaves the producer without a reachable host for REVIEW resolve | Medium | Verify the HF producer Space with `probe_hosted_spaces.py` before removing anything |
 | Public exposure of ops data | Low–Med | G-1 server-side classification, with tests |
 | Digital-Mailroom hub drift after the v1.0.0 import | Medium | Import immediately after each release, as AGENTS.md requires |
 
 ---
 
-## 9. Decisions needed from the owner
+## 9. Owner decisions (2026-11-06)
 
-1. **Contract approach:** option 1 (generated contract, recommended) or option 2 (hand resync and a drift test)?
-2. **Operational state (ADR-002):** 2a (traces for document events, producer HTTP for process state; recommended), 2b (all Langfuse) or 2c (don't show)?
-3. **Surface roles (ADR-003):** is the Observatory primary? Freeze or retire the React desk?
-4. **Browser checks (F-4):** allow Python Playwright smoke tests, which changes the "verify manually" policy?
-5. **Railway (H-1):** who owns the producer's IaC, the pipeline repo or the visualizer's two-service file?
-6. **Versioning:** ship floor v2 as v1.0.0?
-7. **Scope:** all of M0–M5, or M0–M4 with M5 deferred?
+1. **Contract:** option 1, a generated contract published by the pipeline. ADR-001 Accepted.
+2. **Operational state:** traces for per-document events (option 2a). ADR-002 Accepted. Process-level status for the M5 panels reads the producer's read-only HTTP. *Interpretation; the owner may override.*
+3. **Surfaces:** the Observatory is primary. The React desk becomes a Observatory tab, refocused on the human review tray. ADR-003 Accepted (revised).
+4. **Browser checks:** add Python Playwright smoke tests. AGENTS.md policy updated in F-4.
+5. **Railway:** deprecated. Retire it from both repos; the HF Space is the hosted target. ADR-005 Accepted. *Interpretation; the owner may override.*
+6. **Versioning:** floor v2 ships as v1.0.0.
+7. **Scope:** all milestones, M0–M5.
 
----
+## 10. ADRs
 
-## 10. Proposed ADRs
-
-Drafts in `.10x/adrs/`, all marked **Proposed**:
+In `.10x/adrs/`, all **Accepted** 2026-11-06:
 - ADR-001 Generated pipeline contract as the alignment mechanism
 - ADR-002 Operational state: traces for document events, producer HTTP for process state
 - ADR-003 Surface roles and React desk maintenance mode
 - ADR-004 Shared design tokens generated in Python
+- ADR-005 Retire Railway; the HF Space pair is the hosted target
