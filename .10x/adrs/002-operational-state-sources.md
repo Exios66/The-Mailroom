@@ -1,6 +1,6 @@
 # ADR-002: Operational state: traces for document events, producer HTTP for process state
 
-**Status:** Accepted (2026-11-06)
+**Status:** Accepted (2026-11-06); document-trace mechanism superseded by ADR-006
 **Date:** 2026-11-06
 **Feature:** mailroom-alignment-audit
 

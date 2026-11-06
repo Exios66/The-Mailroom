@@ -187,11 +187,19 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 - A-8 Add unmapped-span handling and the health counter. *0.5 d*
 - A-9 Fix A9 (`AuditChain.tsx` fields), with the nesting by `kind`/`parent_id` from pipeline task F1 behind a feature check. *0.5 d*
 
-### B. Pipeline telemetry (cross-repo, llm-mailroom) [Architect, SDE]
-- B-1 Extraction gate → Langfuse event plus categorical score. *0.5 d*
-- B-2 Triage lane → its own trace with `lane-triage` tag and `triage-email` span. *1 d*
+### T. Backend-neutral document traces (ADR-006) [Architect, Staff Engineer, SDE]
+- T-1 (pipeline) Add a `trace_schema` section to the contract: root name, span names and kinds, attribute keys and types. *0.5 d*
+- T-2 (pipeline) Multi-sink tracing: `OBSERVABILITY_PROVIDER` takes a list; `pipeline_trace`, `observation` and `traced_node` emit OTel spans that follow the schema to every sink (OTLP exporters for Phoenix and any OTLP backend; Langfuse through its v4 SDK). Mirror displayable scores as span attributes. *3 d*
+- T-3 (pipeline) A test that every emitted span and attribute is in the schema, run against an in-memory OTel exporter. *0.5 d*
+- T-4 (visualizer) Source registry: `MAILROOM_SOURCE` takes a list; adapters register by name; each normalises to the trace schema. *1 d*
+- T-5 (visualizer) Source conformance kit: one golden document trace through each adapter's fake must produce the same `PipelineRun`. *1 d*
+- T-6 (visualizer) `PhoenixSource` reads the contract-named document spans, not only reloaded and LLM spans. *1 d*
+
+### B. Pipeline document events (cross-repo, llm-mailroom; all through the T-2 layer) [Architect, SDE]
+- B-1 Extraction gate → `review-extraction-gate` span with `mailroom.gate.*` attributes. *0.5 d*
+- B-2 Triage lane → its own document trace tagged `lane-triage`, with a `triage-email` span. *1 d*
 - B-3 Decision review → span. *0.5 d*
-- B-4 Add the new names to `NODE_OBSERVATION_TYPES` and the contract. *included*
+- B-4 Add the new names to `NODE_OBSERVATION_TYPES`, the trace schema and the contract. *included*
 
 ### C. Information architecture and surfaces [CTO, Product Manager]
 - C-1 Record the surface roles (ADR-003). *0.25 d*
@@ -240,8 +248,8 @@ Each task is no longer than half a day unless marked. Owner roles are in bracket
 | Milestone | Contents | Est. | Exit criteria |
 |---|---|---|---|
 | **M0 Stop the bleeding** | F-1, A-9, H-1 | 2 d | Suite green; audit chain correct; no Railway config left in either repo |
-| **M1 Contract** | A-1, A-2, A-3, F-2, H-2 | 5 d | CI fails on a deliberately renamed span |
-| **M2 Catch-up** | A-4–A-8, B-1–B-4, F-3 | 5 d | Golden traces for every route render with zero unmapped spans; release v0.6.0 |
+| **M1 Contract** | A-1, A-2, A-3, F-2, H-2, T-1, T-4, T-5 | 7.5 d | CI fails on a deliberately renamed span; every source adapter passes the conformance kit |
+| **M2 Catch-up** | A-4–A-8, T-2, T-3, T-6, B-1–B-4, F-3 | 9.5 d | Golden traces for every route render with zero unmapped spans; release v0.6.0 |
 | **M3 Design system** | D-1, D-2, G-2 | 3 d | One token source; palette validator green |
 | **M4 Floor v2, Observatory map, review desk tab** | D-3–D-8, C-1–C-4, F-4, I-1, I-2 | 14–16 d | Screenshots at 1440 px and 390 px; keyboard path to the inspector; release v1.0.0 |
 | **M5 Ops panels (optional)** | E-1, E-2, G-1, G-3 | 3 d | Public `/live` shows no operator-only field (tested) |
@@ -266,7 +274,7 @@ Dependencies: M1 needs the A-1 pipeline PR merged. M2's B tasks are pipeline PRs
 ## 9. Owner decisions (2026-11-06)
 
 1. **Contract:** option 1, a generated contract published by the pipeline. ADR-001 Accepted.
-2. **Operational state:** traces for per-document events (option 2a). ADR-002 Accepted. Process-level status for the M5 panels reads the producer's read-only HTTP. *Interpretation; the owner may override.*
+2. **Operational state:** document traces are the displayed events, on any trace backend. Langfuse and Phoenix are the primary sinks, and the wiring must work across backends (owner clarification, ADR-006, superseding ADR-002's Langfuse-only mechanism). Process-level status for the M5 panels still reads the producer's read-only HTTP.
 3. **Surfaces:** the Observatory is primary. The React desk becomes a Observatory tab, refocused on the human review tray. ADR-003 Accepted (revised).
 4. **Browser checks:** add Python Playwright smoke tests. AGENTS.md policy updated in F-4.
 5. **Railway:** deprecated. Retire it from both repos; the HF Space is the hosted target. ADR-005 Accepted. *Interpretation; the owner may override.*
@@ -281,3 +289,4 @@ In `.10x/adrs/`, all **Accepted** 2026-11-06:
 - ADR-003 Surface roles and React desk maintenance mode
 - ADR-004 Shared design tokens generated in Python
 - ADR-005 Retire Railway; the HF Space pair is the hosted target
+- ADR-006 Document traces are the displayed events, on any trace backend (supersedes ADR-002's Langfuse-only mechanism)
