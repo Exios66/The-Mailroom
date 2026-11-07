@@ -6,6 +6,56 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Changed
+
+- Move the llm-mailroom pin to release tag `v0.9.2` (`9e8f30b2`). The tag's package
+  metadata still reads 0.9.1, so the recorded package version stays 0.9.1. The vendored
+  display contract is unchanged, and its provenance now records the pinned commit.
+
+### Changed (M2: A-7)
+
+- Resolve remote branch/tag contract refs to a full commit before fetching the
+  blob, keeping provenance and `matches_pin` correct even if the ref moves.
+
+- Adopt llm-mailroom 0.9.1 at merged contract commit `65523a220954` and
+  re-vendor the display contract with matching immutable provenance, removing
+  the provisional #165-head exception. Align the optional offline evaluation
+  engine with the producer's Dojo v0.27.2 commit `1cd4aba76d82`.
+- Preserve the producer contract's exact bytes when vendoring; the recorded
+  digest now identifies the fetched blob without local JSON reformatting.
+
+### Fixed (browser audit)
+
+- Keep stale session/operator reads distinct from genuinely empty sources:
+  query the source when the poller is stale and propagate unavailability as
+  503, while preserving successful reads during startup and recovery.
+
+- Probe immediately on socket loss, reject superseded HTTP responses, and
+  prevent stale session/operator rows during source outages.
+- Keep short mobile layouts scrollable, logout reachable for long usernames,
+  and History classifications wrapped. Complete permits the producer's parked
+  extraction fallback and disables the invalid Reject action.
+- Answer 503 for trace detail during an outage instead of the source's cached run,
+  and stop logging returning runs as NEW after a source recovers.
+- Remove locally generated demo envelopes; demos use trace-backed seed runs.
+- Make outage labels refer to the configured trace source.
+
+- Serialize HTTP floor refreshes and ignore their late results once the socket
+  has recovered, so an older failure cannot clear a newer live floor.
+
+- Preserve the Observatory CLOSED status during socket reconnect attempts until
+  a successful source response confirms recovery.
+
+- Start HTTP fallback after late WebSocket disconnects in both live consoles;
+  retune Observatory fallback when the server changes its poll interval.
+- Close live floors on source outages even with a warm export cache; keep
+  explicit snapshot downloads available for diagnosis.
+- Keep pixel History filenames and replay controls usable on narrow screens.
+- Optional desk: validate Complete extraction JSON, default finished reviews
+  to Record, preserve producer error details and show objective review causes
+  on pipeline cards. Make mobile navigation leave room for the document view.
+- Preserve login rejection feedback and accept producer audit `at` timestamps.
+
 ### Changed (M1)
 
 - `mailroom_ui/pipeline_schema.py` reads pipeline facts from the generated
@@ -17,8 +67,8 @@ All notable changes to The-Mailroom are documented here, following
   the `gmail_triage` and `relations` agents, the `certificate_of_formation`
   and correspondence `other` subclasses, and the `arbitrate-classification`
   span (interim: on the re-classify station until it gets its own stage).
-- The vendored contract is provisional: it comes from llm-mailroom#165's head
-  and will be re-vendored from its merge commit when the pin moves (A-7).
+- M1 introduced a provisional contract from llm-mailroom#165; M2 A-7 adopts
+  its merged immutable commit and removes the provenance exception.
 
 ### Added (M1)
 

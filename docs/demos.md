@@ -146,5 +146,5 @@ python scripts/seed_demo.py --list-scenarios
 python scripts/seed_demo.py --check --check-api
 ```
 
-Demo envelopes are never served as a local JSON fallback. The pixel `D`
-key is opt-in (`?demo=1`) and only when the source is down.
+Demo runs are read from the configured trace backend. The legacy `?demo=1`
+local simulator is removed; an unavailable trace source closes the floor.

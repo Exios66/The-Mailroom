@@ -8,7 +8,7 @@
 <br/>
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](pyproject.toml)
-[![Langfuse only](https://img.shields.io/badge/source-Langfuse_only-6C5CE7?style=for-the-badge)](docs/architecture.md)
+[![Trace backends](https://img.shields.io/badge/sources-Phoenix_%2B_Langfuse_%2B_plugins-6C5CE7?style=for-the-badge)](docs/architecture.md)
 [![Four surfaces](https://img.shields.io/badge/surfaces-console_·_Observatory_·_TUI_·_site-22C55E?style=for-the-badge)](#quick-start)
 [![Observatory](https://img.shields.io/badge/🤗_live-Observatory-FFD21E?style=for-the-badge)](https://lucius-morningstar-mailroom-observatory.hf.space/)
 
@@ -213,7 +213,7 @@ producer. `--source TRACE` prints parked document text. Never point
 
 Live captures of the three surfaces against the same display API. Values on
 screen are interpreted traces (fixture-shaped exactly like the test suite);
-Langfuse remains the sole display source. The full gallery, including the
+The configured trace backends remain the document display sources. The full gallery, including the
 PR screen recording, lives in the **[demos notebook](docs/demos/The-Mailroom-Demos.ipynb)**
 and [`docs/demos.md`](docs/demos.md) (wiki twin: [`Demos`](wiki/Demos.md)).
 
@@ -374,7 +374,7 @@ capture manifest live in the
 <summary>Demo data (play-testing without a live run)</summary>
 
 Demo runs are seeded **into** Langfuse (env `demo`) — the visualizer still
-reads Langfuse only, so nothing on screen is ever canned data:
+reads the configured trace backend, so nothing on screen is ever canned data:
 
 ```bash
 python scripts/seed_demo.py                       # seed 13 demo runs (incl.
@@ -388,8 +388,8 @@ python scripts/seed_demo.py --check-logs <dir>    # verify against run logs save
                                                   # scripts/sync_langfuse_logs.py
 ```
 
-The pixel `D` key does **not** fabricate envelopes on a live floor. Demo
-envelopes are opt-in (`?demo=1`) and only when the trace source is down.
+Demo runs are seeded into the configured trace backend. The pixel console
+never generates local demo envelopes; an unavailable trace source closes the floor.
 
 </details>
 
@@ -402,7 +402,7 @@ envelopes are opt-in (`?demo=1`) and only when the trace source is down.
 - The sister pipeline repo `../llm-mailroom` (optional — `MAILROOM_TAXONOMY`
   live override, production-pilot scripts, or `mailroom_ui/producer.py`
   checkout import). Prefer `pip install -e ".[pipeline]"` to pin dist
-  `mailroom` @ `9e8f30b279e7626c056b03511f823105760f80d7` (0.9.2, main after v0.7.1) when you want to import `pipeline.review_resolve`.
+  `mailroom` @ `9e8f30b279e7626c056b03511f823105760f80d7` (0.9.1, main after v0.7.1) when you want to import `pipeline.review_resolve`.
 - `arize-phoenix-client` (optional — only for the Phoenix trace source)
 
 </details>
@@ -566,10 +566,12 @@ accounts in an existing volume. A public login stays locked while any stored
 admin still has the documented default password. Archive verification without
 an expected checksum reports an unverified result with a reason.
 
-The poller owns the shared outage floor snapshot. Filtered trace reads do not
-replace it; reconnect frames retain stale status and the last successful fetch
-time. The TUI shows a closed floor when both WS and HTTP offer only stale/cache
-data. Its `history` command shares the last 200 submitted editor commands and
+The poller owns the shared export snapshot. Filtered trace reads do not
+replace it. When the trace source is unavailable, live trace reads return 503
+and WebSocket frames carry no runs; pixel, Observatory and TUI close the floor.
+The last successful fetch time and explicit `/api/snapshot` download remain
+available for diagnosis. A lost WebSocket starts HTTP polling while reconnecting.
+The TUI’s `history` command shares the last 200 submitted editor commands and
 prints the most recent 40.
 
 
@@ -681,9 +683,9 @@ board, one discussion log, and one trace contract:
 
 | Repository | Role | Relationship to The-Mailroom |
 | --- | --- | --- |
-| [llm-mailroom](https://github.com/Exios66/llm-mailroom) | LangGraph state machine processing legal documents through specialist LLM agents (classify → extract → report → archive); pin `@9e8f30b279e7626c056b03511f823105760f80d7` / **0.9.2** (reviewed source adoption) (package `mailroom` 0.9.2) | **Upstream** — its Langfuse project is this visualizer's sole data source; optional `pip install -e ".[pipeline]"` imports `pipeline.review_resolve` |
+| [llm-mailroom](https://github.com/Exios66/llm-mailroom) | LangGraph state machine processing legal documents through specialist LLM agents (classify → extract → report → archive); pin `@9e8f30b279e7626c056b03511f823105760f80d7` / **0.9.1** (reviewed source adoption) (package `mailroom` 0.9.1) | **Upstream** — its configured trace sinks supply this visualizer; optional `pip install -e ".[pipeline]"` imports `pipeline.review_resolve` |
 | [llm-entity-extraction](https://github.com/Exios66/llm-entity-extraction) | Prompt-experiment loop (prompt versions × models, paired-bootstrap ablations) | Breeds the pipeline's sorter/specialist prompts; hosts the shared kanban board + governance log for the whole chain |
-| [llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring) | Canonical scoring engine (`@4740d768`, Dojo v0.24.2) | Upstream engine for pipeline and sandbox; visualizer offline evaluation uses optional `[eval]` |
+| [llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring) | Canonical scoring engine (`@1cd4aba7`, Dojo v0.27.2) | Upstream engine for pipeline and sandbox; visualizer offline evaluation uses optional `[eval]` |
 | [Enron-Evaluation-Environment](https://github.com/Exios66/Enron-Evaluation-Environment) | EDA + pipeline-ready correspondence dataset (CMU Enron corpus) | Corpus feed for the pipeline's `correspondence` doc class |
 | [claims-data-eda](https://github.com/Exios66/claims-data-eda) | Insurance-claims candidate-corpus EDA (CMS DE-SynPUF direction) | Candidate corpus feed for the `insurance_claim` doc class |
 | [atticus-investigation](https://github.com/Exios66/atticus-investigation) | LegalBench classification prompt-engineering pipeline | Eval sibling — same methodology family, LegalBench focus |
@@ -762,7 +764,7 @@ The visualizer is built on:
 
 | Project | What it does here |
 | :--- | :--- |
-| [Langfuse](https://langfuse.com/) | The sole display source for llm-mailroom runs |
+| [Langfuse](https://langfuse.com/) | A primary trace backend alongside Phoenix and adapter plugins |
 | [Arize Phoenix](https://phoenix.arize.com/) (optional) | The trace source for [Mailroom Reloaded](#mailroom-reloaded) |
 | [FastAPI](https://github.com/fastapi/fastapi) · [Uvicorn](https://github.com/encode/uvicorn) | The shared display API and WebSocket |
 | [AgentLaboratory](https://github.com/SamuelSchmidgall/AgentLaboratory) | The visual palette and character direction derive from its artwork |

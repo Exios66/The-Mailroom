@@ -10,7 +10,7 @@ pipeline. It is a different product surface from:
 | `mailroom-tui` | Terminal users | AgentLab banners + tables |
 | GitHub Pages | Offline snapshot | Static export of the pixel SPA |
 
-Langfuse (or the configured Phoenix / multi source) is still the **only**
+The configured trace backends are the **only**
 display source. This edition talks to the same `/api/*` + `/ws` contract.
 
 ## Run locally (preview the public UI)
@@ -76,8 +76,9 @@ remain at `/static`. REVIEW resolve and Inbox enqueue (`POST /v1/upload`)
 need `MAILROOM_PIPELINE_URL` on a **reachable** producer — `127.0.0.1:8000`
 only works when the visualizer and producer share a host. A Space
 Observatory must use the public producer Space URL. Without those knobs
-the desk still shows the live Langfuse floor, with a disk snapshot cache
-(`MAILROOM_TRACE_CACHE_DIR`) so inspect does not stall on `get_run`.
+the desk still shows the live trace-backed floor. The disk snapshot cache
+(`MAILROOM_TRACE_CACHE_DIR`) supports explicit export downloads; live trace
+reads fail and the floor closes when the source is unavailable.
 
 ### Any Docker host (Fly, Render, Cloud Run, a VPS)
 
@@ -96,7 +97,7 @@ expose the pixel console paths — assets stay under `/live/static`).
 - **Review** — human-review queue (`/api/review-queue`).
 - **History + replay** — walk a stored trace through its real span sequence
   (paces by span latency; respects `prefers-reduced-motion`).
-- **Matters** — Langfuse sessions.
+- **Matters** — trace sessions.
 - **Metrics** — window aggregates from the live source.
 - **Inspect** — native `<dialog>` with spans, generations, scores.
 
@@ -130,3 +131,13 @@ is the one-pull wrapper. Event kinds have a glossary in `hosted/js/debug.js`
   scrolling.
 - Contrast is sized for text on cream / ink (and the dark `color-scheme`
   pair).
+
+### Trace adapters
+
+Phoenix and Langfuse are primary backends. Set `MAILROOM_SOURCE=phoenix`,
+`langfuse`, or a comma-separated list. Other sinks supply a `TraceSource`
+adapter via the `mailroom.sources` entry-point group and pass
+`tests/source_conformance.py`; the Observatory needs no sink-specific code.
+The selected adapters normalize traces, observations, scores and sessions for
+all `/api/*` reads and live snapshots. Missing or unavailable adapters fail
+clearly; they never silently fall back to another backend or canned rows.

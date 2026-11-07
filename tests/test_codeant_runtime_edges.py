@@ -36,7 +36,7 @@ def test_default_admin_hash_checks_are_cached_and_rotation_invalidates(monkeypat
 
 @pytest.mark.parametrize('component', ['runs', 'ops'])
 def test_poll_iteration_exception_broadcasts_staleness_to_connected_clients(monkeypatch, component):
-    """Either gathered failure sends an outage frame with the prior good bytes."""
+    """Either gathered failure closes the live floor and retains its timestamp."""
     async def scenario():
         hub = poller.PollHub(LangfuseSource(client=FakeClient([])), interval=.001)
         hub.snapshot = [{'trace_id':'last-good'}]
@@ -63,6 +63,6 @@ def test_poll_iteration_exception_broadcasts_staleness_to_connected_clients(monk
         monkeypatch.setattr(poller, 'fetch_pipeline_ops', fail if component == 'ops' else ops)
         await asyncio.wait_for(hub._run(), timeout=2)
         assert frames and frames[-1]['stale'] is True
-        assert frames[-1]['runs'] == [{'trace_id':'last-good'}]
+        assert frames[-1]['runs'] == []
         assert frames[-1]['fetched_at'] == '2026-10-23T00:00:00+00:00'
     asyncio.run(scenario())

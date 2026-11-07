@@ -8,12 +8,12 @@
 ## Overview
 
 The-Mailroom renders every run of the `llm-mailroom` multi-agent
-legal-document pipeline from its Langfuse traces (pixel-art console, hosted
+legal-document pipeline from its configured trace backends (pixel-art console, hosted
 Observatory, TUI REPL, and the GH Pages terminal site).
-**Langfuse is the sole source of truth**: no display value is ever fabricated
-or served from local canned data. The repo is read-only against Langfuse
-(project-scoped API keys, backend proxies everything — the browser never holds
-keys).
+**Trace-backend neutral**: Phoenix and Langfuse are primary adapters; other
+sinks register through `mailroom.sources` and normalize to the same `TraceSource`
+contract. No run value is fabricated or served from local canned data. The
+backend holds all source credentials and proxies reads; browsers never hold keys.
 
 ```
 ┌────────────────────────── Langfuse (US cloud, project llm-mailroom) ──────┐
@@ -160,7 +160,9 @@ Hugging Face Spaces: SDK **Docker**, empty root directory, port 7860,
 Langfuse keys as Space secrets (`scripts/publish_space.py`).
 Observatory cards show primary/secondary classification outcomes and a
 headline strip; `GET /api/snapshot` + `MAILROOM_TRACE_CACHE_DIR` cache
-Langfuse-derived JSON (never fabricated). See `hosted/README.md` and
+Langfuse-derived JSON for explicit download (never fabricated). Cached rows
+never substitute for an unavailable live source: live reads fail and the floor
+closes until recovery. See `hosted/README.md` and
 `hosted/SPACE_README.md`.
 
 ## GH Pages edition (static site, no Actions)
@@ -285,7 +287,7 @@ does not need Node. Pixel console and Observatory stay vanilla.
 
 The producer **code** pin is optional extra `[pipeline]`
 (`mailroom @ git+https://github.com/Exios66/llm-mailroom.git@9e8f30b279e7626c056b03511f823105760f80d7`,
-package 0.8.1 / reviewed Dojo v0.24.2 (@4740d768) adoption).
+package 0.9.1 / Dojo v0.27.2 (@1cd4aba7) adoption).
 `mailroom_ui/producer.py` imports `pipeline.review_resolve` and
 `schemas.manifest` when that extra or a sibling checkout is present; the
 REVIEW proxy and `tests/fake_producer.py` use those contract helpers

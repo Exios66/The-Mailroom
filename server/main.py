@@ -43,10 +43,7 @@ from mailroom_ui.review_actions import (
     review_context,
 )
 from mailroom_ui.trace_cache import (
-    CACHE_SOURCE,
     cache_status,
-    load_run,
-    load_traces,
     persist_metrics,
     persist_run,
     snapshot_bundle,
@@ -208,10 +205,10 @@ def create_app(source: Optional[object] = None) -> FastAPI:
     app.add_middleware(DebugLogMiddleware, recorder=debug_log)
 
     @app.exception_handler(TraceSourceUnavailable)
-    async def langfuse_down_handler(request, exc):
+    async def trace_source_down_handler(request, exc):
         return JSONResponse(
             status_code=503,
-            content={"error": "langfuse unavailable", "detail": str(exc)},
+            content={"error": "trace source unavailable", "detail": str(exc)},
         )
 
     # V-18: any other server error must come back as JSON with a detail the
@@ -230,6 +227,10 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         )
 
     def _health_payload():
+        """Return source health with cache and operator diagnostics when available.
+
+        A saved snapshot does not change the source's health status.
+        """
         payload = src.health()
         cache = cache_status()
         if isinstance(payload, dict):
@@ -238,16 +239,6 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             payload["mailroom"] = producer_status()
             payload["operator"] = operator_status()
             payload["cache"] = cache
-            if not payload.get("ok") and cache.get("has_snapshot"):
-                # The lamp stays lit so the floor keeps its last snapshot, but
-                # the payload says plainly that the live source is down.
-                payload["ok"] = True
-                payload["stale"] = True
-                payload["degraded"] = True
-                payload["live_ok"] = False
-                payload["source"] = CACHE_SOURCE
-                payload["cached_at"] = cache.get("cached_at")
-                payload["cached_trace_count"] = cache.get("cached_trace_count")
         return payload
 
     @app.get("/api/health")
@@ -274,23 +265,12 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         stage: Optional[str] = None,
         environment: Optional[str] = None,
     ):
-        try:
-            runs = _recent(src, since, limit)
-        except TraceSourceUnavailable:
-            cached = load_traces()
-            if cached:
-                rows = list(cached.get("runs") or [])
-                if stage:
-                    rows = [r for r in rows if r.get("stage") == stage]
-                if environment:
-                    rows = [r for r in rows if r.get("environment") == environment]
-                return {
-                    "count": len(rows),
-                    "source": CACHE_SOURCE,
-                    "cached_at": cached.get("cached_at"),
-                    "runs": rows[:limit],
-                }
-            raise
+        """Return recent live runs, optionally filtered by stage and environment.
+
+        ``since`` is a lookback in seconds. Source unavailability propagates
+        to the app's 503 handler; cached snapshots are not used for this read.
+        """
+        runs = _recent(src, since, limit)
         if stage:
             runs = [r for r in runs if r.stage.value == stage]
         if environment:
@@ -306,17 +286,16 @@ def create_app(source: Optional[object] = None) -> FastAPI:
 
     @app.get("/api/traces/{trace_id}")
     def trace_detail(trace_id: str):
-        # Live source first: the disk snapshot used to win whenever it held
-        # spans, so late scores (offline judge, eval_pipeline) never reached
-        # the inspector — even across restarts. The snapshot is only the
-        # outage fallback, and says so.
+        """Return live trace detail and attempt to save it for snapshot export.
+
+        Return 404 when the trace is absent. Source unavailability propagates
+        to the app's 503 handler rather than returning cached detail.
+        """
         try:
+            # Skip the source's run cache: it would answer 200 during an outage.
+            run = src.get_run(trace_id, force_refresh=True)
+        except TypeError:  # an adapter whose get_run takes only the trace id
             run = src.get_run(trace_id)
-        except TraceSourceUnavailable:
-            cached = load_run(trace_id)
-            if cached:
-                return {**cached, "source": CACHE_SOURCE, "stale": True}
-            raise
         if run is None:
             return JSONResponse(status_code=404, content={"error": "trace not found"})
         detail = _serialize(run, full=True)
@@ -380,7 +359,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         # Prefer the poller's already-enriched window. A 50-doc pilot used to
         # N+1 get_session_traces × get_run and time out against Langfuse.
         desk = [
-            r for r in (hub.runs or [])
+            r for r in (hub.runs if not hub.stale else [])
             if (r.session_id or r.matter_id) == session_id
         ]
         if not desk:
@@ -700,7 +679,7 @@ def create_app(source: Optional[object] = None) -> FastAPI:
             hub.disconnect(ws)
 
     def _operator_runs():
-        if hub.runs:
+        if hub.runs and not hub.stale:
             return list(hub.runs)
         return list_recent_runs(
             src, since=_utcnow() - timedelta(seconds=RECENT_WINDOW), limit=TRACE_LIMIT
@@ -766,19 +745,20 @@ def _recent(src: LangfuseSource, since: int, limit: int) -> list[PipelineRun]:
 
 
 def _desk_runs(src, hub: PollHub, *, since_seconds: int, limit: int) -> list[PipelineRun]:
-    """Enriched runs for METRICS / SESSIONS / REVIEW.
+    """Runs for METRICS / SESSIONS / REVIEW.
 
-    The poller already called get_run() for the live window. Reusing that
-    list keeps those desks instant and leaves the inspector able to fetch
-    /api/traces/{id} instead of waiting behind a sequential Langfuse walk.
-    Fall back to the cheap trace-list (light runs) when the poller has not
-    produced a snapshot yet — never enriched_recent_runs, which N+1s get_run
-    and hung a 50-doc SESSIONS load.
+    The poller's live window may contain enriched runs. Reusing that list
+    leaves the inspector able to fetch /api/traces/{id} instead of waiting
+    behind a sequential Langfuse walk.
+    Use the cheap trace-list (light runs) when the poller is stale or has no
+    runs in the requested window. ``since_seconds`` is a lookback in seconds;
+    source errors from the list read propagate to the caller. This avoids
+    enriched_recent_runs, which N+1s get_run and hung a 50-doc SESSIONS load.
     """
     cutoff = _utcnow() - timedelta(seconds=since_seconds)
     cached = [r for r in (hub.runs or [])
               if (r.updated_at or r.created_at or cutoff) >= cutoff]
-    if cached:
+    if cached and not hub.stale:
         return cached[:limit]
     # Never N+1 Langfuse here. A 50-doc window used to hang SESSIONS/REVIEW
     # for minutes while the poller was still filling hub.runs. Light list

@@ -67,4 +67,4 @@ Space SDK or a Hub model server here.
 - Schema mirror: [pipeline-schema-sync](../pipeline-schema-sync/SKILL.md)
 - Router: [mailroom-tool-router](../mailroom-tool-router/SKILL.md)
 - Pin: README constellation table (`llm-dojo-scoring` `@4740d768` (Dojo v0.24.2);
-  llm-mailroom dist `mailroom` `@9e8f30b279e7626c056b03511f823105760f80d7` / 0.9.2 (reviewed source adoption) via extra `[pipeline]`)
+  llm-mailroom dist `mailroom` `@9e8f30b279e7626c056b03511f823105760f80d7` / 0.9.1 (reviewed source adoption) via extra `[pipeline]`)

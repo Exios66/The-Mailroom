@@ -44,6 +44,7 @@ export interface AuditEntry {
   entry_hash?: string
   seq?: number
   timestamp?: string
+  at?: string
   kind?: string
   parent_id?: string | null
   id?: number | string

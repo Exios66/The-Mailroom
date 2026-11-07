@@ -322,21 +322,13 @@ const MetricsView = (() => {
   async function refresh(since = 604800) {
     gridEl.innerHTML = `<div class="hint mono">LOADING METRICS FROM LANGFUSE…</div>`;
     try {
-      let data;
+      const data = await Mailroom.api.metrics(since);
       let rawRuns = [];
-      if (window.Mailroom.demoMode) {
-        rawRuns = window.Mailroom.demoRuns || [];
-        data = computeLocalMetrics(rawRuns);
-      } else {
-        data = await Mailroom.api.metrics(since);
-        // Also fetch raw runs for the trend chart (optional — but V-18: a
-        // failure must be visible, not silently swallowed)
-        try {
-          const tdata = await Mailroom.api.traces(since, 200);
-          rawRuns = tdata.runs || [];
-        } catch (e) {
-          console.warn("[mailroom] trend data unavailable:", e.message || e);
-        }
+      try {
+        const tdata = await Mailroom.api.traces(since, 200);
+        rawRuns = tdata.runs || [];
+      } catch (e) {
+        console.warn("[mailroom] trend data unavailable:", e.message || e);
       }
       render(data, rawRuns);
       return data;

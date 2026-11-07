@@ -14,7 +14,7 @@ this visualizer.
 
 | Job | Use | Skill | Do **not** use |
 | --- | --- | --- | --- |
-| Default document display | Langfuse (`MAILROOM_SOURCE=langfuse`) | [langfuse](../langfuse/SKILL.md) | Phoenix-only if the family conveyor is required; never Braintrust; never canned JSON on the live path |
+| Default document display | Configured source adapters; Langfuse is the default | [langfuse](../langfuse/SKILL.md) for Langfuse; [apache-phoenix](../apache-phoenix/SKILL.md) for Phoenix | Forcing a primary sink when another conformant adapter is configured; canned JSON on the live path |
 | Optional local OTEL source | `MAILROOM_SOURCE=phoenix` or `both` | [apache-phoenix](../apache-phoenix/SKILL.md) | Phoenix as a replacement for the US-cloud `llm-mailroom` project |
 | Hosted eval / experiment logs | not this repo | [braintrust](../braintrust/SKILL.md) | A `MAILROOM_SOURCE=braintrust` adapter |
 | Hub GT / production-pilot scripts | `scripts/eval_pipeline.py`, `run_production_pilot.py` | [huggingface](../huggingface/SKILL.md) | Live Qwen/Hub unless explicitly asked; Dojo imports in the live display path (offline `[eval]` uses Dojo) |
@@ -33,14 +33,16 @@ this visualizer.
 
 ## Source precedence (`MAILROOM_SOURCE`)
 
-Canonical default in `.env.example`: **`langfuse`**.
+Canonical default in `.env.example`: **`MAILROOM_SOURCE=langfuse`**.
+Select `phoenix` or another registered adapter when that is the configured sink.
 
-1. **langfuse** — sole source of **document** display (traces → envelopes).
-2. **phoenix** — local Arize Phoenix via `PHOENIX_ENDPOINT` (opt-in).
+1. **langfuse** — primary document-trace adapter (the default).
+2. **phoenix** — primary Arize Phoenix adapter via `PHOENIX_ENDPOINT`.
 3. **langfuse,phoenix** (alias **both**) — `MultiSource` union; still no fabricated rows.
    Any comma list of registered adapters works (`mailroom_ui/source_registry.py`);
    a new backend must pass `tests/source_conformance.py`.
-4. Unreachable Langfuse → **MAILROOM CLOSED**, not stale/canned data.
+4. Any other conformant adapter registers through `mailroom.sources`; the UI must not require either primary backend.
+5. All configured sources unreachable → **MAILROOM CLOSED**, not stale/canned data.
 
 Operator liveness (watcher heartbeat, inbox pending) and **human-review
 resolve** (`POST /api/review/resolve` → approve / reject / record / requeue /
@@ -76,7 +78,7 @@ read-only FastAPI on `:8001`.
 
 ```bash
 pip install -e ".[dev]"
-pip install -e ".[pipeline]"  # optional llm-mailroom pin @ 9e8f30b279e7626c056b03511f823105760f80d7 (0.9.2, reviewed source adoption)
+pip install -e ".[pipeline]"  # optional llm-mailroom pin @ 9e8f30b279e7626c056b03511f823105760f80d7 (0.9.1, reviewed source adoption)
 cp .env.example .env          # LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY
 python -m pytest tests/ -q    # never hits real Langfuse
 python -m server.main         # pixel :8001 + Observatory /live
