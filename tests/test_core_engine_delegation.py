@@ -13,7 +13,7 @@ def engine_calls():
     old = sys.getprofile()
     def profile(frame, event, arg):
         """Observe executed Dojo functions."""
-        if event == "call" and frame.f_globals.get("__name__", "") == "llm_dojo_scoring.pipeline_scoring":
+        if event == "call" and frame.f_globals.get("__name__", "") == "llm_dojo_scoring.pipeline.pipeline_scoring":
             seen.add(frame.f_code.co_name)
     sys.setprofile(profile)
     try:
