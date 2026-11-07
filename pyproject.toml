@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "the-mailroom"
 version = "0.5.1"
-description = "Pixel-art visualization console for the llm-mailroom multi-agent pipeline — Langfuse is the sole source of truth."
+description = "Trace-backend-neutral visual console for the llm-mailroom pipeline — Phoenix, Langfuse and conformant adapters."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110",
@@ -19,23 +19,23 @@ dependencies = [
 
 [project.optional-dependencies]
 # Canonical offline scoring; default display dependencies remain light.
-# v0.24.2 plus the interim zero-token fix is pinned by commit; the tag is movable.
-eval = ["llm-dojo-scoring @ git+https://github.com/Exios66/llm-dojo-scoring.git@718e326c1fe5a49b3f1cfd43a3ac10c73e7e01a4"]
+# Dojo v0.27.2, matched to the adopted producer and pinned by immutable commit.
+eval = ["llm-dojo-scoring @ git+https://github.com/Exios66/llm-dojo-scoring.git@1cd4aba76d82eea20c6e8dfcc0d760881bf84924"]
 # Full development tests exercise offline evaluation with the canonical engine.
 dev = ["the-mailroom[eval]", "pytest>=8.0", "pytest-asyncio>=0.23", "httpx>=0.27", "bcrypt", "PyJWT", "watchdog"]
-# Pinned llm-mailroom (PyPI / dist name: mailroom) @ reviewed source 1a1ec3dfb4e71f615f5d34f6198f9d06fd8c26dd
-# (package 0.8.1; mailroom-dataset tag v9.1, llm-dojo-scoring v0.24.2 plus
-#  the interim post-release commit 718e326c1fe5a49b3f1cfd43a3ac10c73e7e01a4). Pulls
+# Pinned llm-mailroom (PyPI / dist name: mailroom) @ reviewed source 65523a220954d05bdf9b3d6604eb2fe128342f58
+# (package 0.9.1; mailroom-dataset tag v9.1, llm-dojo-scoring v0.27.2
+#  at 1cd4aba76d82eea20c6e8dfcc0d760881bf84924). Pulls
 # langgraph, Phoenix, and llm-dojo-scoring — the visualizer display path never imports
 # those. Contract helpers live in mailroom_ui/producer.py
 # (pipeline.review_resolve, schemas.manifest). Install with:
 #   pip install -e ".[pipeline]"
 pipeline = [
-    "mailroom @ git+https://github.com/Exios66/llm-mailroom.git@1a1ec3dfb4e71f615f5d34f6198f9d06fd8c26dd",
+    "mailroom @ git+https://github.com/Exios66/llm-mailroom.git@65523a220954d05bdf9b3d6604eb2fe128342f58",
     "structlog>=24.0",
     "pyyaml>=6.0",
 ]
-# Operator desk (auth / archive / bin observer). Display path stays Langfuse.
+# Operator desk (auth / archive / bin observer). Display stays trace-backed.
 # bcrypt + PyJWT preferred; stdlib pbkdf2/HMAC fallbacks exist without them.
 operator = [
     "bcrypt",

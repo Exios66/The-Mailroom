@@ -24,7 +24,8 @@ Usage::
     # CI / tests: fail on a stale pin reference or a hand-edited contract
     python scripts/bump_producer_pin.py --check
 
-Without ``--checkout`` the contract is fetched from raw.githubusercontent.com.
+Without ``--checkout``, symbolic refs are resolved through GitHub's commit API
+before the contract is fetched from raw.githubusercontent.com at that SHA.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ import json
 import re
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -134,29 +136,45 @@ def fetch_contract(ref: str, checkout: Path | None) -> tuple[bytes, str, str]:
             capture_output=True,
         ).stdout
         return blob, sha, f"git checkout ({checkout.name})"
-    url = RAW_URL.format(ref=ref)
+    sha = ref
+    if not _SHA_RE.fullmatch(sha):
+        # Resolve once, then fetch by SHA so a moving branch cannot change the
+        # blob between the provenance lookup and the download.
+        commit_url = (
+            "https://api.github.com/repos/Exios66/llm-mailroom/commits/"
+            + urllib.parse.quote(ref, safe="")
+        )
+        request = urllib.request.Request(
+            commit_url, headers={"Accept": "application/vnd.github+json"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as resp:  # noqa: S310 - fixed host
+            commit = json.load(resp)
+        sha = commit.get("sha") if isinstance(commit, dict) else None
+        if not isinstance(sha, str) or not _SHA_RE.fullmatch(sha):
+            raise SystemExit("GitHub did not resolve the contract ref to a full commit SHA")
+    url = RAW_URL.format(ref=sha)
     with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 - fixed host
         blob = resp.read()
-    return blob, ref, url
+    return blob, sha, url
 
 
-def load_contract(ref: str, checkout: Path | None) -> tuple[dict, str, str]:
+def load_contract(ref: str, checkout: Path | None) -> tuple[dict, bytes, str, str]:
     """Fetch and validate the contract at ``ref``; writes nothing."""
     blob, sha, origin = fetch_contract(ref, checkout)
     contract = json.loads(blob)
     if "contract_version" not in contract or "graph" not in contract:
         raise SystemExit("fetched file is not a mailroom display contract")
-    return contract, sha, origin
+    return contract, blob, sha, origin
 
 
-def vendor_contract(fetched: tuple[dict, str, str], pin: str, note: str | None) -> dict:
+def vendor_contract(fetched: tuple[dict, bytes, str, str], pin: str, note: str | None) -> dict:
     """Write a contract from ``load_contract`` and its provenance."""
-    contract, sha, origin = fetched
+    contract, body, sha, origin = fetched
     CONTRACT_DIR.mkdir(parents=True, exist_ok=True)
-    body = json.dumps(contract, indent=2, sort_keys=True) + "\n"
-    CONTRACT_PATH.write_text(body, encoding="utf-8")
+    # Provenance identifies the producer's actual blob, including whitespace.
+    CONTRACT_PATH.write_bytes(body)
     source = {
-        "sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        "sha256": hashlib.sha256(body).hexdigest(),
         "pipeline_commit": sha,
         "pipeline_version": contract.get("pipeline_version"),
         "contract_version": contract["contract_version"],

@@ -45,11 +45,11 @@ Cached at process level — **restart** after edits.
 | New observation type | Node hidden or filed as generation |
 
 Offline evaluation uses
-Dojo through optional `[eval]` (`@4740d768`, Dojo v0.24.2); do not duplicate its scoring engine
+Dojo through optional `[eval]` (`@1cd4aba76d82`, Dojo v0.27.2); do not duplicate its scoring engine
 or make the live display path import it.
 
 Producer **code** pin (separate from the topology mirror): extra `[pipeline]`
-installs dist `mailroom` `@1a1ec3dfb4e71f615f5d34f6198f9d06fd8c26dd` (0.8.1, reviewed source adoption). Import only through
+installs dist `mailroom` `@65523a220954d05bdf9b3d6604eb2fe128342f58` (0.9.1, reviewed source adoption). Import only through
 `mailroom_ui/producer.py` (`pipeline.review_resolve`, `schemas.manifest`).
 Never import `api.main`. Move the pin only with `scripts/bump_producer_pin.py`.
 

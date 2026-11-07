@@ -13,8 +13,8 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DOJO_PIN_COMMIT = "718e326c1fe5a49b3f1cfd43a3ac10c73e7e01a4"
-PIPELINE_PIN_COMMIT = "1a1ec3dfb4e71f615f5d34f6198f9d06fd8c26dd"
+DOJO_PIN_COMMIT = "1cd4aba76d82eea20c6e8dfcc0d760881bf84924"
+PIPELINE_PIN_COMMIT = "65523a220954d05bdf9b3d6604eb2fe128342f58"
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
