@@ -192,3 +192,10 @@ def test_inspector_renders_typed_observations():
     assert ".chip.obs-evaluator" in theme
     assert ".chip.obs-retriever" in theme
     assert ".chip.obs-chain" in theme
+
+
+def test_outage_does_not_reset_run_diff_baseline():
+    """A stale floor clears the display only. Resetting lastIds logged every
+    returning trace as NEW on recovery, and the outage as runs leaving."""
+    body = MAIN.split("function applySnapshot", 1)[1].split("function applyPipeline", 1)[0]
+    assert body.index("if (liveOutage)") < body.index("const added =")

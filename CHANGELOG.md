@@ -17,6 +17,8 @@ All notable changes to The-Mailroom are documented here, following
 - Keep short mobile layouts scrollable, logout reachable for long usernames,
   and History classifications wrapped. Complete permits the producer's parked
   extraction fallback and disables the invalid Reject action.
+- Answer 503 for trace detail during an outage instead of the source's cached run,
+  and stop logging returning runs as NEW after a source recovers.
 - Remove locally generated demo envelopes; demos use trace-backed seed runs.
 - Make outage labels refer to the configured trace source.
 

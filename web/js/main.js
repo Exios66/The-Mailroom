@@ -91,7 +91,8 @@ const Main = (() => {
    * offline and clears its runs; static snapshots retain the supplied runs.
    */
   function applySnapshot(runs, stale = false) {
-    if (stale && !Mailroom.staticMode) {
+    const liveOutage = stale && !Mailroom.staticMode;
+    if (liveOutage) {
       sourceOk = false;
       runs = [];
       applySource();
@@ -106,6 +107,13 @@ const Main = (() => {
     }
     if (!sourceOk && !stale) return;
     lastSnapshot = runs;
+    if (liveOutage) {
+      // Clear the display but keep the diff baseline: the runs did not leave,
+      // and they must not log as NEW when the source recovers.
+      Floor.update(runs);
+      renderStatus();
+      return;
+    }
     const ids = new Set(runs.map((r) => r.trace_id));
     const added = [...ids].filter((id) => !lastIds.has(id));
     const removed = [...lastIds].filter((id) => !ids.has(id));
