@@ -291,7 +291,11 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         Return 404 when the trace is absent. Source unavailability propagates
         to the app's 503 handler rather than returning cached detail.
         """
-        run = src.get_run(trace_id)
+        try:
+            # Skip the source's run cache: it would answer 200 during an outage.
+            run = src.get_run(trace_id, force_refresh=True)
+        except TypeError:  # an adapter whose get_run takes only the trace id
+            run = src.get_run(trace_id)
         if run is None:
             return JSONResponse(status_code=404, content={"error": "trace not found"})
         detail = _serialize(run, full=True)

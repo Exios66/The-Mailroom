@@ -116,3 +116,12 @@ def test_session_and_operator_reads_reject_stale_hub_rows(monkeypatch, path):
     monkeypatch.setattr(src, "list_traces", unavailable)
     hub.stale = True
     assert client.get(path, headers=headers).status_code == 503
+
+
+def test_trace_detail_does_not_serve_run_cache_during_outage():
+    """The source's 60 s run cache must not answer 200 after the source fails."""
+    src = LangfuseSource(client=FakeClient([make_trace("t-detail", stage="archived")]))
+    with TestClient(create_app(src)) as c:
+        assert c.get("/api/traces/t-detail").status_code == 200
+        src.client = _DeadClient()
+        assert c.get("/api/traces/t-detail").status_code == 503
