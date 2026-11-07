@@ -1,8 +1,8 @@
 {
   "contract_version": "1.0.0",
-  "fetched_from": "git checkout (llm-mailroom)",
+  "fetched_from": "https://raw.githubusercontent.com/Exios66/llm-mailroom/9e8f30b279e7626c056b03511f823105760f80d7/contract/mailroom-contract.json",
   "matches_pin": true,
-  "pipeline_commit": "65523a220954d05bdf9b3d6604eb2fe128342f58",
+  "pipeline_commit": "9e8f30b279e7626c056b03511f823105760f80d7",
   "pipeline_version": "0.9.1",
   "sha256": "b9930ec48aee99138f94a3ff5ee690f794601841302af56b35565277a6edcdce"
 }

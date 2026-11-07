@@ -116,3 +116,17 @@ def test_meta_and_health_surface_mailroom_pin():
         assert health["mailroom"]["pin"] == MAILROOM_GIT_SHA
         debug = client.get("/api/debug/source").json()
         assert debug["mailroom"]["pin"] == MAILROOM_GIT_SHA
+
+
+def test_producer_status_reports_distribution_metadata(monkeypatch):
+    from mailroom_ui import producer
+
+    assert MAILROOM_DIST_VERSION == "0.9.1"
+    monkeypatch.setattr(producer.importlib.metadata, "version", lambda name: "0.9.1")
+    assert producer_status()["installed_version"] == "0.9.1"
+
+    def missing(name):
+        raise producer.importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(producer.importlib.metadata, "version", missing)
+    assert producer_status()["installed_version"] is None

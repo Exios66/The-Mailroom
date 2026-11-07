@@ -6,6 +6,12 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Changed
+
+- Move the llm-mailroom pin to release tag `v0.9.2` (`9e8f30b2`). The tag's package
+  metadata still reads 0.9.1, so the recorded package version stays 0.9.1. The vendored
+  display contract is unchanged, and its provenance now records the pinned commit.
+
 ### Changed (M2: A-7)
 
 - Resolve remote branch/tag contract refs to a full commit before fetching the

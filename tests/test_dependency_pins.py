@@ -8,13 +8,20 @@ so re-introducing a tag (or drifting the extras apart) fails here.
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
+import pytest
+from packaging.requirements import Requirement
+
 ROOT = Path(__file__).resolve().parents[1]
 DOJO_PIN_COMMIT = "1cd4aba76d82eea20c6e8dfcc0d760881bf84924"
-PIPELINE_PIN_COMMIT = "65523a220954d05bdf9b3d6604eb2fe128342f58"
+PIPELINE_PIN_COMMIT = "9e8f30b279e7626c056b03511f823105760f80d7"
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -52,3 +59,33 @@ def test_combined_extras_only_reference_immutable_commits():
         if d.startswith(("llm-dojo-scoring", "mailroom @"))
     }
     assert refs == {DOJO_PIN_COMMIT, PIPELINE_PIN_COMMIT}
+
+
+@pytest.mark.skipif(
+    os.environ.get("MAILROOM_TEST_EXTRAS_INSTALL") != "1",
+    reason="opt-in resolver integration test requires network and pip",
+)
+def test_combined_extras_installation(tmp_path):
+    """Resolve real upstream metadata, including the producer's Dojo pin."""
+    report = tmp_path / "install.json"
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--dry-run",
+         "--ignore-installed", "--report", str(report), ".[eval,pipeline]"],
+        cwd=ROOT, check=True, timeout=600,
+    )
+    packages = {
+        item["metadata"]["name"]: item
+        for item in json.loads(report.read_text())["install"]
+    }
+    producer = packages["mailroom"]
+    dojo = packages["llm-dojo-scoring"]
+    assert producer["download_info"]["vcs_info"]["commit_id"] == PIPELINE_PIN_COMMIT
+    assert dojo["download_info"]["vcs_info"]["commit_id"] == DOJO_PIN_COMMIT
+    upstream_dojo, = [
+        Requirement(dep) for dep in producer["metadata"]["requires_dist"]
+        if Requirement(dep).name == "llm-dojo-scoring"
+    ]
+    assert upstream_dojo.url == Requirement(_extras()["eval"][0]).url
+    from mailroom_ui.producer import MAILROOM_DIST_VERSION
+
+    assert producer["metadata"]["version"] == MAILROOM_DIST_VERSION
