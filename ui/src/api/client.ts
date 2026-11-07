@@ -29,7 +29,7 @@ api.interceptors.response.use(
   (error) => {
     const url = String(error.config?.url || '')
     // Display /api/* stays open. Only operator /v1 routes are JWT-gated.
-    if (error.response?.status === 401 && url.includes('/v1/')) {
+    if (error.response?.status === 401 && url.includes('/v1/') && !url.endsWith('/auth/login')) {
       localStorage.removeItem('mailroom_token')
       window.location.href = loginPath()
     }

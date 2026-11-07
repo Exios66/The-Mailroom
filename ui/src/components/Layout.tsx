@@ -41,7 +41,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [addDocument, setConnected, setLastEvent, updateDocumentStage])
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen md:h-screen bg-background">
       <Sidebar
         user={user}
         currentPath={location.pathname}
@@ -51,7 +51,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           void logout().then(() => navigate('/login'))
         }}
       />
-      <main className="flex-1 overflow-auto p-6">{children}</main>
+      <main className="flex-1 min-w-0 md:min-h-0 md:overflow-auto p-4 md:p-6">{children}</main>
     </div>
   )
 }

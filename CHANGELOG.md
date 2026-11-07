@@ -6,6 +6,38 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Fixed (browser audit)
+
+- Keep stale session/operator reads distinct from genuinely empty sources:
+  query the source when the poller is stale and propagate unavailability as
+  503, while preserving successful reads during startup and recovery.
+
+- Probe immediately on socket loss, reject superseded HTTP responses, and
+  prevent stale session/operator rows during source outages.
+- Keep short mobile layouts scrollable, logout reachable for long usernames,
+  and History classifications wrapped. Complete permits the producer's parked
+  extraction fallback and disables the invalid Reject action.
+- Answer 503 for trace detail during an outage instead of the source's cached run,
+  and stop logging returning runs as NEW after a source recovers.
+- Remove locally generated demo envelopes; demos use trace-backed seed runs.
+- Make outage labels refer to the configured trace source.
+
+- Serialize HTTP floor refreshes and ignore their late results once the socket
+  has recovered, so an older failure cannot clear a newer live floor.
+
+- Preserve the Observatory CLOSED status during socket reconnect attempts until
+  a successful source response confirms recovery.
+
+- Start HTTP fallback after late WebSocket disconnects in both live consoles;
+  retune Observatory fallback when the server changes its poll interval.
+- Close live floors on source outages even with a warm export cache; keep
+  explicit snapshot downloads available for diagnosis.
+- Keep pixel History filenames and replay controls usable on narrow screens.
+- Optional desk: validate Complete extraction JSON, default finished reviews
+  to Record, preserve producer error details and show objective review causes
+  on pipeline cards. Make mobile navigation leave room for the document view.
+- Preserve login rejection feedback and accept producer audit `at` timestamps.
+
 ### Changed (M1)
 
 - `mailroom_ui/pipeline_schema.py` reads pipeline facts from the generated

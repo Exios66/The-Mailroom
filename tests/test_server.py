@@ -64,7 +64,7 @@ def test_sessions_serve_enriched_runs():
         assert run["llm_call_count"] > 0
 
 
-def test_sessions_embed_all_runs_not_capped_at_20():
+def test_sessions_embed_all_runs_not_capped_at_20(monkeypatch):
     now = datetime.now(timezone.utc) - timedelta(hours=1)
     traces = [
         make_trace(
@@ -76,6 +76,12 @@ def test_sessions_embed_all_runs_not_capped_at_20():
         for i in range(25)
     ]
     src = LangfuseSource(client=FakeClient(traces))
+    from server.poller import PollHub
+
+    hub = PollHub(src, interval=60, window=21600, limit=100)
+    assert hub._fetch() is not None
+    hub.stale = False  # Test a fresh session, independent of first-poll scheduling.
+    monkeypatch.setattr("server.main.PollHub", lambda *args, **kwargs: hub)
     with TestClient(create_app(src)) as c:
         s = c.get("/api/sessions?limit=10").json()
         sid = s["sessions"][0]["id"]
@@ -224,3 +230,44 @@ def test_compliance_filing_floor_payload_exposes_subclass_and_intake():
     assert metrics["avg_maud_question_accuracy"] == 0.8
     assert metrics["avg_extraction_verified_precision"] == 0.7
     assert metrics["per_doc_subclass"]["compliance_filing/10-K"] == 1
+
+
+def test_session_and_operator_runs_respect_hub_freshness():
+    """Stale hub rows require a source read; outages cannot masquerade as empty."""
+    import pytest
+    from unittest.mock import patch
+    from server.poller import PollHub
+    from mailroom_ui.sources import TraceSourceUnavailable
+
+    src = LangfuseSource(client=FakeClient(_fresh_traces()))
+    hub = PollHub(src, interval=60, window=21600, limit=100)
+    assert hub._fetch() is not None
+    cached = list(hub.runs)
+    sid = cached[0].session_id or cached[0].matter_id
+    with patch('server.main.PollHub', return_value=hub), patch('server.main.mount_operator') as mount:
+        app = create_app(src)
+    provider = mount.call_args.kwargs['runs_provider']
+    client = TestClient(app)  # No lifespan: control the last poll result.
+    with patch('server.main.list_recent_runs', side_effect=TraceSourceUnavailable('outage')):
+        for stale in (True, False, True):
+            hub.stale = stale
+            response = client.get(f'/api/sessions/{sid}')
+            if stale:
+                assert response.status_code == 503
+                with pytest.raises(TraceSourceUnavailable):
+                    provider()
+            else:
+                assert response.status_code == 200
+                assert response.json()['count'] == len(cached)
+                assert provider() == cached
+
+    # A stale poller at startup does not hide a healthy source's real rows.
+    hub.stale = True
+    with patch('server.main.list_recent_runs', return_value=cached):
+        assert client.get(f'/api/sessions/{sid}').json()['count'] == len(cached)
+        assert provider() == cached
+    # Real empty data is still a successful response, unlike an outage.
+    with patch('server.main.list_recent_runs', return_value=[]), \
+         patch('server.main._session_runs', return_value=[]):
+        assert client.get(f'/api/sessions/{sid}').json()['runs'] == []
+        assert provider() == []

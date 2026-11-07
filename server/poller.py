@@ -259,9 +259,13 @@ class PollHub:
         self.clients.discard(ws)
 
     def _snapshot_message(self, *, stale: bool) -> dict[str, Any]:
+        """Build a client snapshot, omitting runs when stale.
+
+        ``fetched_at`` still identifies the last successful fetch, if any.
+        """
         return {
             "type": "snapshot",
-            "runs": self.snapshot,
+            "runs": [] if stale else self.snapshot,
             "stale": stale,
             "fetched_at": self.fetched_at,
             "poll_interval_s": self.interval,
@@ -269,6 +273,7 @@ class PollHub:
         }
 
     async def _run(self) -> None:
+        """Poll until stopped and attempt to broadcast empty stale frames on failure."""
         while not self._stop.is_set():
             try:
                 runs, ops = await asyncio.gather(
@@ -276,11 +281,9 @@ class PollHub:
                     asyncio.to_thread(fetch_pipeline_ops),
                 )
                 self.pipeline_ops = ops
-                # V-4: a partial Langfuse failure must NOT wipe the floor —
-                # keep the last good snapshot and mark it stale so the UI can
-                # show a staleness badge instead of a blank screen with a
-                # green lamp. `_fetch` returns None on failure (instead of
-                # []), meaning "no fresh data".
+                # Retain the snapshot for explicit export, but outage frames
+                # carry no display rows: disconnected sources close the floor.
+                # None means failure; [] is a successful empty source.
                 if runs is not None:
                     self.snapshot = runs
                     self.fetched_at = datetime.now(timezone.utc).isoformat()

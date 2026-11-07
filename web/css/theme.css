@@ -675,3 +675,13 @@ dialog.operator-login menu { display: flex; gap: 8px; justify-content: flex-end;
 .dojo-update-notice { padding: 10px 14px; color: var(--paper); background: var(--panel-2); border-left: 4px solid var(--gold); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .dojo-update-notice a { color: var(--gold); text-decoration: underline; }
 .dojo-update-notice a:focus-visible { outline: 2px solid var(--paper); outline-offset: 3px; }
+
+/* History keeps filenames and replay controls readable on narrow screens. */
+.history-row { grid-template-columns: minmax(0,2fr) 96px 130px 100px 90px 90px 120px; }
+@media (max-width: 1000px) {
+  .run-row.history-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .history-row .run-file, .history-row .run-when { grid-column: 1 / -1; }
+  .history-row .run-when { flex-wrap: wrap; }
+}
+
+.history-row .history-classification { min-width: 0; overflow-wrap: anywhere; }

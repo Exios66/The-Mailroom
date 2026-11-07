@@ -36,6 +36,12 @@ export default function DocumentCard({ document }: Props) {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate">{document.filename || document.doc_id}</p>
           <p className="text-xs text-muted-foreground truncate">{document.doc_type}</p>
+          {document.needs_human && (
+            <p className="text-xs text-amber-600 mt-1">
+              Needs review{document.verdict ? ` · ${document.verdict}` : ''}
+              {document.review_reason ? ` — ${document.review_reason}` : ''}
+            </p>
+          )}
           <div className="mt-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Confidence</span>

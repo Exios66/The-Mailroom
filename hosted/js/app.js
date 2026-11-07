@@ -76,8 +76,11 @@ const App = (() => {
   let replayTimers = [];
   let lastFocus = null;
   let socketLive = false;
+  let sourceOffline = false;
   let pollIntervalMs = 3000;
   let fallbackTimer = null;
+  let tracesInFlight = false;
+  let floorRevision = 0;
   let fallbackPollMs = 0;
   let pipelineOps = null;
 
@@ -1004,29 +1007,52 @@ const App = (() => {
     refreshTraces();
   }
 
+  /** Apply a positive polling interval in seconds, with a one-second minimum. */
   function applyPollInterval(seconds) {
     if (typeof seconds === "number" && seconds > 0) {
       pollIntervalMs = Math.max(1000, Math.round(seconds * 1000));
+      if (fallbackTimer) startFallbackPolling();
     }
   }
 
+  /**
+   * Refresh the floor over HTTP. A trace request failure clears it and shows
+   * an alert unless a newer snapshot has arrived.
+   */
   async function refreshTraces() {
+    if (tracesInFlight) return;
+    tracesInFlight = true;
+    const revision = floorRevision;
     try {
       const data = await Obs.api.traces(604800, 200);
+      if (revision !== floorRevision) return;
+      sourceOffline = false;
       applyRuns(data.runs || []);
       showAlert("");
+      if (!socketLive) setSource("live", "Live · HTTP polling while reconnecting");
       if (data.source === "langfuse-cache") {
         const age = data.cached_at ? ` · ${data.cached_at}` : "";
         setSource("stale", `SOURCE: CACHE${age}`);
       }
       dbg("traces", { where: "floor", count: (data.runs || []).length });
       try {
-        applyPipelineOps(await Obs.api.pipeline());
-      } catch (_e) { applyPipelineOps(null); /* producer unavailable */ }
+        const ops = await Obs.api.pipeline();
+        if (revision !== floorRevision) return;
+        if (!socketLive) applyPipelineOps(ops);
+      } catch (_e) {
+        if (revision !== floorRevision) return;
+        if (!socketLive) applyPipelineOps(null); /* producer unavailable */
+      }
     } catch (err) {
+      if (revision !== floorRevision) return;
       applyPipelineOps(null);
+      sourceOffline = true;
+      applyRuns([]);
+      setSource("down", "MAILROOM CLOSED — trace source unavailable");
       dbg("traces-error", { message: err.message });
       showAlert(`Could not load traces — ${err.message}`);
+    } finally {
+      tracesInFlight = false;
     }
   }
 
@@ -1035,6 +1061,7 @@ const App = (() => {
       if (socketLive) return;
       await refreshTraces();
     };
+    void tick();
     if (fallbackTimer && fallbackPollMs === pollIntervalMs) return;
     if (fallbackTimer) clearInterval(fallbackTimer);
     fallbackPollMs = pollIntervalMs;
@@ -1046,6 +1073,7 @@ const App = (() => {
     try {
       const h = await Obs.api.health();
       const ok = !!(h.ok ?? h.langfuse);
+      sourceOffline = !ok;
       dbg("health", { ok, source: h.source, raw: h });
       if (ok) {
         showAlert("");
@@ -1053,7 +1081,7 @@ const App = (() => {
           const age = h.cached_at ? ` · ${h.cached_at}` : "";
           setSource("stale", `SOURCE: CACHE${age}`);
         } else if (!socketLive) {
-          setSource("live", `Live · source ${h.source || "langfuse"}`);
+          setSource("live", `Live · source ${h.source || "configured trace backend"}`);
         }
         if (!meta) {
           try {
@@ -1070,13 +1098,17 @@ const App = (() => {
       // Health is about the trace SOURCE; the WebSocket's own open/close
       // events own `socketLive` (flipping it here started duplicate polling
       // next to a still-streaming socket until reload).
-      setSource("down", "Trace source reported offline");
+      sourceOffline = true;
+      applyRuns([]);
+      setSource("down", "MAILROOM CLOSED — trace source unavailable");
       return false;
     } catch (err) {
       dbg("error", { where: "health", message: err.message });
-      setSource("down", `No live connection — ${err.message}`);
+      sourceOffline = true;
+      applyRuns([]);
+      setSource("down", `MAILROOM CLOSED — ${err.message}`);
       if (!runs.length) {
-        showAlert("The Observatory needs the Mailroom API (Langfuse-backed) on this host. This is not the GitHub Pages snapshot.");
+        showAlert("The Observatory needs the Mailroom API for the configured trace backend on this host. This is not the GitHub Pages snapshot.");
       }
       return false;
     }
@@ -1085,17 +1117,24 @@ const App = (() => {
   function onMessage(msg) {
     if (msg.type === "status") {
       socketLive = !!msg.connected;
-      if (msg.connected) setSource("live", "Live · WebSocket connected");
+      if (msg.connected) {
+        if (!sourceOffline) setSource("live", "Live · WebSocket connected");
+      }
       else {
         applyPipelineOps(null);
-        setSource("stale", "Socket disconnected — reconnecting");
+        startFallbackPolling();
+        if (!sourceOffline) setSource("stale", "Socket disconnected — polling while reconnecting");
       }
     } else if (msg.type === "snapshot") {
-      applyRuns(msg.runs || []);
+      floorRevision += 1;
+      sourceOffline = !!msg.stale;
+      applyRuns(msg.stale ? [] : (msg.runs || []));
       applyPipelineOps(msg.pipeline);
       applyPollInterval(msg.poll_interval_s);
       if (!socketLive) startFallbackPolling();
-      if (msg.stale) setSource("stale", "Live · last snapshot is stale");
+      setSource(msg.stale ? "down" : "live", msg.stale
+        ? "MAILROOM CLOSED — trace source unavailable"
+        : "Live · WebSocket connected");
     }
   }
 

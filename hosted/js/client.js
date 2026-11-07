@@ -1,5 +1,5 @@
 /* Mailroom Observatory client — same-origin API + WebSocket.
- * Langfuse (or the configured source) remains the only display source. */
+ * The configured trace backends are the document display sources. */
 const Obs = (() => {
   function dbg(kind, payload) {
     try {
@@ -76,6 +76,11 @@ const Obs = (() => {
       dlg.showModal();
     });
   }
+  /**
+   * Prompt for operator credentials and try to store the returned token for this tab.
+   * Returns false on cancellation or a response without a token; login HTTP
+   * errors and fetch failures propagate to the caller.
+   */
   async function operatorLogin() {
     const creds = await askCredentials("This host requires an operator login for review and inbox actions.");
     if (!creds) return false;
@@ -85,8 +90,7 @@ const Obs = (() => {
       body: JSON.stringify(creds),
     });
     if (!res.ok) {
-      await readError(res, "/v1/auth/login", "Obs.login").catch((e) => dbg("login-failed", { message: e.message }));
-      return false;
+      await readError(res, "/v1/auth/login", "Obs.login");
     }
     const body = await res.json();
     setOperatorToken(body.access_token || "");
