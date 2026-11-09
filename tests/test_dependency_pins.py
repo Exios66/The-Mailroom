@@ -20,7 +20,7 @@ import pytest
 from packaging.requirements import Requirement
 
 ROOT = Path(__file__).resolve().parents[1]
-DOJO_PIN_COMMIT = "1cd4aba76d82eea20c6e8dfcc0d760881bf84924"
+DOJO_PIN_COMMIT = "00a2a7f7b058a4ade06b027c2afbd8b03bea6a5f"
 PIPELINE_PIN_COMMIT = "41581508f5a29c6a5eee1ed0909fa24b526801ea"
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 

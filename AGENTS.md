@@ -33,7 +33,7 @@ open exactly one specialty skill. Companion to
 - **Expected location**: a sibling of this repo, i.e. `../llm-mailroom` from this checkout (e.g. `/Users/luciusjmorningstar/Downloads/llm-mailroom`). It is **not currently present on this machine** — clone it before relying on `MAILROOM_TAXONOMY`.
 - **Import pin**: optional extra `[pipeline]` installs dist `mailroom` from
   `git+https://github.com/Exios66/llm-mailroom.git@41581508f5a29c6a5eee1ed0909fa24b526801ea` (package 0.9.3,
-  reviewed source adoption; llm-dojo-scoring v0.27.2, mailroom-dataset tag `v9.1`).
+  reviewed source adoption; llm-dojo-scoring v0.28.1, mailroom-dataset tag `v9.1`).
   `mailroom_ui/producer.py` is the only import adapter — `pipeline.review_resolve`
   - `schemas.manifest` for REVIEW dispositions / `serialize_document`. Default
   `pip install -e ".[dev]"` stays light; missing extra falls back to the same

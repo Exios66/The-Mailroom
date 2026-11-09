@@ -8,13 +8,12 @@ checkout is available:
     pip install -e ".[pipeline]"
 
 Pin: ``git+https://github.com/Exios66/llm-mailroom.git@41581508f5a29c6a5eee1ed0909fa24b526801ea`` (reviewed source
-with package version 0.9.1 — dedicated
+with package version 0.9.3 — dedicated
 merger_agreement_specialist, ModernBERT intake-ml-triage span,
-llm-dojo-scoring v0.27.2, mailroom-dataset tag v9.1). The review_resolve /
-schemas.manifest contract is unchanged since v0.7.1 at this pin; the vendored
-display contract is provisionally ahead of it (llm-mailroom PR #203 head —
-two human-resume edges), and ``RESOLUTIONS`` / ``REJECT_REASONS`` fall back to
-the same constants until the pin moves. Bump
+llm-dojo-scoring v0.28.1, mailroom-dataset tag v9.1). The review_resolve /
+schemas.manifest contract matches this pin (llm-mailroom PR #203 merged, with
+its two human-resume edges), and ``RESOLUTIONS`` / ``REJECT_REASONS`` fall back
+to the same constants when the extra is not installed. Bump
 ``MAILROOM_GIT_SHA`` and the extra together.
 
 In the mailroom-hub monorepo the workspace ``[pipeline]`` extra resolves
@@ -36,7 +35,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-# Reviewed source dependency adoption — canonical Dojo v0.27.2.
+# Reviewed source dependency adoption — canonical Dojo v0.28.1.
 MAILROOM_GIT_SHA = "41581508f5a29c6a5eee1ed0909fa24b526801ea"
 MAILROOM_GIT_URL = "https://github.com/Exios66/llm-mailroom.git"
 MAILROOM_DIST_NAME = "mailroom"

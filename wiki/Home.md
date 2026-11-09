@@ -15,7 +15,7 @@ These five source repositories are integrated by
 [Digital-Mailroom](https://github.com/LLM-Mailroom-Services/Digital-Mailroom).
 The visualizer reads their Langfuse traces.
 
-Optional `[eval]` and `[pipeline]` installs share published Dojo `v0.27.2` at immutable commit `1cd4aba76d82eea20c6e8dfcc0d760881bf84924`.
+Optional `[eval]` and `[pipeline]` installs share published Dojo `v0.28.1` at immutable commit `00a2a7f7b058a4ade06b027c2afbd8b03bea6a5f`.
 The producer code pin is dist `mailroom` at `41581508f5a29c6a5eee1ed0909fa24b526801ea` (0.9.3).
 Enron and claims remain external data feeders, with their historical hub copies
 on dedicated preservation branches; they are not active core workspace packages.

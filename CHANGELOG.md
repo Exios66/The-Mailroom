@@ -11,6 +11,10 @@ All notable changes to The-Mailroom are documented here, following
 - **Pin moved to the llm-mailroom #203 merge commit `4158150` (pipeline 0.9.3).** `bump_producer_pin.py`
   moved the reviewed pin from `9e8f30b` and re-vendored the display contract from the merge commit
   (bytes unchanged from the PR-head copy); `contract/source.json` now records `matches_pin: true`.
+- **`[eval]` Dojo pin aligned with the producer: `1cd4aba` (v0.27.2) → `00a2a7f` (v0.28.1).** Producer 0.9.3
+  requires Dojo `00a2a7f`, so `pip install -e ".[eval,pipeline]"` (and `.[dev,pipeline]`) could not resolve
+  two different commits of `llm-dojo-scoring`. `tests/test_dependency_pins.py`, the architecture pages
+  (`docs/` and `wiki/`) and the README / AGENTS / skill references move with the pin.
 
 ### Fixed
 

@@ -315,16 +315,16 @@ does not need Node. Pixel console and Observatory stay vanilla.
 
 The producer **code** pin is optional extra `[pipeline]`
 (`mailroom @ git+https://github.com/Exios66/llm-mailroom.git@41581508f5a29c6a5eee1ed0909fa24b526801ea`,
-package 0.9.1 / Dojo v0.27.2 (@1cd4aba7) adoption).
+package 0.9.3 / Dojo v0.28.1 (@00a2a7f7) adoption).
 `mailroom_ui/producer.py` imports `pipeline.review_resolve` and
 `schemas.manifest` when that extra or a sibling checkout is present; the
 REVIEW proxy and `tests/fake_producer.py` use those contract helpers
 (dispositions, resolutions, reject reasons, `serialize_document`, tray
-actions). The vendored display contract is provisionally vendored from
-llm-mailroom PR #203 (`contract/source.json` note, `matches_pin: false`)
-because the floor needs its two human-resume edges; the pin moves with the
-merge. `RESOLUTIONS` / `REJECT_REASONS` fall back to the same constants
-until the pin catches up. The adapter never imports `api.main` or
+actions). The vendored display contract matches the pin
+(`contract/source.json`, `matches_pin: true`): llm-mailroom PR #203 merged,
+so the pin carries the two human-resume edges the floor needs.
+`RESOLUTIONS` / `REJECT_REASONS` still fall back to the same constants
+when the extra is not installed. The adapter never imports `api.main` or
 `llm_dojo_scoring`. `/api/meta` reports the pin.
 
 ## Demos & screenshots
