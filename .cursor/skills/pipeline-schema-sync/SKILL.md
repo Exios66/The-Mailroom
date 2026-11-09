@@ -49,7 +49,7 @@ Dojo through optional `[eval]` (`@1cd4aba76d82`, Dojo v0.27.2); do not duplicate
 or make the live display path import it.
 
 Producer **code** pin (separate from the topology mirror): extra `[pipeline]`
-installs dist `mailroom` `@9e8f30b279e7626c056b03511f823105760f80d7` (0.9.1, reviewed source adoption). Import only through
+installs dist `mailroom` `@41581508f5a29c6a5eee1ed0909fa24b526801ea` (0.9.3, reviewed source adoption). Import only through
 `mailroom_ui/producer.py` (`pipeline.review_resolve`, `schemas.manifest`).
 Never import `api.main`. Move the pin only with `scripts/bump_producer_pin.py`.
 

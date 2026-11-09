@@ -16,7 +16,7 @@ These five source repositories are integrated by
 The visualizer reads their Langfuse traces.
 
 Optional `[eval]` and `[pipeline]` installs share published Dojo `v0.27.2` at immutable commit `1cd4aba76d82eea20c6e8dfcc0d760881bf84924`.
-The producer code pin is dist `mailroom` at `9e8f30b279e7626c056b03511f823105760f80d7` (0.9.1).
+The producer code pin is dist `mailroom` at `41581508f5a29c6a5eee1ed0909fa24b526801ea` (0.9.3).
 Enron and claims remain external data feeders, with their historical hub copies
 on dedicated preservation branches; they are not active core workspace packages.
 The standalone extraction and LegalBench repositories retain their own workflows.

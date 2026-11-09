@@ -1,9 +1,8 @@
 {
   "contract_version": "1.0.0",
   "fetched_from": "git checkout (llm-mailroom)",
-  "matches_pin": false,
-  "note": "Vendored from llm-mailroom PR #203 head ab090bd (pipeline 0.9.3) ahead of merge; byte-identical to the d18851f copy: adds human_review -> compile_report and __start__ -> compile_report (human_applied). Re-run with the merge commit when the PR lands.",
-  "pipeline_commit": "ab090bdb401a82ac5ad31513638d039f6fb47d00",
+  "matches_pin": true,
+  "pipeline_commit": "41581508f5a29c6a5eee1ed0909fa24b526801ea",
   "pipeline_version": "0.9.3",
   "sha256": "1eeedaa637fe59bd8f974b679d90b1aaac1df2ee7af5c7aa62625b9902c15546"
 }

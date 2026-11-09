@@ -6,6 +6,12 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Changed
+
+- **Pin moved to the llm-mailroom #203 merge commit `4158150` (pipeline 0.9.3).** `bump_producer_pin.py`
+  moved the reviewed pin from `9e8f30b` and re-vendored the display contract from the merge commit
+  (bytes unchanged from the PR-head copy); `contract/source.json` now records `matches_pin: true`.
+
 ### Added
 
 - **Resolve refusals match llm-mailroom PR #203 head `ab090bd`.** The producer refuses a posted

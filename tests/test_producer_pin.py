@@ -121,9 +121,9 @@ def test_meta_and_health_surface_mailroom_pin():
 def test_producer_status_reports_distribution_metadata(monkeypatch):
     from mailroom_ui import producer
 
-    assert MAILROOM_DIST_VERSION == "0.9.1"
-    monkeypatch.setattr(producer.importlib.metadata, "version", lambda name: "0.9.1")
-    assert producer_status()["installed_version"] == "0.9.1"
+    assert MAILROOM_DIST_VERSION == "0.9.3"
+    monkeypatch.setattr(producer.importlib.metadata, "version", lambda name: "0.9.3")
+    assert producer_status()["installed_version"] == "0.9.3"
 
     def missing(name):
         raise producer.importlib.metadata.PackageNotFoundError(name)

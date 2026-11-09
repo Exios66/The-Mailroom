@@ -404,7 +404,7 @@ never generates local demo envelopes; an unavailable trace source closes the flo
 - The sister pipeline repo `../llm-mailroom` (optional — `MAILROOM_TAXONOMY`
   live override, production-pilot scripts, or `mailroom_ui/producer.py`
   checkout import). Prefer `pip install -e ".[pipeline]"` to pin dist
-  `mailroom` @ `9e8f30b279e7626c056b03511f823105760f80d7` (0.9.1, main after v0.7.1) when you want to import `pipeline.review_resolve`.
+  `mailroom` @ `41581508f5a29c6a5eee1ed0909fa24b526801ea` (0.9.3, main after v0.7.1) when you want to import `pipeline.review_resolve`.
 - `arize-phoenix-client` (optional — only for the Phoenix trace source)
 
 </details>
@@ -685,7 +685,7 @@ board, one discussion log, and one trace contract:
 
 | Repository | Role | Relationship to The-Mailroom |
 | --- | --- | --- |
-| [llm-mailroom](https://github.com/Exios66/llm-mailroom) | LangGraph state machine processing legal documents through specialist LLM agents (classify → extract → report → archive); pin `@9e8f30b279e7626c056b03511f823105760f80d7` / **0.9.1** (reviewed source adoption) (package `mailroom` 0.9.1) | **Upstream** — its configured trace sinks supply this visualizer; optional `pip install -e ".[pipeline]"` imports `pipeline.review_resolve` |
+| [llm-mailroom](https://github.com/Exios66/llm-mailroom) | LangGraph state machine processing legal documents through specialist LLM agents (classify → extract → report → archive); pin `@41581508f5a29c6a5eee1ed0909fa24b526801ea` / **0.9.3** (reviewed source adoption) (package `mailroom` 0.9.3) | **Upstream** — its configured trace sinks supply this visualizer; optional `pip install -e ".[pipeline]"` imports `pipeline.review_resolve` |
 | [llm-entity-extraction](https://github.com/Exios66/llm-entity-extraction) | Prompt-experiment loop (prompt versions × models, paired-bootstrap ablations) | Breeds the pipeline's sorter/specialist prompts; hosts the shared kanban board + governance log for the whole chain |
 | [llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring) | Canonical scoring engine (`@1cd4aba7`, Dojo v0.27.2) | Upstream engine for pipeline and sandbox; visualizer offline evaluation uses optional `[eval]` |
 | [Enron-Evaluation-Environment](https://github.com/Exios66/Enron-Evaluation-Environment) | EDA + pipeline-ready correspondence dataset (CMU Enron corpus) | Corpus feed for the pipeline's `correspondence` doc class |
