@@ -854,3 +854,37 @@ def test_intake_ml_triage_span_is_intake_on_both_sdk_shapes():
         assert span.output == triage
         assert run.stage != Stage.UNKNOWN
         assert run.routing_path[0] == "intake"
+
+
+def test_human_approved_archive_enters_at_the_reporting_tail():
+    """llm-mailroom PR #203: a reviewer's own fields skip extraction.
+
+    A live resume runs ``route-for-review -> compile-report -> ...``; a process
+    that lost the interrupt checkpoint enters at ``compile-report`` straight
+    from the START router. Both shapes must land on the reporting tail instead
+    of showing up as an ``unknown`` station.
+    """
+    resumed = _run(make_trace(
+        "t-human-resume",
+        span_names=["route-for-review", "compile-report", "write-catalog", "archive-document"],
+        stage="archived",
+    ))
+    assert resumed.stage == Stage.ARCHIVED
+    assert resumed.routing_path == ["review", "report", "catalog", "archive"]
+    assert "extract" not in resumed.routing_path
+
+    stateless = _run(make_trace(
+        "t-human-stateless",
+        span_names=["compile-report", "write-catalog", "archive-document"],
+        stage="archived",
+    ))
+    assert stateless.stage == Stage.ARCHIVED
+    assert stateless.routing_path == ["report", "catalog", "archive"]
+
+    # An in-flight generic marker must not pull the run back to INTAKE.
+    in_flight = _run(make_trace(
+        "t-human-inflight",
+        span_names=["route-for-review", "compile-report"],
+        stage="processing",
+    ))
+    assert in_flight.stage == Stage.COMPILE_REPORT

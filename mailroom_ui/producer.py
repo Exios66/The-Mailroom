@@ -11,8 +11,10 @@ Pin: ``git+https://github.com/Exios66/llm-mailroom.git@9e8f30b279e7626c056b03511
 with package version 0.9.1 — dedicated
 merger_agreement_specialist, ModernBERT intake-ml-triage span,
 llm-dojo-scoring v0.27.2, mailroom-dataset tag v9.1). The review_resolve /
-schemas.manifest contract is unchanged since v0.7.1.
-Bump
+schemas.manifest contract is unchanged since v0.7.1 at this pin; the vendored
+display contract is provisionally ahead of it (llm-mailroom PR #203 head —
+two human-resume edges), and ``RESOLUTIONS`` / ``REJECT_REASONS`` fall back to
+the same constants until the pin moves. Bump
 ``MAILROOM_GIT_SHA`` and the extra together.
 
 In the mailroom-hub monorepo the workspace ``[pipeline]`` extra resolves
@@ -45,6 +47,18 @@ MAILROOM_PEP508 = (
 
 _FALLBACK_DISPOSITIONS = frozenset({"resume", "record", "requeue", "complete"})
 _FALLBACK_DECISIONS = frozenset({"approved", "rejected"})
+# llm-mailroom PR #203: a human decision as data. ``resolution`` supersedes the
+# legacy decision+disposition pair; a rejection names one of these reasons.
+_FALLBACK_RESOLUTIONS = frozenset({"approve_as_is", "correct", "reclassify", "reject"})
+_FALLBACK_REJECT_REASONS = (
+    "not_a_legal_document",
+    "duplicate",
+    "unreadable",
+    "out_of_scope",
+    "wrong_matter",
+    "spam",
+    "other",
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -144,6 +158,7 @@ def _serialize_document_fallback(doc: Any) -> dict[str, Any]:
         stage = doc.get("stage")
         created = doc.get("created_at")
         updated = doc.get("updated_at")
+        entered = doc.get("review_entered_at")
         return {
             "doc_id": doc.get("doc_id"),
             "matter_id": doc.get("matter_id"),
@@ -158,6 +173,7 @@ def _serialize_document_fallback(doc: Any) -> dict[str, Any]:
             "trace_id": doc.get("trace_id"),
             "review_decision": doc.get("review_decision"),
             "extracted_data": doc.get("extracted_data"),
+            "review_entered_at": entered.isoformat() if hasattr(entered, "isoformat") else entered,
             "created_at": created.isoformat() if hasattr(created, "isoformat") else created,
             "updated_at": updated.isoformat() if hasattr(updated, "isoformat") else updated,
         }
@@ -166,6 +182,7 @@ def _serialize_document_fallback(doc: Any) -> dict[str, Any]:
         stage = stage.value
     updated = getattr(doc, "updated_at", None)
     created = getattr(doc, "created_at", None)
+    entered = getattr(doc, "review_entered_at", None)
     return {
         "doc_id": getattr(doc, "doc_id", None),
         "matter_id": getattr(doc, "matter_id", None),
@@ -180,6 +197,7 @@ def _serialize_document_fallback(doc: Any) -> dict[str, Any]:
         "trace_id": getattr(doc, "trace_id", None),
         "review_decision": getattr(doc, "review_decision", None),
         "extracted_data": getattr(doc, "extracted_data", None),
+        "review_entered_at": entered.isoformat() if hasattr(entered, "isoformat") else entered,
         "created_at": created.isoformat() if hasattr(created, "isoformat") else created,
         "updated_at": updated.isoformat() if hasattr(updated, "isoformat") else updated,
     }
@@ -313,6 +331,13 @@ def producer_status() -> dict[str, Any]:
 if _LOADED is not None:
     DISPOSITIONS: frozenset[str] = frozenset(_LOADED["review"].DISPOSITIONS)
     DECISIONS: frozenset[str] = frozenset(_LOADED["review"].DECISIONS)
+    # Present from producer 0.9.3+ (PR #203); an older pin keeps the fallback.
+    RESOLUTIONS: frozenset[str] = frozenset(
+        getattr(_LOADED["review"], "RESOLUTIONS", _FALLBACK_RESOLUTIONS)
+    )
+    REJECT_REASONS: tuple[str, ...] = tuple(
+        getattr(_LOADED["review"], "REJECT_REASONS", _FALLBACK_REJECT_REASONS)
+    )
     serialize_document = _LOADED["review"].serialize_document
     tray_actions_for = _LOADED["review"].tray_actions_for
     DocumentManifest = _LOADED["manifest"].DocumentManifest
@@ -320,6 +345,8 @@ if _LOADED is not None:
 else:
     DISPOSITIONS = _FALLBACK_DISPOSITIONS
     DECISIONS = _FALLBACK_DECISIONS
+    RESOLUTIONS = _FALLBACK_RESOLUTIONS
+    REJECT_REASONS = _FALLBACK_REJECT_REASONS
     serialize_document = _serialize_document_fallback
     tray_actions_for = _tray_actions_fallback
     DocumentManifest = None  # type: ignore[assignment]

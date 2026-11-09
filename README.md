@@ -199,10 +199,12 @@ console; different surface, different URL. Not GitHub Pages.
 verdict banners, review siding, sessions, metrics, inspect (`[` / `]` cycle
 runs), and a debug ring. It subscribes to the same WebSocket floor snapshots
 as the web UI (`--once --view floor|review|metrics|sessions|inspect|debug`
-renders a single frame for scripting). `--resolve TRACE --decision
-approved|rejected --disposition resume|record|requeue --notes "..."
-[--doc-type X --doc-subclass Y]` posts through this visualizer to the
-producer. `--source TRACE` prints parked document text. Never point
+renders a single frame for scripting). `--resolve TRACE --resolution
+approve_as_is|correct|reclassify|reject [--field-corrections JSON
+--reject-reason TOKEN --notes "..."]` posts through this visualizer to the
+producer; the legacy `--decision approved|rejected --disposition
+resume|record|requeue [--doc-type X --doc-subclass Y]` pair still works.
+`--source TRACE` prints parked document text. Never point
 `MAILROOM_API_URL` at the producer `:8000`.
 
 </details>
@@ -278,7 +280,7 @@ Open a section below to expand the stills.
 | ![Inspector overlay on the floor](docs/screenshots/inspector.png) |
 | **INSPECTOR** — node spans, LLM generations, classification / extraction / judge scores. |
 | ![REVIEW siding — human-review queue](docs/screenshots/review.png) |
-| **REVIEW** — parked + RECONSIDER cards with Approve / Reject / Requeue / Complete (disposition resume/record/requeue/complete). |
+| **REVIEW** — parked + RECONSIDER cards with Approve as-is / Correct / Re-extract / Reject / Requeue / Complete (resolution approve_as_is|correct|reclassify|reject, or the legacy disposition resume|record|requeue|complete). |
 | ![SESSIONS / matters](docs/screenshots/sessions.png) |
 | **SESSIONS** — Langfuse matters with their traces, stages, and verdicts. |
 | ![HISTORY with replay](docs/screenshots/history.png) |

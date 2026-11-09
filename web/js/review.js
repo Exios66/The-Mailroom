@@ -5,6 +5,10 @@ const ReviewView = (() => {
   // A reviewer typing notes / editing extracted_data must not lose it to the
   // 30 s background refresh (the old refresh replaced innerHTML wholesale).
   let dirty = false;
+  // The outcome of a resolve stays visible across the refresh that follows it:
+  // the producer's ``warning`` when a completion did not reach the archive is
+  // the one line a reviewer must not lose.
+  const lastResult = new Map();
   listEl.addEventListener("input", () => { dirty = true; });
   listEl.addEventListener("change", () => { dirty = true; });
 
@@ -78,8 +82,19 @@ const ReviewView = (() => {
       card.addEventListener("click", () => {
         Inspector.open(card.dataset.trace);
       });
+      const result = lastResult.get(card.dataset.trace);
+      const status = card.querySelector(".review-resolve-status");
+      if (result && status) status.textContent = result;
     }
-    Mailroom.bindReviewForms(listEl, { onDone: () => { dirty = false; refresh({ force: true }); } });
+    Mailroom.bindReviewForms(listEl, {
+      onDone: (result, form) => {
+        dirty = false;
+        const trace = form && form.dataset.trace;
+        const status = form && form.querySelector(".review-resolve-status");
+        if (trace && status && status.textContent) lastResult.set(trace, status.textContent);
+        refresh({ force: true });
+      },
+    });
   }
 
   async function producerBanner() {

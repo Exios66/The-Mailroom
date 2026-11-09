@@ -30,7 +30,14 @@ export default function ReviewPanel() {
         }
         extracted_data = parsed as Record<string, unknown>
       }
-      return reviewApi.resolve(doc, { resolution, comment, disposition, extracted_data })
+      // llm-mailroom PR #203: approving a parked review archives the fields the
+      // reviewer checked instead of re-extracting them. An older producer
+      // ignores `human_resolution` and keeps the legacy decision+disposition.
+      const human_resolution =
+        resolution === 'approved' && doc.stage === 'review' && disposition === 'resume'
+          ? 'approve_as_is'
+          : undefined
+      return reviewApi.resolve(doc, { resolution, comment, disposition, extracted_data, human_resolution })
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['review-queue'] })

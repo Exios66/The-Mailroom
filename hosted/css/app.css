@@ -679,6 +679,7 @@ dialog::backdrop { background: rgba(20, 16, 12, 0.55); }
 }
 .review-source-open { margin-left: auto; }
 .review-source-badge { color: var(--warn); }
+.review-causes { margin: 0; color: var(--ink-soft); }
 .review-source-text {
   margin: 0;
   max-height: 12rem;

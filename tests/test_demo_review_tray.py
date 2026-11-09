@@ -127,12 +127,124 @@ def test_demo_review_tray_check_api(capsys):
 
 def test_fake_producer_complete_uses_parked_extraction():
     store = FakeProducerStore()
-    parked = dict(store.documents["doc-claim-fnol"]["extracted_data"])
+    parked = {
+        k: v for k, v in store.documents["doc-claim-fnol"]["extracted_data"].items()
+        if not str(k).startswith("_")
+    }
     with TestClient(create_fake_producer(store)) as client:
         response = client.post(
             "/v1/review/doc-claim-fnol/resolve", headers=_auth(),
             json={"decision": "approved", "disposition": "complete"},
         )
     assert response.status_code == 200
-    assert store.documents["doc-claim-fnol"]["extracted_data"] == parked
-    assert store.documents["doc-claim-fnol"]["stage"] == "archived"
+    row = store.documents["doc-claim-fnol"]
+    assert row["stage"] == "archived"
+    # The approved fields are kept verbatim; the archived row also carries the
+    # derived report block (llm-mailroom PR #203 archives through the tail).
+    assert {k: v for k, v in row["extracted_data"].items() if not str(k).startswith("_")} == parked
+    assert row["extracted_data"]["_report"]["status"] == "ok"
+
+
+def test_fake_producer_approve_as_is_archives_the_reviewed_fields():
+    """PR #203: approving archives the parked fields through the tail instead
+    of re-extracting, and the confidence stays the model's own number."""
+    store = FakeProducerStore()
+    parked = {
+        k: v for k, v in store.documents["doc-merger-42"]["extracted_data"].items()
+        if not str(k).startswith("_")
+    }
+    model_conf = store.documents["doc-merger-42"]["extraction_confidence"]
+    with TestClient(create_fake_producer(store)) as client:
+        response = client.post(
+            "/v1/review/doc-merger-42/resolve", headers=_auth(),
+            json={"resolution": "approve_as_is", "reviewer": "j.burleson"},
+        )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["resolution"] == "approve_as_is"
+    assert body["complete"]["stage"] == "archived"
+    assert body["complete"]["extraction_source"] == "human"
+    assert body["complete"]["extraction_confidence"] == model_conf != 1.0
+    assert body["human_label"]["reviewer"] == "j.burleson"
+    row = store.documents["doc-merger-42"]
+    assert row["stage"] == "archived"
+    assert row["human_label"]["resolution"] == "approve_as_is"
+    assert {k: v for k, v in row["extracted_data"].items() if not str(k).startswith("_")} == parked
+    # Reviewer evidence travels with the archived row.
+    assert row["extracted_data"]["_review"]["review_causes"]
+
+
+def test_fake_producer_correct_merges_field_corrections():
+    store = FakeProducerStore()
+    with TestClient(create_fake_producer(store)) as client:
+        response = client.post(
+            "/v1/review/doc-merger-42/resolve", headers=_auth(),
+            json={"resolution": "correct", "field_corrections": {"indemnification": "capped"}},
+        )
+    assert response.status_code == 200, response.text
+    applied = store.documents["doc-merger-42"]["extracted_data"]
+    assert applied["indemnification"] == "capped"
+    assert applied["consideration"] == "all-stock"  # untouched parked field
+
+
+def test_fake_producer_reject_needs_a_reason():
+    store = FakeProducerStore()
+    with TestClient(create_fake_producer(store)) as client:
+        missing = client.post(
+            "/v1/review/doc-merger-42/resolve", headers=_auth(),
+            json={"resolution": "reject"},
+        )
+        assert missing.status_code == 400
+        assert "reject_reason" in missing.text
+        ok = client.post(
+            "/v1/review/doc-merger-42/resolve", headers=_auth(),
+            json={"resolution": "reject", "reject_reason": "duplicate"},
+        )
+    assert ok.status_code == 200, ok.text
+    assert store.documents["doc-merger-42"]["stage"] == "failed"
+    assert store.documents["doc-merger-42"]["reject_reason"] == "duplicate"
+
+
+def test_fake_producer_racing_resolve_is_409():
+    store = FakeProducerStore()
+    store.inflight.add("doc-merger-42")
+    with TestClient(create_fake_producer(store)) as client:
+        response = client.post(
+            "/v1/review/doc-merger-42/resolve", headers=_auth(),
+            json={"resolution": "approve_as_is"},
+        )
+    assert response.status_code == 409
+    assert "already in progress" in response.text
+
+
+def test_fake_producer_complete_that_never_archived_reports_a_warning():
+    """A tail that re-parks keeps the decision but not the completion."""
+    store = FakeProducerStore()
+    store.archive_fails = True
+    with TestClient(create_fake_producer(store)) as client:
+        response = client.post(
+            "/v1/review/doc-claim-fnol/resolve", headers=_auth(),
+            json={"decision": "approved", "disposition": "complete"},
+        )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["complete"]["stage"] == "review"
+    assert "did not reach the archive" in body["warning"]
+    assert store.documents["doc-claim-fnol"]["stage"] == "review"
+
+
+def test_fake_producer_review_entered_at_is_serialized():
+    store = FakeProducerStore()
+    entered = store.documents["doc-merger-42"]["review_entered_at"]
+    with TestClient(create_fake_producer(store)) as client:
+        doc = client.get(
+            "/v1/lookup", params={"doc_id": "doc-merger-42"}, headers=_auth(),
+        ).json()["document"]
+    assert doc["review_entered_at"] == entered
+
+
+def test_fake_producer_mirrors_resolution_contract():
+    from mailroom_ui.producer import REJECT_REASONS, RESOLUTIONS
+
+    assert RESOLUTIONS == frozenset({"approve_as_is", "correct", "reclassify", "reject"})
+    assert "not_a_legal_document" in REJECT_REASONS

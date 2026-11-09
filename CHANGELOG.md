@@ -6,6 +6,67 @@ All notable changes to The-Mailroom are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- **llm-mailroom PR #203 follow-ups (pipeline 0.9.3).** The visualizer is ready
+  for the pipeline's calibration + two-way human-review landing before that PR
+  merges; the vendored display contract is provisionally taken from its head
+  (`contract/source.json` records the PR commit and `matches_pin: false`, and
+  the pin + real merge commit come in the bump when #203 lands).
+  - **Contract + floor graph.** `pipeline_schema.py` now reads the graph
+    `edges` (`GRAPH_EDGES`, `GRAPH_EDGE_LABELS`, `GRAPH_START/END`) and knows
+    which stations a run can start on — intake, a review resume that
+    re-extracts (`__start__ → extract`), and a human-applied approval that
+    enters the reporting tail (`__start__ → compile_report`). A new START edge
+    that the floor cannot place is a `contract_gaps()` entry, not a silently
+    mis-stationed envelope. The two new edges are
+    `human_review → compile_report` and `__start__ → compile_report`.
+  - **Human-resume display.** A trace that skips extraction because a reviewer
+    approved or corrected the fields renders REPORT → CATALOG → ARCHIVE (never
+    `unknown`), whether it resumed through `route-for-review` or entered at
+    `compile-report` after a restart. Pinned in `tests/test_interpreter.py`.
+  - **Review causes.** `reconsideration.py` mirrors every cause token the
+    pipeline can park with: the six decision-reviewer tokens that were already
+    missing here (`hollow_extraction`, `sorter_low_confidence`,
+    `reviewer_*`) plus PR #203's state-derived block (`transient_exhausted`,
+    `boss_conflict`, `arbiter_escalated`, `classification_arbiter_escalated`,
+    `unknown_class`, `empty_document`, `unsupported_extraction`,
+    `low_extraction_confidence`, `judge_incomplete`, `judge_error`,
+    `retries_exhausted`, `chunk_failed`). A judge `INCOMPLETE` verdict is
+    `judge_incomplete` (not a report failure) and `JUDGE_ERROR` is its own
+    cause. `cause_labels()` renders a producer catalog row's own
+    `review_causes`; `/api/review/context` returns them as `causes`, and both
+    desks show "producer causes" on the resolve form.
+  - **Resolve proxy.** `POST /api/review/resolve` forwards `resolution`
+    (`approve_as_is` | `correct` | `reclassify` | `reject`),
+    `field_corrections`, `reviewer` and `reject_reason`. Shape errors (unknown
+    resolution, a resolution mixed with a posted `extracted_data`, a malformed
+    corrections object) are refused locally with the producer's wording. The
+    operator login names the `reviewer`, so the producer audit chain and
+    `human_label` record who decided. A racing resolve surfaces the producer's
+    new **409** as an actionable message; a resolve on a document that already
+    left review keeps the legacy 400.
+  - **Human decisions in the desks.** Pixel REVIEW, the Observatory and the
+    optional React desk now offer Approve as-is (archives the fields the
+    reviewer checked — the PR's headline fix, previously "approve" re-ran
+    extraction), Correct (sends only the edited keys as `field_corrections`),
+    Re-extract, Reject, Requeue and Complete (full replacement). A class/subtype
+    change with Approve as-is switches to `reclassify` instead of failing. The
+    status line reports the resolution, reviewer and archived stage, keeps
+    showing after the refresh, and shows the producer's `warning` when a
+    `complete` did not reach the archive. `mailroom-tui` gains `--resolution`,
+    `--field-corrections` and `--reject-reason`.
+  - **Legacy-visible producer changes handled.** `disposition=complete` now
+    archives through the graph tail, so it reports the model's own
+    `extraction_confidence` (never `1.0`), `extraction_source: "human"` and a
+    `warning` when the tail re-parked the document; the fake producer in
+    `tests/fake_producer.py` mirrors the whole contract (resolutions,
+    reject reasons, `human_label`, `review_entered_at`, 409, tail failure) so
+    the desks are exercised against it.
+  - `GET /api/review/context` and the lookup serializer also carry
+    `review_entered_at`, and the resolve forms show how long the document has
+    been parked.
+
 ### Changed
 
 - Move the llm-mailroom pin to release tag `v0.9.2` (`9e8f30b2`). The tag's package

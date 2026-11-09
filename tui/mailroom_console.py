@@ -625,7 +625,17 @@ def run() -> None:
                         help="trace id (or producer doc_id) to resolve via POST /api/review/resolve")
     parser.add_argument("--decision", default="approved",
                         choices=["approved", "rejected"],
-                        help="review decision used with --resolve")
+                        help="legacy review decision used with --resolve when no --resolution is given")
+    parser.add_argument("--resolution", default="",
+                        choices=["", "approve_as_is", "correct", "reclassify", "reject"],
+                        help="human decision as data (producer PR #203): approve_as_is archives the "
+                             "reviewed fields, correct merges --field-corrections, reclassify "
+                             "re-extracts under --doc-type, reject fails the document")
+    parser.add_argument("--field-corrections", default="", dest="field_corrections",
+                        help="JSON object of reviewer edits for --resolution correct")
+    parser.add_argument("--reject-reason", default="", dest="reject_reason",
+                        help="rejection token for --resolution reject (not_a_legal_document, duplicate, "
+                             "unreadable, out_of_scope, wrong_matter, spam, other)")
     parser.add_argument("--disposition", default="resume",
                         choices=["resume", "record", "requeue", "complete"],
                         help="resume pipeline, record-only audit, requeue to inbox, or complete with --extracted-data")
@@ -675,6 +685,16 @@ def run() -> None:
             "disposition": args.disposition,
             "notes": args.notes,
         }
+        if args.resolution:
+            body["resolution"] = args.resolution
+        if args.field_corrections:
+            try:
+                body["field_corrections"] = json.loads(args.field_corrections)
+            except json.JSONDecodeError as exc:
+                console.print(Panel(Text(f"--field-corrections is not valid JSON: {exc}", style="bright_red")))
+                raise SystemExit(2)
+        if args.reject_reason:
+            body["reject_reason"] = args.reject_reason
         if args.doc_type:
             body["doc_type"] = args.doc_type
         if args.doc_subclass:

@@ -93,6 +93,42 @@ def test_classification_arbiter_has_a_station():
     assert ps.SPAN_STAGE_MAP["arbitrate-classification"] is Stage.RETRY_CLASSIFY
 
 
+def test_human_resume_edges_are_read_from_the_contract():
+    """llm-mailroom PR #203: a human-approved review archives through the tail.
+
+    ``human_review -> compile_report`` carries the reviewer's own fields, and a
+    process that lost its interrupt checkpoint enters at ``compile_report``
+    from the START router. Both are real edges in the vendored graph, and the
+    reporting tail is a known run entry rather than an anomaly.
+    """
+    edges = set(ps.GRAPH_EDGES)
+    assert ("human_review", "compile_report") in edges
+    assert (ps.GRAPH_START, "compile_report") in edges
+    assert (ps.GRAPH_START, "extract") in edges  # resume re-extraction
+    assert ps.SPAN_STAGE_MAP["compile_report"] is Stage.COMPILE_REPORT
+    assert Stage.COMPILE_REPORT in ps.RESUME_ENTRY_STAGES
+    assert Stage.EXTRACT in ps.RESUME_ENTRY_STAGES
+    assert Stage.INTAKE not in ps.RESUME_ENTRY_STAGES
+
+
+def test_unknown_start_edge_is_a_gap():
+    contract = copy.deepcopy(ps.CONTRACT)
+    contract["graph"]["edges"].append(
+        {"source": contract["graph"]["start"], "target": "archive", "conditional": True, "label": None}
+    )
+    gaps = ps.contract_gaps(contract)
+    assert any("start edge to 'archive'" in g and "known run entry" in g for g in gaps)
+
+
+def test_start_edge_to_an_unmapped_node_is_a_gap():
+    contract = copy.deepcopy(ps.CONTRACT)
+    contract["graph"]["edges"].append(
+        {"source": contract["graph"]["start"], "target": "score_document", "conditional": True, "label": None}
+    )
+    gaps = ps.contract_gaps(contract)
+    assert any("start edge to 'score_document' has no floor stage" in g for g in gaps)
+
+
 def test_unsupported_contract_major_is_refused(tmp_path):
     bad = dict(ps.CONTRACT, contract_version="2.0.0")
     path = tmp_path / "contract.json"

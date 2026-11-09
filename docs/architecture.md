@@ -246,19 +246,47 @@ and the floor parks them on the REVIEW siding as **RECONSIDER** so a
 wrong archive cannot look like a finished case. Cause tokens live in
 `mailroom_ui/reconsideration.py` (mirrored by llm-mailroom
 `pipeline/reconsideration.py`, which also parks GT misses before extract
-and withholds catalog writes when `compile_report` fails).
+and withholds catalog writes when `compile_report` fails). llm-mailroom
+PR #203 makes every route into review name at least one cause — including
+the state-derived `transient_exhausted`, `boss_conflict`, `arbiter_escalated`,
+`classification_arbiter_escalated`, `unknown_class`, `empty_document`,
+`unsupported_extraction`, `low_extraction_confidence`, `judge_incomplete`,
+`judge_error`, `retries_exhausted` and `chunk_failed` — so the mirror carries
+all of them, and the REVIEW desk renders the producer's own
+`review_causes` with those labels (`/api/review/context` → `causes`).
 
 Operators resolve those items from the REVIEW desk (pixel cards, inspector,
 Observatory, or `mailroom-tui --resolve`). The visualizer proxies
-`POST /api/review/resolve` to llm-mailroom `/v1/review/{doc_id}/resolve`:
-`disposition=resume` re-extracts a parked `stage=review` document (optional
+`POST /api/review/resolve` to llm-mailroom `/v1/review/{doc_id}/resolve`.
+A parked document takes a `resolution` (llm-mailroom PR #203):
+
+| resolution | effect |
+| --- | --- |
+| `approve_as_is` | archives the parked fields the reviewer checked, no LLM pass |
+| `correct` | merges `field_corrections` over the parked fields, then archives |
+| `reclassify` | re-extracts under the chosen `doc_type` / subtype |
+| `reject` | manifest `failed`, file to `failed/`, `reject_reason` required |
+
+Approved or corrected fields travel `human_review → compile_report →
+catalog_write → archive`, so the report, catalog row and scores exist; a
+restart without the interrupt checkpoint enters at `compile_report` through
+the START router. `extraction_confidence` stays the model's own number,
+never `1.0`, and `extraction_source: "human"` marks the provenance. The
+legacy pair still works: `disposition=resume` re-extracts (optional
 `doc_type` is mapped to producer `override_doc_type`; `doc_subclass` /
-`contract_subtype` pass through); `record` appends a hash-chained audit row
-without moving the file; `requeue` copies the source file back to the inbox;
-`complete` archives operator-supplied `extracted_data` without another LLM
-pass after a specialist-schema check (llm-mailroom #53 — correspondence
-fields on a contract 400). Aborted runs carry `failure_class` on the
-Langfuse output or as `run aborted [<class>]: …` in `error_message`.
+`contract_subtype` pass through), `record` appends a hash-chained audit row
+without moving the file, `requeue` copies the source file back to the inbox,
+and `complete` archives operator-supplied `extracted_data` as a full
+replacement after a specialist-schema check (llm-mailroom #53 —
+correspondence fields on a contract 400); a `complete` whose report tail
+re-parks returns a `warning` and `complete.stage != archived` instead of
+claiming success. A resolve racing another in-flight resolve of the same
+document answers **409** (`another resolve … wait for it to finish`); a
+resolve on a document that already left review stays the legacy 400. The
+operator login names the reviewer (`reviewer` in the body), so the producer
+audit chain and `human_label` record who decided. Aborted runs carry
+`failure_class` on the Langfuse output or as `run aborted [<class>]: …` in
+`error_message`.
 `GET /api/review/source` tries producer `GET /v1/documents/{doc_id}/source`
 and, on 404, falls back to `GET /v1/lookup` catalog JSON (`original_filename`,
 `extracted_data`). Binary `?download=1` 404s when that route is missing.
@@ -291,8 +319,13 @@ package 0.9.1 / Dojo v0.27.2 (@1cd4aba7) adoption).
 `mailroom_ui/producer.py` imports `pipeline.review_resolve` and
 `schemas.manifest` when that extra or a sibling checkout is present; the
 REVIEW proxy and `tests/fake_producer.py` use those contract helpers
-(dispositions, `serialize_document`, tray actions). The adapter never
-imports `api.main` or `llm_dojo_scoring`. `/api/meta` reports the pin.
+(dispositions, resolutions, reject reasons, `serialize_document`, tray
+actions). The vendored display contract is provisionally vendored from
+llm-mailroom PR #203 (`contract/source.json` note, `matches_pin: false`)
+because the floor needs its two human-resume edges; the pin moves with the
+merge. `RESOLUTIONS` / `REJECT_REASONS` fall back to the same constants
+until the pin catches up. The adapter never imports `api.main` or
+`llm_dojo_scoring`. `/api/meta` reports the pin.
 
 ## Demos & screenshots
 

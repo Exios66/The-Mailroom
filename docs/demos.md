@@ -32,8 +32,9 @@ Hub card: https://huggingface.co/spaces/Lucius-Morningstar/mailroom-observatory
 ## Working REVIEW tray (producer stub)
 
 `scripts/demo_v030_cast.py` still shows the honest 503 when the producer URL
-is unset. For a **working** resolve path (lookup, source fallback, resume /
-record / requeue / complete):
+is unset. For a **working** resolve path (lookup, source fallback,
+`approve_as_is` without an LLM pass, legacy resume / record / requeue /
+complete):
 
 ```bash
 PYTHONPATH=. python scripts/demo_review_tray.py --check-api
@@ -44,7 +45,10 @@ PYTHONPATH=. python scripts/demo_review_tray.py --port 8006
 
 Display traces are FakeClient (same contract as the test suite). The stub is
 `tests/fake_producer.py` and speaks llm-mailroom `/v1` — including
-`override_doc_type`. Lookup serialization comes from pinned
+`override_doc_type` and the PR #203 human decision (`resolution`,
+`field_corrections`, `reviewer`, `reject_reason`, `human_label`,
+`review_entered_at`, 409 on a racing resolve, and a `warning` when a
+completion's report tail re-parks). Lookup serialization comes from pinned
 `pipeline.review_resolve.serialize_document` when `[pipeline]` (or a sibling
 checkout) is importable. It does **not** implement `GET /documents/{id}/source`
 (same as producer main); the text pane uses catalog lookup.

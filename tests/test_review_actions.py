@@ -543,3 +543,164 @@ def test_producer_urls_honor_empty_api_prefix(monkeypatch):
     assert any(u.endswith("/lookup?doc_id=doc-u") for u in urls)
     assert any(u.endswith("/review/doc-u/resolve") for u in urls)
     assert not any("/v1/" in u for u in urls)
+
+
+def test_api_review_resolve_forwards_resolution_corrections_and_reviewer(monkeypatch):
+    """llm-mailroom PR #203: the human decision travels as data."""
+    monkeypatch.setenv("MAILROOM_PIPELINE_URL", "http://pipeline.test:8000")
+    monkeypatch.setenv("MAILROOM_PIPELINE_TOKEN", "secret-token")
+
+    posted = {}
+
+    def fake_request(method, url, *, token="", body=None, timeout=8.0):
+        if method == "GET" and "/v1/lookup?" in url:
+            return {"document": {"doc_id": "doc-r", "doc_type": "contract"}}
+        if method == "POST" and url.endswith("/v1/review/doc-r/resolve"):
+            posted.update(body or {})
+            return {"status": "ok", "doc_id": "doc-r", "resolution": "correct"}
+        raise AssertionError(url)
+
+    from mailroom_ui import review_actions
+
+    src = LangfuseSource(client=FakeClient([make_trace("t-r", stage="review")]))
+    with patch.object(review_actions, "_request_json", side_effect=fake_request):
+        with TestClient(create_app(src)) as c:
+            r = c.post("/api/review/resolve", json={
+                "doc_id": "doc-r",
+                "resolution": "correct",
+                "field_corrections": {"governing_law": "Delaware"},
+                "reviewer": "j.burleson",
+                "notes": "fixed the jurisdiction",
+            })
+    assert r.status_code == 200, r.text
+    assert posted["resolution"] == "correct"
+    assert posted["field_corrections"] == {"governing_law": "Delaware"}
+    assert posted["reviewer"] == "j.burleson"
+    # A resolution decides the outcome; the producer rejects a conflicting pair.
+    assert posted["decision"] == "approved"
+    assert posted["disposition"] == "resume"
+    assert "extracted_data" not in posted
+
+
+def test_api_review_resolve_reject_resolution_derives_decision(monkeypatch):
+    monkeypatch.setenv("MAILROOM_PIPELINE_URL", "http://pipeline.test:8000")
+    monkeypatch.setenv("MAILROOM_PIPELINE_TOKEN", "secret-token")
+
+    posted = {}
+
+    def fake_request(method, url, *, token="", body=None, timeout=8.0):
+        if method == "GET" and "/v1/lookup?" in url:
+            return {"document": {"doc_id": "doc-x"}}
+        if method == "POST":
+            posted.update(body or {})
+            return {"status": "ok", "resolution": "reject"}
+        raise AssertionError(url)
+
+    from mailroom_ui import review_actions
+
+    src = LangfuseSource(client=FakeClient([make_trace("t-x", stage="review")]))
+    with patch.object(review_actions, "_request_json", side_effect=fake_request):
+        with TestClient(create_app(src)) as c:
+            r = c.post("/api/review/resolve", json={
+                "doc_id": "doc-x",
+                "resolution": "reject",
+                "reject_reason": "not a legal document",
+            })
+    assert r.status_code == 200, r.text
+    assert posted["decision"] == "rejected"
+    assert posted["reject_reason"] == "not_a_legal_document"
+
+
+def test_api_review_resolve_rejects_unknown_resolution_before_the_producer(monkeypatch):
+    monkeypatch.setenv("MAILROOM_PIPELINE_URL", "http://pipeline.test:8000")
+    monkeypatch.setenv("MAILROOM_PIPELINE_TOKEN", "secret-token")
+
+    def fake_request(method, url, *, token="", body=None, timeout=8.0):
+        raise AssertionError(f"producer must not be called: {method} {url}")
+
+    from mailroom_ui import review_actions
+
+    src = LangfuseSource(client=FakeClient([make_trace("t-bad", stage="review")]))
+    with patch.object(review_actions, "_request_json", side_effect=fake_request):
+        with TestClient(create_app(src)) as c:
+            r = c.post("/api/review/resolve", json={"doc_id": "doc-b", "resolution": "teleport"})
+    assert r.status_code == 400
+    assert "resolution must be one of" in r.json()["error"]
+
+
+def test_api_review_resolve_rejects_extracted_data_with_a_resolution(monkeypatch):
+    """The producer ignores a posted extracted_data under a resolution; the
+    visualizer refuses it instead of silently dropping the reviewer's JSON."""
+    monkeypatch.setenv("MAILROOM_PIPELINE_URL", "http://pipeline.test:8000")
+    monkeypatch.setenv("MAILROOM_PIPELINE_TOKEN", "secret-token")
+
+    from mailroom_ui import review_actions
+
+    src = LangfuseSource(client=FakeClient([make_trace("t-mix", stage="review")]))
+    with patch.object(review_actions, "_request_json", side_effect=AssertionError("no call")):
+        with TestClient(create_app(src)) as c:
+            r = c.post("/api/review/resolve", json={
+                "doc_id": "doc-m",
+                "resolution": "correct",
+                "disposition": "complete",
+                "extracted_data": {"parties": ["A", "B"]},
+            })
+    assert r.status_code == 400
+    assert "field_corrections" in r.json()["error"]
+
+
+def test_api_review_resolve_racing_resolve_is_an_actionable_409(monkeypatch):
+    """llm-mailroom PR #203 refuses a second resolve of the same document."""
+    monkeypatch.setenv("MAILROOM_PIPELINE_URL", "http://pipeline.test:8000")
+    monkeypatch.setenv("MAILROOM_PIPELINE_TOKEN", "secret-token")
+
+    def fake_request(method, url, *, token="", body=None, timeout=8.0):
+        if method == "GET" and "/v1/lookup?" in url:
+            return {"document": {"doc_id": "doc-race"}}
+        raise ReviewActionError(
+            "A resolve for document doc-race is already in progress", status=409,
+        )
+
+    from mailroom_ui import review_actions
+
+    src = LangfuseSource(client=FakeClient([make_trace("t-race", stage="review")]))
+    with patch.object(review_actions, "_request_json", side_effect=fake_request):
+        with TestClient(create_app(src)) as c:
+            r = c.post("/api/review/resolve", json={"doc_id": "doc-race", "decision": "approved"})
+    assert r.status_code == 409
+    assert "already in progress" in r.json()["error"]
+    assert "wait for it to finish" in r.json()["error"]
+
+
+def test_api_review_context_labels_the_producer_causes(monkeypatch):
+    """The pipeline now names a cause for every review route; the desk renders
+    its tokens with the visualizer's labels."""
+    monkeypatch.setenv("MAILROOM_PIPELINE_URL", "http://pipeline.test:8000")
+    monkeypatch.setenv("MAILROOM_PIPELINE_TOKEN", "secret-token")
+
+    def fake_request(method, url, *, token="", body=None, timeout=8.0):
+        if method == "GET" and "/v1/lookup?" in url:
+            return {"document": {
+                "doc_id": "doc-c",
+                "stage": "review",
+                "review_causes": ["chunk_failed", "judge_incomplete", "new_token"],
+                "review_entered_at": "2026-11-08T06:00:00+00:00",
+            }}
+        if method == "GET" and "/v1/audit/" in url:
+            return {"doc_id": "doc-c", "entries": [], "valid": True}
+        raise AssertionError(url)
+
+    from mailroom_ui import review_actions
+
+    src = LangfuseSource(client=FakeClient([make_trace("t-causes", stage="review")]))
+    with patch.object(review_actions, "_request_json", side_effect=fake_request):
+        with TestClient(create_app(src)) as c:
+            r = c.get("/api/review/context", params={"doc_id": "doc-c"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["document"]["review_entered_at"] == "2026-11-08T06:00:00+00:00"
+    assert body["causes"] == [
+        {"token": "chunk_failed", "label": "one or more extraction windows failed"},
+        {"token": "judge_incomplete", "label": "judge verdict INCOMPLETE — extraction misses the source"},
+        {"token": "new_token", "label": "new token"},
+    ]

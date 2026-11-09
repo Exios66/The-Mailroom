@@ -1,8 +1,9 @@
 {
   "contract_version": "1.0.0",
-  "fetched_from": "https://raw.githubusercontent.com/Exios66/llm-mailroom/9e8f30b279e7626c056b03511f823105760f80d7/contract/mailroom-contract.json",
-  "matches_pin": true,
-  "pipeline_commit": "9e8f30b279e7626c056b03511f823105760f80d7",
-  "pipeline_version": "0.9.1",
-  "sha256": "b9930ec48aee99138f94a3ff5ee690f794601841302af56b35565277a6edcdce"
+  "fetched_from": "git checkout (llm-mailroom)",
+  "matches_pin": false,
+  "note": "Vendored from llm-mailroom PR #203 head d18851f (pipeline 0.9.3) ahead of merge: adds human_review -> compile_report and __start__ -> compile_report (human_applied). Re-run with the merge commit when the PR lands.",
+  "pipeline_commit": "d18851fa9d5d1e04e7cc7a966297326bde4a82c8",
+  "pipeline_version": "0.9.3",
+  "sha256": "1eeedaa637fe59bd8f974b679d90b1aaac1df2ee7af5c7aa62625b9902c15546"
 }

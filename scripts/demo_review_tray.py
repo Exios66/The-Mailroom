@@ -183,7 +183,7 @@ def check_api(producer_host: str, producer_port: int) -> None:
     from tests.fake_producer import pick_port
 
     port = producer_port if producer_port > 0 else pick_port(producer_host)
-    server, bound, _store = _start_producer(producer_host, port)
+    server, bound, store = _start_producer(producer_host, port)
     prev = _point_visualizer_at_producer(f"http://{producer_host}:{bound}")
     src = LangfuseSource(client=FakeClient(build_cast()), cache_ttl=0.2,
                          poll_cache_ttl=0.2, run_cache_ttl=0.2)
@@ -210,6 +210,21 @@ def check_api(producer_host: str, producer_port: int) -> None:
                 "notes": "paper trail from demo --check-api",
             }).json()
             assert rec["disposition"] == "record", rec
+            # PR #203: a reviewer's own fields archive through the tail with no
+            # LLM pass, and the confidence stays the model's own number.
+            model_conf = store.documents["doc-merger-42"]["extraction_confidence"]
+            approved = c.post("/api/review/resolve", json={
+                "trace_id": "tray-review",
+                "resolution": "approve_as_is",
+                "reviewer": "demo-reviewer",
+                "notes": "fields checked as-is",
+            }).json()
+            assert approved["resolution"] == "approve_as_is", approved
+            assert approved["complete"]["stage"] == "archived", approved
+            assert approved["complete"]["extraction_source"] == "human"
+            assert approved["complete"]["extraction_confidence"] == model_conf != 1.0
+            # Put the stub row back in review to exercise the legacy pair too.
+            store.documents["doc-merger-42"]["stage"] = "review"
             resumed = c.post("/api/review/resolve", json={
                 "trace_id": "tray-review",
                 "decision": "approved",
@@ -234,6 +249,7 @@ def check_api(producer_host: str, producer_port: int) -> None:
             print("check-api ok")
             print(f"  lookup     doc-merger-42  source=lookup")
             print(f"  record     doc-claim-miss")
+            print(f"  approve    doc-merger-42  resolution=approve_as_is (no LLM, model conf kept)")
             print(f"  resume     doc-merger-42  override_doc_type=merger_agreement")
             print(f"  complete   doc-claim-fnol")
     finally:

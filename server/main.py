@@ -109,7 +109,7 @@ API_ENDPOINTS = [
     {"method": "POST", "path": "/api/debug/client", "desc": "store a browser debug dump for the next agent pull"},
     {"method": "GET", "path": "/api/pipeline", "desc": "producer watcher/inbox liveness (MAILROOM_PIPELINE_URL)"},
     {"method": "GET", "path": "/api/review/context", "desc": "producer catalog+audit for a review item; ?trace_id=&filename=&doc_id="},
-    {"method": "POST", "path": "/api/review/resolve", "desc": "proxy approve/reject/record/requeue/complete (+ doc_type mapped to override_doc_type) to llm-mailroom /v1"},
+    {"method": "POST", "path": "/api/review/resolve", "desc": "proxy resolution=approve_as_is|correct|reclassify|reject or legacy approve/reject/record/requeue/complete (+ doc_type mapped to override_doc_type) to llm-mailroom /v1"},
     {"method": "GET", "path": "/api/review/source", "desc": "parked document text from producer (lookup fallback if no /documents/{id}/source); ?trace_id=&filename=&doc_id=&download=1"},
     {"method": "GET", "path": "/api/review/audit", "desc": "hash-chained producer audit; ?doc_id="},
     {"method": "POST", "path": "/api/inbox/enqueue", "desc": "proxy multipart file to producer POST /v1/upload (503 until MAILROOM_PIPELINE_URL)"},
@@ -416,8 +416,14 @@ def create_app(source: Optional[object] = None) -> FastAPI:
         return review_context(trace_id=trace_id, filename=filename, doc_id=doc_id, timeout=4.0)
 
     @app.post("/api/review/resolve")
-    def review_resolve_ep(payload: dict[str, Any], _operator=Depends(write_guard)):
+    def review_resolve_ep(payload: dict[str, Any], operator=Depends(write_guard)):
         """Proxy a human review decision to llm-mailroom. Browser never holds the token."""
+        # llm-mailroom PR #203: the human decision is data. ``resolution`` is
+        # preferred; ``decision`` + ``disposition`` stay for older producers.
+        # The authenticated operator login names the reviewer on the producer
+        # audit chain; an unauthenticated loopback desk falls back to the
+        # request's own label, then to the producer default.
+        reviewer = str(getattr(operator, "username", "") or payload.get("reviewer") or "")
         try:
             return resolve_review(
                 decision=str(payload.get("decision") or ""),
@@ -430,6 +436,10 @@ def create_app(source: Optional[object] = None) -> FastAPI:
                 doc_subclass=str(payload.get("doc_subclass") or ""),
                 override_doc_type=str(payload.get("override_doc_type") or ""),
                 extracted_data=payload.get("extracted_data"),
+                resolution=str(payload.get("resolution") or ""),
+                field_corrections=payload.get("field_corrections"),
+                reviewer=reviewer,
+                reject_reason=str(payload.get("reject_reason") or ""),
             )
         except ReviewActionError as exc:
             return JSONResponse(
