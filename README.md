@@ -199,10 +199,12 @@ console; different surface, different URL. Not GitHub Pages.
 verdict banners, review siding, sessions, metrics, inspect (`[` / `]` cycle
 runs), and a debug ring. It subscribes to the same WebSocket floor snapshots
 as the web UI (`--once --view floor|review|metrics|sessions|inspect|debug`
-renders a single frame for scripting). `--resolve TRACE --decision
-approved|rejected --disposition resume|record|requeue --notes "..."
-[--doc-type X --doc-subclass Y]` posts through this visualizer to the
-producer. `--source TRACE` prints parked document text. Never point
+renders a single frame for scripting). `--resolve TRACE --resolution
+approve_as_is|correct|reclassify|reject [--field-corrections JSON
+--reject-reason TOKEN --notes "..."]` posts through this visualizer to the
+producer; the legacy `--decision approved|rejected --disposition
+resume|record|requeue [--doc-type X --doc-subclass Y]` pair still works.
+`--source TRACE` prints parked document text. Never point
 `MAILROOM_API_URL` at the producer `:8000`.
 
 </details>
@@ -278,7 +280,7 @@ Open a section below to expand the stills.
 | ![Inspector overlay on the floor](docs/screenshots/inspector.png) |
 | **INSPECTOR** — node spans, LLM generations, classification / extraction / judge scores. |
 | ![REVIEW siding — human-review queue](docs/screenshots/review.png) |
-| **REVIEW** — parked + RECONSIDER cards with Approve / Reject / Requeue / Complete (disposition resume/record/requeue/complete). |
+| **REVIEW** — parked + RECONSIDER cards with Approve as-is / Correct / Re-extract / Reject / Requeue / Complete (resolution approve_as_is / correct / reclassify / reject, or the legacy disposition resume / record / requeue / complete). |
 | ![SESSIONS / matters](docs/screenshots/sessions.png) |
 | **SESSIONS** — Langfuse matters with their traces, stages, and verdicts. |
 | ![HISTORY with replay](docs/screenshots/history.png) |
@@ -402,7 +404,7 @@ never generates local demo envelopes; an unavailable trace source closes the flo
 - The sister pipeline repo `../llm-mailroom` (optional — `MAILROOM_TAXONOMY`
   live override, production-pilot scripts, or `mailroom_ui/producer.py`
   checkout import). Prefer `pip install -e ".[pipeline]"` to pin dist
-  `mailroom` @ `9e8f30b279e7626c056b03511f823105760f80d7` (0.9.1, main after v0.7.1) when you want to import `pipeline.review_resolve`.
+  `mailroom` @ `41581508f5a29c6a5eee1ed0909fa24b526801ea` (0.9.3, main after v0.7.1) when you want to import `pipeline.review_resolve`.
 - `arize-phoenix-client` (optional — only for the Phoenix trace source)
 
 </details>
@@ -683,9 +685,9 @@ board, one discussion log, and one trace contract:
 
 | Repository | Role | Relationship to The-Mailroom |
 | --- | --- | --- |
-| [llm-mailroom](https://github.com/Exios66/llm-mailroom) | LangGraph state machine processing legal documents through specialist LLM agents (classify → extract → report → archive); pin `@9e8f30b279e7626c056b03511f823105760f80d7` / **0.9.1** (reviewed source adoption) (package `mailroom` 0.9.1) | **Upstream** — its configured trace sinks supply this visualizer; optional `pip install -e ".[pipeline]"` imports `pipeline.review_resolve` |
+| [llm-mailroom](https://github.com/Exios66/llm-mailroom) | LangGraph state machine processing legal documents through specialist LLM agents (classify → extract → report → archive); pin `@41581508f5a29c6a5eee1ed0909fa24b526801ea` / **0.9.3** (reviewed source adoption) (package `mailroom` 0.9.3) | **Upstream** — its configured trace sinks supply this visualizer; optional `pip install -e ".[pipeline]"` imports `pipeline.review_resolve` |
 | [llm-entity-extraction](https://github.com/Exios66/llm-entity-extraction) | Prompt-experiment loop (prompt versions × models, paired-bootstrap ablations) | Breeds the pipeline's sorter/specialist prompts; hosts the shared kanban board + governance log for the whole chain |
-| [llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring) | Canonical scoring engine (`@1cd4aba7`, Dojo v0.27.2) | Upstream engine for pipeline and sandbox; visualizer offline evaluation uses optional `[eval]` |
+| [llm-dojo-scoring](https://github.com/Exios66/llm-dojo-scoring) | Canonical scoring engine (`@00a2a7f7`, Dojo v0.28.1) | Upstream engine for pipeline and sandbox; visualizer offline evaluation uses optional `[eval]` |
 | [Enron-Evaluation-Environment](https://github.com/Exios66/Enron-Evaluation-Environment) | EDA + pipeline-ready correspondence dataset (CMU Enron corpus) | Corpus feed for the pipeline's `correspondence` doc class |
 | [claims-data-eda](https://github.com/Exios66/claims-data-eda) | Insurance-claims candidate-corpus EDA (CMS DE-SynPUF direction) | Candidate corpus feed for the `insurance_claim` doc class |
 | [atticus-investigation](https://github.com/Exios66/atticus-investigation) | LegalBench classification prompt-engineering pipeline | Eval sibling — same methodology family, LegalBench focus |

@@ -518,8 +518,15 @@ main { min-height: 520px; }
 }
 .review-resolve-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .review-approve { background: var(--green-light); }
+.review-correct { background: var(--green-light); }
 .review-reject { background: var(--red-light); }
 .review-complete { background: var(--gold); }
+.review-resolve-causes {
+  margin-top: 6px;
+  color: var(--gray);
+  font-size: 10px;
+  line-height: 1.4;
+}
 .review-resolve-status {
   margin-top: 8px;
   color: var(--amber);

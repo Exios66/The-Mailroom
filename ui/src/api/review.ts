@@ -25,5 +25,6 @@ export const reviewApi = {
       filename: doc.filename,
       doc_type: resolution.doc_type || doc.doc_type,
       extracted_data: resolution.extracted_data,
+      ...(resolution.human_resolution ? { resolution: resolution.human_resolution } : {}),
     }).then((r) => r.data),
 }

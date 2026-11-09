@@ -114,9 +114,15 @@ DESCRIPTION
     Prints the review siding: needs_human runs with their
     escalation reasons / failure classes. Resolve a run with:
 
-      mailroom-tui --resolve TRACE --decision approved [--doc-type X]
+      mailroom-tui --resolve TRACE --resolution approve_as_is \\
+        [--doc-type X] [--field-corrections '{"k": "v"}'] [--notes "..."]
 
-    or in the web UI / Observatory.""",
+    Resolutions (llm-mailroom PR #203): approve_as_is archives the
+    fields the reviewer checked, correct merges --field-corrections
+    over them, reclassify re-extracts under --doc-type, reject files
+    the document as failed (--reject-reason). The legacy
+    --decision approved|rejected --disposition resume|record|requeue|complete
+    pair still works. Or use the web UI / Observatory.""",
     "sessions": """SESSIONS(1)
 
 NAME

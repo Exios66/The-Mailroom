@@ -8,6 +8,104 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Changed
 
+- **Pin moved to the llm-mailroom #203 merge commit `4158150` (pipeline 0.9.3).** `bump_producer_pin.py`
+  moved the reviewed pin from `9e8f30b` and re-vendored the display contract from the merge commit
+  (bytes unchanged from the PR-head copy); `contract/source.json` now records `matches_pin: true`.
+- **`[eval]` Dojo pin aligned with the producer: `1cd4aba` (v0.27.2) → `00a2a7f` (v0.28.1).** Producer 0.9.3
+  requires Dojo `00a2a7f`, so `pip install -e ".[eval,pipeline]"` (and `.[dev,pipeline]`) could not resolve
+  two different commits of `llm-dojo-scoring`. `tests/test_dependency_pins.py`, the architecture pages
+  (`docs/` and `wiki/`) and the README / AGENTS / skill references move with the pin.
+
+### Fixed
+
+- **REVIEW desks send what the producer accepts (bot review of PR #71).** One shared pure planner,
+  `web/js/review_plan.js`, now builds the resolve request for both the pixel console and the hosted
+  Observatory (it replaces two drifting copies): Correct after a class / subtype change is sent as
+  `resolution=reclassify` (llm-mailroom refuses `correct` with a new class and `reclassify` takes no
+  `field_corrections`; field edits made with a class change are refused in the desk instead of
+  dropped), and a field the reviewer deletes travels as an explicit `null` correction, because
+  `field_corrections` merge over the parked fields and the producer has no delete (the legacy
+  Complete, which replaces the extraction, is the only true removal; deleting a required or list
+  field such as `keywords`, `parties` or `confidence` is refused by the producer's schema check).
+  An empty select ("(keep current)" doc type, "(none / keep)" subtype) is "unchanged", as
+  `review_actions` drops it from the request, so it never turns Correct / Approve as-is into a
+  class move. The hosted desk passes the form
+  to `onDone`, so the producer's `warning` survives the queue refresh. The fake producer merges
+  `field_corrections` for `resolution=correct` with `disposition=complete` (it archived the parked
+  fields untouched), treats a legacy complete with no posted object as the parked public fields,
+  records a legacy complete as `correct` (changed keys, `removed_fields`) or `approve_as_is`, and
+  refuses what `plan_resolution` refuses: approve_as_is / correct with a class change, reclassify
+  with `field_corrections` or with no class given, reject with `field_corrections`.
+  README table cell no longer splits on `|`.
+
+### Added
+
+- **Resolve refusals match llm-mailroom PR #203 head `ab090bd`.** The producer refuses a posted
+  `extracted_data` with any `resolution`, `disposition=resume` included; the fake producer now does
+  too (it refused only `complete`), and both it and `review_actions` use the producer's wording.
+  `contract/source.json` records the `ab090bd` head; the contract bytes are unchanged.
+
+- **llm-mailroom PR #203 follow-ups (pipeline 0.9.3).** The visualizer is ready
+  for the pipeline's calibration + two-way human-review landing before that PR
+  merges; the vendored display contract is provisionally taken from its head
+  (`contract/source.json` records the PR commit and `matches_pin: false`, and
+  the pin + real merge commit come in the bump when #203 lands).
+  - **Contract + floor graph.** `pipeline_schema.py` now reads the graph
+    `edges` (`GRAPH_EDGES`, `GRAPH_EDGE_LABELS`, `GRAPH_START/END`) and knows
+    which stations a run can start on — intake, a review resume that
+    re-extracts (`__start__ → extract`), and a human-applied approval that
+    enters the reporting tail (`__start__ → compile_report`). A new START edge
+    that the floor cannot place is a `contract_gaps()` entry, not a silently
+    mis-stationed envelope. The two new edges are
+    `human_review → compile_report` and `__start__ → compile_report`.
+  - **Human-resume display.** A trace that skips extraction because a reviewer
+    approved or corrected the fields renders REPORT → CATALOG → ARCHIVE (never
+    `unknown`), whether it resumed through `route-for-review` or entered at
+    `compile-report` after a restart. Pinned in `tests/test_interpreter.py`.
+  - **Review causes.** `reconsideration.py` mirrors every cause token the
+    pipeline can park with: the six decision-reviewer tokens that were already
+    missing here (`hollow_extraction`, `sorter_low_confidence`,
+    `reviewer_*`) plus PR #203's state-derived block (`transient_exhausted`,
+    `boss_conflict`, `arbiter_escalated`, `classification_arbiter_escalated`,
+    `unknown_class`, `empty_document`, `unsupported_extraction`,
+    `low_extraction_confidence`, `judge_incomplete`, `judge_error`,
+    `retries_exhausted`, `chunk_failed`). A judge `INCOMPLETE` verdict is
+    `judge_incomplete` (not a report failure) and `JUDGE_ERROR` is its own
+    cause. `cause_labels()` renders a producer catalog row's own
+    `review_causes`; `/api/review/context` returns them as `causes`, and both
+    desks show "producer causes" on the resolve form.
+  - **Resolve proxy.** `POST /api/review/resolve` forwards `resolution`
+    (`approve_as_is` | `correct` | `reclassify` | `reject`),
+    `field_corrections`, `reviewer` and `reject_reason`. Shape errors (unknown
+    resolution, a resolution mixed with a posted `extracted_data`, a malformed
+    corrections object) are refused locally with the producer's wording. The
+    operator login names the `reviewer`, so the producer audit chain and
+    `human_label` record who decided. A racing resolve surfaces the producer's
+    new **409** as an actionable message; a resolve on a document that already
+    left review keeps the legacy 400.
+  - **Human decisions in the desks.** Pixel REVIEW, the Observatory and the
+    optional React desk now offer Approve as-is (archives the fields the
+    reviewer checked — the PR's headline fix, previously "approve" re-ran
+    extraction), Correct (sends only the edited keys as `field_corrections`),
+    Re-extract, Reject, Requeue and Complete (full replacement). A class/subtype
+    change with Approve as-is switches to `reclassify` instead of failing. The
+    status line reports the resolution, reviewer and archived stage, keeps
+    showing after the refresh, and shows the producer's `warning` when a
+    `complete` did not reach the archive. `mailroom-tui` gains `--resolution`,
+    `--field-corrections` and `--reject-reason`.
+  - **Legacy-visible producer changes handled.** `disposition=complete` now
+    archives through the graph tail, so it reports the model's own
+    `extraction_confidence` (never `1.0`), `extraction_source: "human"` and a
+    `warning` when the tail re-parked the document; the fake producer in
+    `tests/fake_producer.py` mirrors the whole contract (resolutions,
+    reject reasons, `human_label`, `review_entered_at`, 409, tail failure) so
+    the desks are exercised against it.
+  - `GET /api/review/context` and the lookup serializer also carry
+    `review_entered_at`, and the resolve forms show how long the document has
+    been parked.
+
+### Changed
+
 - Move the llm-mailroom pin to release tag `v0.9.2` (`9e8f30b2`). The tag's package
   metadata still reads 0.9.1, so the recorded package version stays 0.9.1. The vendored
   display contract is unchanged, and its provenance now records the pinned commit.

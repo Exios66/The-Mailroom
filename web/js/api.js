@@ -506,8 +506,8 @@ const Mailroom = (() => {
     const parked = run.stage === "review";
     const disp = defaultDisposition(run);
     const hint = parked
-      ? "Correct the class if the sorter missed. Resume re-extracts with that class. Record appends an audit row only. Requeue copies the file to the inbox. Complete archives operator extracted_data without another LLM pass."
-      : "This run is not parked in the review bin — Resume and Complete are disabled. Record writes an audit row; Requeue copies the file back to the inbox.";
+      ? "Approve archives the fields the reviewer checked (no LLM pass). Correct sends only your edits (a deleted optional field is cleared to null; the producer refuses deleting a required or list field such as keywords, parties or confidence). Complete replaces the extraction with your JSON. Re-extract re-runs the pipeline under the chosen class. Record appends an audit row only. Requeue copies the file to the inbox."
+      : "This run is not parked in the review bin — Approve, Re-extract and Complete are disabled. Record writes an audit row; Requeue copies the file back to the inbox.";
     const currentType = run.doc_type || "";
     const currentSub = run.doc_subclass || run.contract_subtype || "";
     const hasSubs = (reviewSubclassMap()[currentType] || []).length > 0 || !!currentSub;
@@ -518,7 +518,7 @@ const Mailroom = (() => {
       download: true,
     };
     const openHref = staticMode ? "" : remote.reviewSourceUrl(sourceQs);
-    return `<form class="review-resolve" data-trace="${esc(run.trace_id || "")}" data-filename="${esc(run.filename || "")}" data-doc-id="${esc(run.doc_id || "")}">
+    return `<form class="review-resolve" data-trace="${esc(run.trace_id || "")}" data-filename="${esc(run.filename || "")}" data-doc-id="${esc(run.doc_id || "")}" data-doc-type="${esc(currentType)}" data-doc-subclass="${esc(currentSub)}">
       <div class="review-resolve-head">HUMAN REVIEW</div>
       <p class="review-resolve-hint">${esc(hint)}</p>
       <div class="review-source">
@@ -544,15 +544,18 @@ const Mailroom = (() => {
           <option value="complete" ${parked ? "" : "disabled"}>Complete (human extraction)</option>
         </select>
       </label>
-      <label class="review-disp-label review-extracted-wrap"${parked ? "" : " hidden"}>extracted_data (JSON, required for Complete)
+      <label class="review-disp-label review-extracted-wrap"${parked ? "" : " hidden"}>extracted_data (JSON, used by Approve / Correct / Complete)
         <textarea name="extracted_data" class="review-notes review-extracted" rows="4" placeholder='{"claim_number": "…"}'></textarea>
       </label>
       <div class="review-resolve-btns">
-        <button type="submit" class="px-btn mono review-approve" data-decision="approved">Approve</button>
+        <button type="submit" class="px-btn mono review-approve" data-decision="approved" data-resolution="approve_as_is" ${parked ? "" : "disabled"}>Approve as-is</button>
+        <button type="submit" class="px-btn mono review-correct" data-decision="approved" data-resolution="correct" ${parked ? "" : "disabled"}>Correct</button>
+        <button type="submit" class="px-btn mono review-reextract" data-decision="approved" data-resolution="" ${parked ? "" : "disabled"}>Re-extract</button>
         <button type="submit" class="px-btn mono review-reject" data-decision="rejected">Reject</button>
         <button type="submit" class="px-btn mono review-requeue" data-decision="approved" data-disposition="requeue">Requeue</button>
         <button type="submit" class="px-btn mono review-complete" data-decision="approved" data-disposition="complete" ${parked ? "" : "disabled"}>Complete</button>
       </div>
+      <div class="review-resolve-causes mono" hidden></div>
       <div class="review-resolve-status" aria-live="polite"></div>
     </form>`;
   }
@@ -611,10 +614,33 @@ const Mailroom = (() => {
         filename: form.dataset.filename,
         doc_id: form.dataset.docId,
       })).then((ctx) => {
-        const extracted = ctx && ctx.document && ctx.document.extracted_data;
+        if (!ctx) return;
+        // The producer's own cause tokens (llm-mailroom PR #203 covers every
+        // route into review); labelled server-side by the visualizer.
+        const causes = Array.isArray(ctx.causes) ? ctx.causes : [];
+        const causeEl = form.querySelector(".review-resolve-causes");
+        if (causeEl && causes.length) {
+          causeEl.hidden = false;
+          causeEl.textContent = `producer causes: ${causes.map((c) => (c && c.label) || c).join("; ")}`;
+        }
+        const doc = ctx.document || null;
+        const entered = doc && doc.review_entered_at;
+        const ageEl = form.querySelector(".review-source-label");
+        if (ageEl && entered) {
+          const hours = (Date.now() - Date.parse(entered)) / 3600000;
+          if (Number.isFinite(hours) && hours >= 0) {
+            ageEl.textContent = `DOCUMENT · parked ${Math.floor(hours)}h ago`;
+          }
+        }
+        // ``_``-prefixed keys are producer bookkeeping (``_review``,
+        // ``_report``, ``_lane_b``) — never an editable field.
+        const extracted = publicFields(doc && doc.extracted_data);
         const ta = form.querySelector("textarea[name='extracted_data']");
-        if (ta && extracted && !ta.value) {
-          ta.value = typeof extracted === "string" ? extracted : JSON.stringify(extracted, null, 2);
+        if (extracted && !ta.value) {
+          // Diff base for Correct: only the reviewer's edits become
+          // field_corrections on the producer.
+          form.dataset.parked = JSON.stringify(extracted);
+          ta.value = JSON.stringify(extracted, null, 2);
         }
       }).catch(() => { /* catalog probe is best-effort */ });
       form.addEventListener("submit", async (ev) => {
@@ -622,27 +648,30 @@ const Mailroom = (() => {
         ev.stopPropagation();
         const status = form.querySelector(".review-resolve-status");
         const btn = ev.submitter;
-        const decision = (btn && btn.dataset.decision) || "approved";
+        let decision = (btn && btn.dataset.decision) || "approved";
         const disposition = (btn && btn.dataset.disposition)
           || (form.disposition && form.disposition.value)
           || "resume";
         const notes = (form.notes && form.notes.value) || "";
         const docType = (form.doc_type && form.doc_type.value) || "";
         const docSubclass = (form.doc_subclass && form.doc_subclass.value) || "";
-        let extractedData;
-        const rawExtracted = (form.extracted_data && form.extracted_data.value) || "";
-        if (disposition === "complete" || rawExtracted.trim()) {
-          try {
-            extractedData = rawExtracted.trim() ? JSON.parse(rawExtracted) : undefined;
-          } catch (err) {
-            if (status) status.textContent = "extracted_data is not valid JSON";
-            return;
-          }
-          if (disposition === "complete" && (!extractedData || typeof extractedData !== "object" || Array.isArray(extractedData))) {
-            if (status) status.textContent = "Complete needs an extracted_data JSON object";
-            return;
-          }
+        // What to send (class move, edits, deletions) is one pure planner shared
+        // with the hosted desk: web/js/review_plan.js.
+        const plan = ReviewPlan.plan({
+          resolution: (btn && btn.dataset.resolution) || "",
+          disposition,
+          docType,
+          docSubclass,
+          baseType: form.dataset.docType,
+          baseSub: form.dataset.docSubclass,
+          rawExtracted: (form.extracted_data && form.extracted_data.value) || "",
+          parkedRaw: form.dataset.parked,
+        });
+        if (plan.error) {
+          if (status) status.textContent = plan.error;
+          return;
         }
+        const { resolution, corrections, extractedData } = plan;
         if (status) status.textContent = "submitting…";
         try {
           const payload = {
@@ -655,9 +684,11 @@ const Mailroom = (() => {
             doc_type: docType,
             doc_subclass: docSubclass,
           };
-          if (extractedData) payload.extracted_data = extractedData;
+          if (resolution) payload.resolution = resolution;
+          if (corrections) payload.field_corrections = corrections;
+          if (extractedData && !resolution) payload.extracted_data = extractedData;
           const result = await api.reviewResolve(payload);
-          const msg = `ok — ${result.disposition || disposition} ${result.decision || decision}${result.doc_id ? ` · ${result.doc_id}` : ""}`;
+          const msg = describeResolve(result, { resolution, disposition, decision });
           if (status) status.textContent = msg;
           if (typeof onDone === "function") onDone(result, form);
         } catch (err) {
@@ -665,6 +696,28 @@ const Mailroom = (() => {
         }
       });
     }
+  }
+
+  function publicFields(value) {
+    if (value && typeof value === "string") {
+      try { value = JSON.parse(value); } catch (_err) { return null; }
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const out = {};
+    for (const [key, val] of Object.entries(value)) {
+      if (!key.startsWith("_")) out[key] = val;
+    }
+    return out;
+  }
+
+  function describeResolve(result, { resolution, disposition, decision }) {
+    const out = result || {};
+    const label = out.resolution || resolution
+      || (out.disposition || disposition);
+    const stage = out.complete && out.complete.stage ? ` · stage ${out.complete.stage}` : "";
+    const who = out.reviewer ? ` · ${out.reviewer}` : "";
+    const warn = out.warning ? ` — ${out.warning}` : "";
+    return `ok — ${label} ${out.decision || decision}${who}${stage}${warn}`;
   }
 
   let ws = null;

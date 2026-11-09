@@ -403,8 +403,8 @@ const App = (() => {
     const parked = run.stage === "review";
     const disp = parked ? "resume" : "record";
     const hint = parked
-      ? "Correct the class if the sorter missed. Resume re-extracts with that class. Record writes an audit row only. Requeue copies the file to the inbox. Complete archives operator extracted_data without another LLM pass."
-      : "Not parked in the review bin — Resume and Complete are disabled. Record or requeue instead.";
+      ? "Approve as-is archives the fields the reviewer checked (no LLM pass). Correct sends only your edits (a deleted optional field is cleared to null; the producer refuses deleting a required or list field such as keywords, parties or confidence). Re-extract re-runs the pipeline under the chosen class. Record writes an audit row only. Requeue copies the file to the inbox. Complete replaces the extraction with your JSON."
+      : "Not parked in the review bin — Approve, Correct, Re-extract and Complete are disabled. Record or requeue instead.";
     const currentType = run.doc_type || "";
     const currentSub = run.doc_subclass || run.contract_subtype || "";
     const subs = subclassOptions(currentType, currentSub);
@@ -413,11 +413,11 @@ const App = (() => {
       filename: run.filename || "",
       doc_id: run.doc_id || "",
     });
-    return `<form class="review-resolve" data-trace="${Obs.esc(run.trace_id || "")}" data-filename="${Obs.esc(run.filename || "")}" data-doc-id="${Obs.esc(run.doc_id || "")}">
+    return `<form class="review-resolve" data-trace="${Obs.esc(run.trace_id || "")}" data-filename="${Obs.esc(run.filename || "")}" data-doc-id="${Obs.esc(run.doc_id || "")}" data-doc-type="${Obs.esc(currentType)}" data-doc-subclass="${Obs.esc(currentSub)}">
       <p class="hint">${Obs.esc(hint)}</p>
       <div class="review-source">
         <div class="review-source-toolbar">
-          <span>Document</span>
+          <span class="review-source-label">Document</span>
           <a class="review-source-open" href="${Obs.esc(openHref)}" target="_blank" rel="noopener">Open original</a>
           <span class="review-source-badge" hidden>truncated</span>
         </div>
@@ -438,17 +438,32 @@ const App = (() => {
           <option value="complete" ${parked ? "" : "disabled"}>Complete (human extraction)</option>
         </select>
       </label>
-      <label class="review-extracted-wrap"${parked ? "" : " hidden"}>extracted_data (JSON)
+      <label class="review-extracted-wrap"${parked ? "" : " hidden"}>extracted_data (JSON — used by Approve / Correct / Complete)
         <textarea name="extracted_data" rows="4" placeholder='{"claim_number": "…"}'></textarea>
       </label>
       <div class="toolbar" role="group" aria-label="Review decision">
-        <button type="submit" class="btn" data-decision="approved">Approve</button>
+        <button type="submit" class="btn" data-decision="approved" data-resolution="approve_as_is" ${parked ? "" : "disabled"}>Approve as-is</button>
+        <button type="submit" class="btn" data-decision="approved" data-resolution="correct" ${parked ? "" : "disabled"}>Correct</button>
+        <button type="submit" class="btn btn-quiet" data-decision="approved" data-resolution="" ${parked ? "" : "disabled"}>Re-extract</button>
         <button type="submit" class="btn btn-quiet" data-decision="rejected">Reject</button>
         <button type="submit" class="btn btn-quiet" data-decision="approved" data-disposition="requeue">Requeue</button>
         <button type="submit" class="btn" data-decision="approved" data-disposition="complete" ${parked ? "" : "disabled"}>Complete</button>
       </div>
+      <p class="review-causes hint" hidden></p>
       <p class="review-status" role="status"></p>
     </form>`;
+  }
+
+  function publicFields(value) {
+    if (value && typeof value === "string") {
+      try { value = JSON.parse(value); } catch (_err) { return null; }
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const out = {};
+    for (const [key, val] of Object.entries(value)) {
+      if (!key.startsWith("_")) out[key] = val;
+    }
+    return out;
   }
 
   function fillHostedSubclass(form) {
@@ -504,10 +519,29 @@ const App = (() => {
         filename: form.dataset.filename,
         doc_id: form.dataset.docId,
       })).then((ctx) => {
-        const extracted = ctx && ctx.document && ctx.document.extracted_data;
+        if (!ctx) return;
+        const causes = Array.isArray(ctx.causes) ? ctx.causes : [];
+        const causeEl = form.querySelector(".review-causes");
+        if (causeEl && causes.length) {
+          causeEl.hidden = false;
+          causeEl.textContent = `Producer causes: ${causes.map((c) => (c && c.label) || c).join("; ")}`;
+        }
+        const doc = ctx.document || null;
+        const entered = doc && doc.review_entered_at;
+        const ageEl = form.querySelector(".review-source-label");
+        if (ageEl && entered) {
+          const hours = (Date.now() - Date.parse(entered)) / 3600000;
+          if (Number.isFinite(hours) && hours >= 0) {
+            ageEl.textContent = `Document · parked ${Math.floor(hours)}h ago`;
+          }
+        }
+        // ``_``-prefixed keys are producer bookkeeping (``_review``,
+        // ``_report``, ``_lane_b``) — never an editable field.
+        const extracted = publicFields(doc && doc.extracted_data);
         const ta = form.querySelector("textarea[name='extracted_data']");
-        if (ta && extracted && !ta.value) {
-          ta.value = typeof extracted === "string" ? extracted : JSON.stringify(extracted, null, 2);
+        if (extracted && !ta.value) {
+          form.dataset.parked = JSON.stringify(extracted);
+          ta.value = JSON.stringify(extracted, null, 2);
         }
       }).catch(() => { /* catalog probe is best-effort */ });
       form.addEventListener("submit", async (ev) => {
@@ -522,20 +556,23 @@ const App = (() => {
         const notes = (form.notes && form.notes.value) || "";
         const docType = (form.doc_type && form.doc_type.value) || "";
         const docSubclass = (form.doc_subclass && form.doc_subclass.value) || "";
-        let extractedData;
-        const rawExtracted = (form.extracted_data && form.extracted_data.value) || "";
-        if (disposition === "complete" || rawExtracted.trim()) {
-          try {
-            extractedData = rawExtracted.trim() ? JSON.parse(rawExtracted) : undefined;
-          } catch (_err) {
-            if (status) status.textContent = "extracted_data is not valid JSON";
-            return;
-          }
-          if (disposition === "complete" && (!extractedData || typeof extractedData !== "object" || Array.isArray(extractedData))) {
-            if (status) status.textContent = "Complete needs an extracted_data JSON object";
-            return;
-          }
+        // What to send (class move, edits, deletions) is one pure planner shared
+        // with the pixel console: web/js/review_plan.js (served at /static).
+        const plan = ReviewPlan.plan({
+          resolution: (btn && btn.dataset.resolution) || "",
+          disposition,
+          docType,
+          docSubclass,
+          baseType: form.dataset.docType,
+          baseSub: form.dataset.docSubclass,
+          rawExtracted: (form.extracted_data && form.extracted_data.value) || "",
+          parkedRaw: form.dataset.parked,
+        });
+        if (plan.error) {
+          if (status) status.textContent = plan.error;
+          return;
         }
+        const { resolution, corrections, extractedData } = plan;
         if (status) status.textContent = "Submitting…";
         try {
           const payload = {
@@ -548,18 +585,28 @@ const App = (() => {
             doc_type: docType,
             doc_subclass: docSubclass,
           };
-          if (extractedData) payload.extracted_data = extractedData;
+          if (resolution) payload.resolution = resolution;
+          if (corrections) payload.field_corrections = corrections;
+          if (extractedData && !resolution) payload.extracted_data = extractedData;
           const result = await Obs.api.reviewResolve(payload);
           if (status) {
-            status.textContent = `Saved — ${result.disposition || disposition} ${result.decision || decision}`;
+            const out = result || {};
+            const label = out.resolution || resolution || out.disposition || disposition;
+            const who = out.reviewer ? ` · ${out.reviewer}` : "";
+            const stage = out.complete && out.complete.stage ? ` · stage ${out.complete.stage}` : "";
+            const warn = out.warning ? ` — ${out.warning}` : "";
+            status.textContent = `Saved — ${label} ${out.decision || decision}${who}${stage}${warn}`;
           }
-          if (typeof onDone === "function") onDone(result);
+          if (typeof onDone === "function") onDone(result, form);
         } catch (err) {
           if (status) status.textContent = err.message || String(err);
         }
       });
     }
   }
+
+  // Resolve outcomes survive the refresh that follows them (see refreshReview).
+  const lastResolve = new Map();
 
   async function refreshReview() {
     const el = need("review-list");
@@ -586,7 +633,22 @@ const App = (() => {
       </tr>`);
       el.innerHTML = setup + table("Runs waiting on a human", ["Document", "Type", "Why", "Verdict", "Resolve"], rows);
       bindCards(el);
-      bindReviewForms(el, { onDone: () => refreshReview() });
+      bindReviewForms(el, {
+        onDone: (result, form) => {
+          // Keep the outcome visible across the refresh: the producer's
+          // ``warning`` when a completion did not archive must be readable.
+          const trace = form && form.dataset.trace;
+          const status = form && form.querySelector(".review-status");
+          if (trace && status && status.textContent) lastResolve.set(trace, status.textContent);
+          refreshReview();
+        },
+      });
+      for (const row of el.querySelectorAll("tr")) {
+        const form = row.querySelector(".review-resolve");
+        const status = row.querySelector(".review-status");
+        const saved = form && lastResolve.get(form.dataset.trace);
+        if (saved && status) status.textContent = saved;
+      }
       dbg("traces", { where: "review", count: (data.runs || []).length });
     } catch (err) {
       dbg("review-error", { message: err.message });

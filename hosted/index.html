@@ -85,7 +85,7 @@
   <section id="view-review" class="view" hidden aria-labelledby="review-heading">
     <div class="view-head">
       <h2 id="review-heading">Human review queue</h2>
-      <p>Runs waiting on a person. Correct the doc type or subtype, read the parked file, then Approve (resume extract), Record (audit only), or Requeue (inbox). Requires <code>MAILROOM_PIPELINE_URL</code> and token on the visualizer. Same list as <code>/api/review-queue</code>.</p>
+      <p>Runs waiting on a person. Read the parked file, then approve the fields as-is, correct them, re-extract under a new class, reject with a reason, record the decision for the audit chain, or requeue to the inbox. Requires <code>MAILROOM_PIPELINE_URL</code> and token on the visualizer. Same list as <code>/api/review-queue</code>.</p>
     </div>
     <div id="review-list"></div>
   </section>
@@ -154,6 +154,7 @@
 <script src="/live/static/js/debug.js?v=0.5.1-dmr095"></script>
 <script src="/live/static/js/client.js?v=0.5.1-dmr095"></script>
 <script src="/static/js/dojo-update.js?v=0.5.1-dmr095"></script>
+<script src="/static/js/review_plan.js?v=0.5.1-dmr095"></script>
 <script src="/live/static/js/bert_panels.js?v=0.5.1-dmr095"></script>
 <script src="/live/static/js/app.js?v=0.5.1-dmr095"></script>
 </body>

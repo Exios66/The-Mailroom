@@ -68,6 +68,8 @@ export interface ReviewResolution {
   comment?: string
   doc_type?: string
   extracted_data?: Record<string, unknown>
+  /** Producer `resolution` (llm-mailroom PR #203): approve_as_is | correct | reclassify | reject. */
+  human_resolution?: 'approve_as_is' | 'correct' | 'reclassify' | 'reject'
 }
 
 export interface OpsStatus {

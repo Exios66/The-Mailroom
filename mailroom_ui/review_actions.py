@@ -9,6 +9,16 @@ Producer contract (llm-mailroom ``origin/main``): prefer ``/v1`` aliases;
 resolve body uses ``override_doc_type`` (not ``doc_type``); lookup returns
 ``{"document": serialize_document(...)}`` with ``original_filename``. Producer main now ships ``GET /documents/{id}/source`` and ``POST /upload``;
 older forks may 404 the source route — the visualizer falls back to lookup.
+
+llm-mailroom PR #203 (pipeline 0.9.3) adds the human decision as data:
+``resolution`` (``approve_as_is`` | ``correct`` | ``reclassify`` | ``reject``),
+``field_corrections``, ``reviewer`` and ``reject_reason`` on the same resolve
+route. ``approve_as_is`` / ``correct`` archive the reviewed fields through the
+graph tail (report → catalog → archive, no LLM) and return ``human_label``;
+``disposition=complete`` does the same for a posted full replacement, so its
+``complete`` block now reports the model's own ``extraction_confidence``,
+``extraction_source: "human"`` and a ``warning`` when the tail did not reach
+the archive. A resolve racing another in-flight resolve answers 409.
 """
 
 from __future__ import annotations
@@ -27,13 +37,18 @@ from .pipeline_schema import normalize_review_doc_type, normalize_review_subclas
 from .producer import (
     DECISIONS,
     DISPOSITIONS,
+    REJECT_REASONS,
+    RESOLUTIONS,
     tray_actions_for,
     validate_operator_extraction,
 )
+from .reconsideration import cause_labels
 
 log = logging.getLogger("mailroom.review_actions")
 
 VALID_DISPOSITIONS = DISPOSITIONS
+VALID_RESOLUTIONS = RESOLUTIONS
+VALID_REJECT_REASONS = REJECT_REASONS
 
 
 class ReviewActionError(Exception):
@@ -535,6 +550,83 @@ def _coerce_extracted_data(extracted_data: Any) -> Optional[dict[str, Any]]:
     return extracted_data
 
 
+def _coerce_field_corrections(value: Any) -> Optional[dict[str, Any]]:
+    """Reviewer edits for ``resolution=correct`` (object or JSON string)."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ReviewActionError("field_corrections must be a JSON object", status=400) from exc
+    if not isinstance(value, dict):
+        raise ReviewActionError("field_corrections must be a JSON object", status=400)
+    return {k: v for k, v in value.items() if not str(k).startswith("_")}
+
+
+def _resolution_fields(
+    *,
+    resolution: str = "",
+    field_corrections: Any = None,
+    reviewer: str = "",
+    reject_reason: str = "",
+    disposition: str = "resume",
+    extracted_data: Any = None,
+) -> dict[str, Any]:
+    """Human-decision fields for the resolve body (llm-mailroom PR #203).
+
+    Only the shape is checked here; the producer owns the cross-field rules
+    (a resolution needs a parked review, ``reclassify`` needs a class, an
+    invalid reviewer payload stays parked). Catching the shape locally turns a
+    desk typo into an immediate message instead of a producer round-trip.
+    """
+    extra: dict[str, Any] = {}
+    token = (resolution or "").strip().lower()
+    if token:
+        if token not in VALID_RESOLUTIONS:
+            raise ReviewActionError(
+                "resolution must be one of " + ", ".join(sorted(VALID_RESOLUTIONS)),
+                status=400,
+            )
+        if disposition not in {"resume", "complete"}:
+            raise ReviewActionError(
+                "resolution only applies to disposition=resume or disposition=complete",
+                status=400,
+            )
+        if token == "reject" and disposition == "complete":
+            raise ReviewActionError(
+                "resolution=reject is a failed document; use disposition=resume",
+                status=400,
+            )
+        if extracted_data:
+            # A resolution carries its fields in ``extracted_data`` (approve_as_is)
+            # or ``field_corrections`` (correct); a posted ``extracted_data`` is
+            # ignored by the producer, so refuse it rather than drop the edit.
+            raise ReviewActionError(
+                "extracted_data is not used with a resolution (disposition=resume or "
+                "complete); send field_corrections with resolution=correct (or omit "
+                "resolution for the legacy complete)",
+                status=400,
+            )
+        extra["resolution"] = token
+    corrections = _coerce_field_corrections(field_corrections)
+    if corrections is not None:
+        extra["field_corrections"] = corrections
+    label = (reviewer or "").strip()
+    if label:
+        extra["reviewer"] = label
+    reason = (reject_reason or "").strip().lower()
+    if reason:
+        reason = reason.replace(" ", "_").replace("-", "_")
+        if reason not in VALID_REJECT_REASONS:
+            raise ReviewActionError(
+                "reject_reason must be one of " + ", ".join(VALID_REJECT_REASONS),
+                status=400,
+            )
+        extra["reject_reason"] = reason
+    return extra
+
+
 def review_context(
     *,
     trace_id: str = "",
@@ -563,6 +655,7 @@ def review_context(
         "document": None,
         "audit": None,
         "tray_actions": None,
+        "causes": [],
         "error": None,
     }
     if not (trace_id or filename or doc_id):
@@ -573,6 +666,9 @@ def review_context(
         )
         out["document"] = document
         out["tray_actions"] = tray_actions_for(document.get("stage"))
+        # The producer's own cause tokens (llm-mailroom PR #203 covers every
+        # route into review) rendered with this module's labels.
+        out["causes"] = cause_labels(document.get("review_causes"))
         resolved = str(document.get("doc_id") or doc_id or "")
         if resolved:
             try:
@@ -599,20 +695,47 @@ def resolve_review(
     doc_subclass: str = "",
     override_doc_type: str = "",
     extracted_data: Any = None,
+    resolution: str = "",
+    field_corrections: Any = None,
+    reviewer: str = "",
+    reject_reason: str = "",
     timeout: float = 60.0,
 ) -> dict[str, Any]:
-    """POST /v1/review/{doc_id}/resolve on the producer (JSON body)."""
+    """POST /v1/review/{doc_id}/resolve on the producer (JSON body).
+
+    ``resolution`` is the producer's human decision as data (PR #203):
+    ``approve_as_is`` archives the parked fields the reviewer checked,
+    ``correct`` merges ``field_corrections`` over them, ``reclassify`` re-extracts
+    under a new class and ``reject`` files the document as failed with a
+    ``reject_reason``. Without it the legacy ``decision`` + ``disposition`` pair
+    behaves exactly as before.
+    """
     decision = (decision or "").strip()
-    disposition = (disposition or "resume").strip() or "resume"
-    if decision not in DECISIONS:
-        raise ReviewActionError("decision must be 'approved' or 'rejected'", status=400)
+    disposition = (disposition or "resume").strip().lower() or "resume"
+    resolution = (resolution or "").strip().lower()
     if disposition not in VALID_DISPOSITIONS:
         raise ReviewActionError(
             "disposition must be 'resume', 'record', 'requeue', or 'complete'",
             status=400,
         )
-    extra = _class_override_body(doc_type, doc_subclass, override_doc_type)
     extracted = _coerce_extracted_data(extracted_data)
+    extra = _class_override_body(doc_type, doc_subclass, override_doc_type)
+    extra.update(
+        _resolution_fields(
+            resolution=resolution,
+            field_corrections=field_corrections,
+            reviewer=reviewer,
+            reject_reason=reject_reason,
+            disposition=disposition,
+            extracted_data=extracted,
+        )
+    )
+    if resolution:
+        # The producer derives the decision from the resolution; send the
+        # matching one so a caller that also passed the legacy field agrees.
+        decision = "rejected" if resolution == "reject" else "approved"
+    if decision not in DECISIONS:
+        raise ReviewActionError("decision must be 'approved' or 'rejected'", status=400)
     _require_pipeline()
     token = _token()
     resolved, document = _lookup_or_id(
@@ -633,13 +756,25 @@ def resolve_review(
     }
     if extracted is not None:
         body["extracted_data"] = extracted
-    return _request_json(
-        "POST",
-        producer_url(f"/review/{urllib.parse.quote(resolved)}/resolve"),
-        token=token,
-        body=body,
-        timeout=timeout,
-    )
+    try:
+        return _request_json(
+            "POST",
+            producer_url(f"/review/{urllib.parse.quote(resolved)}/resolve"),
+            token=token,
+            body=body,
+            timeout=timeout,
+        )
+    except ReviewActionError as exc:
+        if exc.status == 409:
+            # llm-mailroom PR #203: a per-document resolve lock refuses a second
+            # resolve of the same document instead of racing it.
+            raise ReviewActionError(
+                "another resolve for this document is already in progress — "
+                "wait for it to finish, then refresh the queue",
+                status=409,
+                detail=exc.detail,
+            ) from exc
+        raise
 
 
 INBOX_SETUP = (

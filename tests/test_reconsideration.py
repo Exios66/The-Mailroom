@@ -99,6 +99,54 @@ def test_v4_archived_miss_also_reconsiders():
     assert run.needs_human is True
 
 
+def test_judge_incomplete_is_its_own_cause_not_a_report_failure():
+    """llm-mailroom PR #203: ``INCOMPLETE`` means the extraction misses the
+    source, so it is ``judge_incomplete`` — not ``reporting_incomplete``."""
+    from mailroom_ui.reconsideration import JUDGE_INCOMPLETE, REPORTING_INCOMPLETE
+
+    run = _run(make_trace("t-judge-incomplete", verdict="INCOMPLETE"))
+    assert JUDGE_INCOMPLETE in run.review_causes
+    assert REPORTING_INCOMPLETE not in run.review_causes
+
+
+def test_judge_error_verdict_is_a_cause():
+    from mailroom_ui.reconsideration import JUDGE_ERROR
+
+    run = _run(make_trace("t-judge-error", verdict="JUDGE_ERROR"))
+    assert JUDGE_ERROR in run.review_causes
+
+
+def test_producer_cause_tokens_all_have_labels():
+    """Every token llm-mailroom PR #203 can park a document with renders."""
+    from mailroom_ui import reconsideration as rc
+
+    tokens = (
+        "class_miss", "subclass_miss", "extraction_miss", "judge_miss",
+        "judge_partial", "schema_invalid", "guardrail", "parse_error",
+        "reporting_incomplete", "needs_judge_review", "hollow_extraction",
+        "sorter_low_confidence", "reviewer_unavailable", "reviewer_no_text",
+        "reviewer_ineligible_label", "reviewer_disagreement",
+        "reviewer_low_confidence", "transient_exhausted", "boss_conflict",
+        "arbiter_escalated", "classification_arbiter_escalated",
+        "unknown_class", "empty_document", "unsupported_extraction",
+        "low_extraction_confidence", "judge_incomplete", "judge_error",
+        "retries_exhausted", "chunk_failed",
+    )
+    missing = [t for t in tokens if t not in rc.CAUSE_LABELS]
+    assert missing == []
+
+
+def test_cause_labels_render_known_and_unknown_tokens():
+    from mailroom_ui.reconsideration import cause_labels
+
+    labelled = cause_labels(["chunk_failed", "chunk_failed", "brand_new_cause"])
+    assert labelled == [
+        {"token": "chunk_failed", "label": "one or more extraction windows failed"},
+        {"token": "brand_new_cause", "label": "brand new cause"},
+    ]
+    assert cause_labels(None) == []
+
+
 def test_failed_stage_is_not_reconsideration():
     run = _run(make_trace("t-fail", stage="failed", verdict="MISS"))
     assert run.needs_human is False

@@ -25,7 +25,13 @@ from typing import Any, Optional
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from mailroom_ui.producer import DECISIONS, DISPOSITIONS, serialize_catalog_row
+from mailroom_ui.producer import (
+    DECISIONS,
+    DISPOSITIONS,
+    REJECT_REASONS,
+    RESOLUTIONS,
+    serialize_catalog_row,
+)
 
 DEMO_TOKEN = "demo-review-token"
 
@@ -54,7 +60,11 @@ def demo_catalog() -> dict[str, dict[str, Any]]:
                 "parties": ["Helios Holdings Inc.", "Northwind Target LLC"],
                 "consideration": "all-stock",
                 "indemnification": None,
+                "_review": {
+                    "review_causes": ["low_extraction_confidence", "judge_partial"],
+                },
             },
+            "review_entered_at": _now(),
             "created_at": _now(),
             "updated_at": _now(),
         },
@@ -76,7 +86,11 @@ def demo_catalog() -> dict[str, dict[str, Any]]:
                 "claimant": "Jordan Hale",
                 "loss_date": "2026-03-12",
                 "status": "open",
+                "_review": {
+                    "review_causes": ["chunk_failed", "retries_exhausted"],
+                },
             },
+            "review_entered_at": _now(),
             "created_at": _now(),
             "updated_at": _now(),
         },
@@ -108,9 +122,20 @@ class FakeProducerStore:
         self.audit: dict[str, list[dict[str, Any]]] = {doc_id: [] for doc_id in self.documents}
         self.queued: list[dict[str, str]] = []
         self.inbox_pending = 1
+        # llm-mailroom PR #203: a per-document resolve lock answers 409 for a
+        # racing resolve, and a completed review archives through the report
+        # tail (which can fail and re-park). Tests drive both switches.
+        self.inflight: set[str] = set()
+        self.archive_fails = False
 
     def serialize(self, doc: dict[str, Any]) -> dict[str, Any]:
-        return serialize_catalog_row(doc)
+        payload = serialize_catalog_row(doc)
+        # The pinned producer's serializer predates PR #203; the stub emits the
+        # field the real one now does so the desk's parked-age line is exercised.
+        entered = doc.get("review_entered_at")
+        if entered and not payload.get("review_entered_at"):
+            payload["review_entered_at"] = entered
+        return payload
 
     def find(self, *, doc_id: str = "", trace_id: str = "", filename: str = "") -> Optional[dict[str, Any]]:
         if doc_id and doc_id in self.documents:
@@ -147,6 +172,10 @@ class FakeProducerStore:
         if override_doc_type:
             kind = normalize_review_doc_type(str(override_doc_type))
             if kind:
+                if kind != doc.get("doc_type"):
+                    # Belong to the old class (llm-mailroom apply_classification_override).
+                    doc["doc_subclass"] = None
+                    doc["contract_subtype"] = None
                 doc["doc_type"] = kind
         if doc_subclass is not None and str(doc_subclass).strip():
             sub = str(doc_subclass).strip()
@@ -267,10 +296,31 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
             raw = body.get("extracted_data")
             if raw:
                 body["extracted_data"] = json.loads(str(raw))
+        if doc_id in store.inflight:
+            raise HTTPException(409, f"A resolve for document {doc_id} is already in progress")
 
         decision = str(body.get("decision") or "").strip()
         notes = str(body.get("notes") or "")
         disposition = str(body.get("disposition") or "resume").strip() or "resume"
+        resolution = str(body.get("resolution") or "").strip().lower()
+        reviewer = str(body.get("reviewer") or request.headers.get("x-reviewer") or "").strip()
+        reject_reason = str(body.get("reject_reason") or "").strip().lower()
+        if resolution:
+            if resolution not in RESOLUTIONS:
+                raise HTTPException(400, f"resolution must be one of {sorted(RESOLUTIONS)}")
+            if disposition not in {"resume", "complete"}:
+                raise HTTPException(
+                    400, "resolution only applies to disposition=resume or disposition=complete"
+                )
+            if body.get("extracted_data"):
+                # Mirrors llm-mailroom src/api/main.py: any resolution, resume included.
+                raise HTTPException(
+                    400,
+                    "extracted_data is not used with a resolution (disposition=resume or "
+                    "complete); send field_corrections with resolution=correct (or omit "
+                    "resolution for the legacy complete)",
+                )
+            decision = decision or ("rejected" if resolution == "reject" else "approved")
         if decision not in DECISIONS:
             raise HTTPException(400, "decision must be 'approved' or 'rejected'")
         if disposition not in DISPOSITIONS:
@@ -278,10 +328,13 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
         rec = store.documents.get(doc_id)
         if rec is None:
             raise HTTPException(404, f"Manifest not found for doc_id: {doc_id}")
+        if reject_reason and reject_reason not in REJECT_REASONS:
+            raise HTTPException(400, f"reject_reason must be one of {list(REJECT_REASONS)}")
+        before = deepcopy(rec)
         try:
             store.apply_override(
                 rec,
-                override_doc_type=body.get("override_doc_type"),
+                override_doc_type=body.get("override_doc_type") or body.get("doc_type"),
                 doc_subclass=body.get("doc_subclass"),
                 contract_subtype=body.get("contract_subtype"),
             )
@@ -316,14 +369,131 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
                 "use disposition=record or disposition=requeue",
             )
 
-        if disposition == "complete":
-            if decision != "approved":
+        parked_all = dict(rec.get("extracted_data") or {})
+        parked = {k: v for k, v in parked_all.items() if not str(k).startswith("_")}
+        # Reviewer evidence survives the archive (the producer copies its
+        # ``_review`` block forward on every catalog write).
+        review_block = parked_all.get("_review") if isinstance(parked_all.get("_review"), dict) else None
+        corrections = {
+            k: v for k, v in (body.get("field_corrections") or {}).items()
+            if not str(k).startswith("_")
+        } if isinstance(body.get("field_corrections"), dict) else {}
+
+        # llm-mailroom ``plan_resolution`` inputs: what the override moved.
+        class_override = bool(
+            str(body.get("override_doc_type") or body.get("doc_type") or "").strip()
+            or str(body.get("doc_subclass") or "").strip()
+            or str(body.get("contract_subtype") or "").strip()
+        )
+        class_changed = bool(rec.get("doc_type")) and rec.get("doc_type") != before.get("doc_type")
+        details_changed = not class_changed and (
+            rec.get("contract_subtype") != before.get("contract_subtype")
+            or rec.get("doc_subclass") != before.get("doc_subclass")
+        )
+        if resolution == "reject" and corrections:
+            raise HTTPException(400, "field_corrections do not apply to resolution=reject")
+        if resolution in {"approve_as_is", "correct"}:
+            if class_changed:
+                raise HTTPException(
+                    400,
+                    "the parked fields belong to the old class; use resolution=reclassify "
+                    "to change doc_type" if resolution == "approve_as_is"
+                    else "resolution=correct cannot change doc_type; use resolution=reclassify",
+                )
+            if details_changed and parked:
+                raise HTTPException(
+                    400,
+                    "the parked fields were extracted for the old subtype/subclass; use "
+                    "resolution=reclassify to change it" if resolution == "approve_as_is"
+                    else "resolution=correct cannot change the subtype/subclass of parked "
+                    "fields; use resolution=reclassify",
+                )
+        if resolution == "reclassify":
+            if corrections:
+                raise HTTPException(
+                    400, "reclassify takes no field_corrections (the document is re-extracted)"
+                )
+            if not class_override and not (class_changed or details_changed):
+                raise HTTPException(
+                    400,
+                    "resolution=reclassify requires doc_type (or override_doc_type), "
+                    "doc_subclass or contract_subtype",
+                )
+
+        human_label: dict[str, Any] = {
+            "decision": decision,
+            "resolution": resolution or ("reject" if decision == "rejected" else "approve_as_is"),
+            "doc_type": rec.get("doc_type"),
+            "doc_subclass": rec.get("doc_subclass"),
+            "field_corrections": corrections,
+            "reviewer": reviewer or "human_reviewer",
+            "resolved_at": _now(),
+            "notes": notes,
+            "reject_reason": reject_reason or None,
+            # Snapshot of what the model said BEFORE any override/merge.
+            "model_snapshot": {
+                "doc_type": before.get("doc_type"),
+                "doc_subclass": before.get("doc_subclass"),
+                "extraction_confidence": before.get("extraction_confidence"),
+                "extracted_data": before.get("extracted_data"),
+            },
+        }
+
+        if resolution == "reject" or (resolution == "" and disposition != "complete"
+                                      and decision == "rejected"):
+            if resolution == "reject" and not reject_reason:
+                raise HTTPException(
+                    400, f"resolution=reject requires reject_reason (one of {list(REJECT_REASONS)})"
+                )
+            rec["review_decision"] = "rejected"
+            rec["stage"] = "failed"
+            rec["reject_reason"] = reject_reason or None
+            rec["human_label"] = human_label
+            store.append_audit(doc_id, "review_rejected", notes, {"disposition": "resume"})
+            return {"status": "ok", "doc_id": doc_id, "decision": "rejected",
+                    "disposition": "resume", "resolution": human_label["resolution"],
+                    "reviewer": human_label["reviewer"], "notes": notes,
+                    "human_label": human_label}
+
+        if resolution == "reclassify":
+            # Re-extraction under the manifest class: no reviewer fields to apply.
+            rec["review_decision"] = "approved"
+            rec["stage"] = "extract"
+            rec["human_label"] = human_label
+            store.append_audit(doc_id, "review_approved", notes,
+                               {"disposition": "resume", "resumed_stage": "extract"})
+            return {"status": "ok", "doc_id": doc_id, "decision": "approved",
+                    "disposition": "resume", "resolution": "reclassify",
+                    "reviewer": human_label["reviewer"], "notes": notes,
+                    "human_label": human_label,
+                    "resume": {"stage": "extract", "doc_type": rec.get("doc_type")}}
+
+        if resolution or disposition == "complete":
+            if disposition == "complete" and decision != "approved":
                 raise HTTPException(400, "disposition=complete requires decision=approved")
-            extracted = body.get("extracted_data")
-            if extracted is None or extracted == {}:
-                extracted = rec.get("extracted_data")
+            if resolution == "approve_as_is" and corrections:
+                raise HTTPException(
+                    400, "approve_as_is takes no field_corrections; use resolution=correct"
+                )
+            if resolution == "correct" and not corrections:
+                raise HTTPException(400, "resolution=correct requires non-empty field_corrections")
+            if resolution:
+                # Any resolution (resume or complete alike) works from the
+                # parked fields plus field_corrections, as in llm-mailroom
+                # ``plan_resolution``; a posted extracted_data was refused above.
+                extracted = {**parked, **corrections} if corrections else dict(parked)
+            else:
+                # Legacy complete (no resolution): the posted object is a FULL
+                # replacement, else the parked public fields.
+                extracted = body.get("extracted_data")
+                if extracted is None or extracted == {}:
+                    extracted = dict(parked)
+                if isinstance(extracted, dict):
+                    extracted = {k: v for k, v in extracted.items() if not str(k).startswith("_")}
             if not isinstance(extracted, dict) or not extracted:
-                raise HTTPException(400, "disposition=complete requires extracted_data object")
+                raise HTTPException(
+                    400, "Document has no parked extraction to approve; use disposition=resume"
+                )
             kind = rec.get("doc_type")
             if kind:
                 try:
@@ -332,31 +502,89 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
                     extracted = validate_operator_extraction(str(kind), extracted)
                 except ValueError as exc:
                     raise HTTPException(400, str(exc)) from exc
-            rec["extracted_data"] = extracted
+            if not resolution and isinstance(extracted, dict):
+                # llm-mailroom plan_resolution, legacy complete: recorded as
+                # ``correct`` (changed keys as field_corrections; a parked key the
+                # posted object leaves out is a removal) or ``approve_as_is``.
+                changed = {k: v for k, v in extracted.items() if k not in parked or parked[k] != v}
+                removed = sorted(
+                    k for k in parked
+                    if k not in extracted and k not in ("confidence", "reasoning", "mock_extraction")
+                )
+                human_label["resolution"] = (
+                    "correct" if (changed or removed or class_changed) else "approve_as_is"
+                )
+                human_label["field_corrections"] = changed
+                if removed:
+                    human_label["removed_fields"] = removed
+            if store.archive_fails:
+                # The report/archive tail can re-park: decision stands, the
+                # completion does not (llm-mailroom PR #203).
+                rec["extracted_data"] = {
+                    **extracted,
+                    "_report": {"status": "failed"},
+                    **({"_review": review_block} if review_block else {}),
+                }
+                rec["stage"] = "review"
+                rec["review_decision"] = "approved"
+                rec["extraction_source"] = "human"
+                rec["human_label"] = human_label
+                store.append_audit(doc_id, "review_approved", notes,
+                                   {"disposition": "complete", "archived": False})
+                return {
+                    "status": "ok", "doc_id": doc_id, "decision": "approved",
+                    "disposition": "complete", "resolution": human_label["resolution"],
+                    "reviewer": human_label["reviewer"], "notes": notes,
+                    "human_label": human_label,
+                    "warning": "document did not reach the archive (stage: review); see complete.stage",
+                    "complete": {
+                        "stage": "review",
+                        "doc_type": rec.get("doc_type"),
+                        "extraction_confidence": rec.get("extraction_confidence"),
+                        "extraction_source": "human",
+                        "extraction_attempts": 0,
+                        "extracted_data": extracted,
+                    },
+                }
+            rec["extracted_data"] = {
+                **extracted,
+                "_report": {"status": "ok"},
+                **({"_review": review_block} if review_block else {}),
+            }
             rec["stage"] = "archived"
             rec["review_decision"] = "approved"
+            rec["extraction_source"] = "human"
+            rec["human_label"] = human_label
             store.append_audit(doc_id, "review_completed", notes,
                                {"disposition": "complete", "stage": "archived"})
             return {
-                "status": "ok", "doc_id": doc_id, "decision": decision,
-                "disposition": "complete", "notes": notes,
-                "complete": {"stage": "archived"},
+                "status": "ok", "doc_id": doc_id, "decision": "approved",
+                "disposition": "complete", "resolution": human_label["resolution"],
+                "reviewer": human_label["reviewer"], "notes": notes,
+                "human_label": human_label,
+                "complete": {
+                    "stage": "archived",
+                    "doc_type": rec.get("doc_type"),
+                    # The model's own number, never 1.0 for a human edit.
+                    "extraction_confidence": rec.get("extraction_confidence"),
+                    "extraction_source": "human",
+                    "extraction_attempts": 0,
+                    "extracted_data": extracted,
+                    "archive_path": f"archive/{rec.get('doc_type')}/"
+                                    f"{rec.get('original_filename')}",
+                },
             }
-
-        if decision == "rejected":
-            rec["review_decision"] = "rejected"
-            rec["stage"] = "failed"
-            store.append_audit(doc_id, "review_rejected", notes, {"disposition": "resume"})
-            return {"status": "ok", "doc_id": doc_id, "decision": decision,
-                    "disposition": "resume", "notes": notes}
 
         rec["review_decision"] = "approved"
         rec["stage"] = "archived"
+        rec["human_label"] = human_label
         store.append_audit(doc_id, "review_approved", notes,
                            {"disposition": "resume", "resumed_stage": "extract"})
         return {
             "status": "ok", "doc_id": doc_id, "decision": decision,
-            "disposition": "resume", "notes": notes,
+            "disposition": "resume", "resolution": human_label["resolution"],
+            "reviewer": human_label["reviewer"], "notes": notes,
+            "human_label": human_label,
             "resume": {"stage": "extract", "doc_type": rec.get("doc_type")},
         }
 

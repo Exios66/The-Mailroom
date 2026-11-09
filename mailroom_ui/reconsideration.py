@@ -16,7 +16,9 @@ from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from .pipeline_schema import EXTRACT_CLASS_ALIASES, PipelineSchema, canonical_score_name
 
-# Canonical cause tokens (keep in sync with llm-mailroom).
+# Canonical cause tokens (keep in sync with llm-mailroom
+# ``pipeline/reconsideration.py``; llm-mailroom PR #203 added the state-derived
+# block and made every route into human review name at least one cause).
 CLASS_MISS = "class_miss"
 SUBCLASS_MISS = "subclass_miss"
 EXTRACTION_MISS = "extraction_miss"
@@ -27,6 +29,29 @@ GUARDRAIL = "guardrail"
 PARSE_ERROR = "parse_error"
 REPORTING_INCOMPLETE = "reporting_incomplete"
 NEEDS_JUDGE = "needs_judge_review"
+HOLLOW_EXTRACTION = "hollow_extraction"
+# Decision-model reviewer causes (``pipeline/decision_review.py``).
+SORTER_LOW_CONFIDENCE = "sorter_low_confidence"
+REVIEWER_UNAVAILABLE = "reviewer_unavailable"
+REVIEWER_NO_TEXT = "reviewer_no_text"
+REVIEWER_INELIGIBLE_LABEL = "reviewer_ineligible_label"
+REVIEWER_DISAGREEMENT = "reviewer_disagreement"
+REVIEWER_LOW_CONFIDENCE = "reviewer_low_confidence"
+# State-derived causes (llm-mailroom PR #203): the park reason rebuilt from
+# routing state, so a live run with no ground truth and no scores still names
+# why it stopped. These arrive on a producer catalog row's ``review_causes``.
+TRANSIENT_EXHAUSTED = "transient_exhausted"
+BOSS_CONFLICT = "boss_conflict"
+ARBITER_ESCALATED = "arbiter_escalated"
+CLASS_ARBITER_ESCALATED = "classification_arbiter_escalated"
+UNKNOWN_CLASS = "unknown_class"
+EMPTY_DOCUMENT = "empty_document"
+UNSUPPORTED_EXTRACTION = "unsupported_extraction"
+LOW_EXTRACTION_CONFIDENCE = "low_extraction_confidence"
+JUDGE_INCOMPLETE = "judge_incomplete"
+JUDGE_ERROR = "judge_error"
+RETRIES_EXHAUSTED = "retries_exhausted"
+CHUNK_FAILED = "chunk_failed"
 
 CAUSE_LABELS: dict[str, str] = {
     CLASS_MISS: "classification miss vs ground truth",
@@ -39,6 +64,28 @@ CAUSE_LABELS: dict[str, str] = {
     PARSE_ERROR: "parse error",
     REPORTING_INCOMPLETE: "report / completeness incomplete",
     NEEDS_JUDGE: "deterministic scorer wanted a judge that the high-conf path skipped",
+    HOLLOW_EXTRACTION: "hollow extraction payload (no public fields)",
+    SORTER_LOW_CONFIDENCE: "sorter confidence below the low threshold",
+    REVIEWER_UNAVAILABLE: "decision reviewer returned no valid answer",
+    REVIEWER_NO_TEXT: "document has no usable text for the decision reviewer",
+    REVIEWER_INELIGIBLE_LABEL: "sorter or reviewer label is not an eligible class",
+    REVIEWER_DISAGREEMENT: "sorter and decision reviewer labels disagree",
+    REVIEWER_LOW_CONFIDENCE: (
+        "decision reviewer confidence missing or below the class cutoff, "
+        "or no valid cutoff for the class"
+    ),
+    TRANSIENT_EXHAUSTED: "provider errors outlasted the transient retry budget",
+    BOSS_CONFLICT: "conflict with the matter record that the boss did not clear",
+    ARBITER_ESCALATED: "arbiter escalated the extraction to a person",
+    CLASS_ARBITER_ESCALATED: "classification arbiter did not accept a class",
+    UNKNOWN_CLASS: "document class is unknown or not extractable",
+    EMPTY_DOCUMENT: "document has no readable text",
+    UNSUPPORTED_EXTRACTION: "no specialist extractor for this class",
+    LOW_EXTRACTION_CONFIDENCE: "extraction confidence below the low band after retries",
+    JUDGE_INCOMPLETE: "judge verdict INCOMPLETE — extraction misses the source",
+    JUDGE_ERROR: "judge verification failed",
+    RETRIES_EXHAUSTED: "confidence retry budget spent without a settled answer",
+    CHUNK_FAILED: "one or more extraction windows failed",
 }
 
 _TRUTHY_ZERO = frozenset({0, 0.0, "0", "false", "False", False})
@@ -143,6 +190,12 @@ def collect_review_causes(
         causes.append(JUDGE_MISS)
     elif upper == "PARTIAL":
         causes.append(JUDGE_PARTIAL)
+    elif upper == "INCOMPLETE":
+        # llm-mailroom PR #203: the judge's own "extraction misses the source"
+        # verdict, distinct from a report/completeness failure.
+        causes.append(JUDGE_INCOMPLETE)
+    elif upper == "JUDGE_ERROR":
+        causes.append(JUDGE_ERROR)
 
     if _is_falsey_flag(_score(scores, "schema_valid")):
         causes.append(SCHEMA_INVALID)
@@ -174,6 +227,25 @@ def format_causes(causes: Sequence[str]) -> Optional[str]:
         return None
     labels = [CAUSE_LABELS.get(c, c.replace("_", " ")) for c in causes]
     return "reconsider: " + "; ".join(labels)
+
+
+def cause_labels(tokens: Optional[Sequence[Any]]) -> list[dict[str, str]]:
+    """Producer ``review_causes`` tokens as ``{token, label}`` pairs.
+
+    The pipeline's own causes travel on a parked catalog row (``review_causes``)
+    and use the same vocabulary as this module. Unknown tokens keep their raw
+    spelling plus a derived label, so a new pipeline token renders immediately
+    instead of disappearing.
+    """
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in tokens or ():
+        token = str(raw or "").strip()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        out.append({"token": token, "label": CAUSE_LABELS.get(token, token.replace("_", " "))})
+    return out
 
 
 def should_reconsider(stage: Optional[str], causes: Iterable[str]) -> bool:

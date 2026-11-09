@@ -49,6 +49,41 @@ CONTRACT_NODES: dict[str, dict[str, str]] = {
 }
 CONTRACT_SPAN_TYPES: dict[str, str] = dict(CONTRACT["spans"])
 
+
+def _graph_edges(contract: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    graph = contract.get("graph") or {}
+    return tuple(
+        (str(edge.get("source")), str(edge.get("target")))
+        for edge in graph.get("edges") or ()
+        if edge.get("source") and edge.get("target")
+    )
+
+
+def _edge_labels(contract: dict[str, Any]) -> dict[tuple[str, str], str]:
+    """Conditional-edge label by (source, target) — ``failed`` on review→end."""
+    graph = contract.get("graph") or {}
+    return {
+        (str(edge.get("source")), str(edge.get("target"))): str(edge["label"])
+        for edge in graph.get("edges") or ()
+        if edge.get("source") and edge.get("target") and edge.get("label")
+    }
+
+
+# Compiled graph wiring (ADR-001 contract). The floor keeps its own station
+# order; the edges are what tell us a run may enter or leave a station in a
+# shape the station order cannot guess (a human-resolved approval starts its
+# resumed run at the reporting tail, not at intake).
+GRAPH_START: str = str((CONTRACT.get("graph") or {}).get("start") or "__start__")
+GRAPH_END: str = str((CONTRACT.get("graph") or {}).get("end") or "__end__")
+GRAPH_EDGES: tuple[tuple[str, str], ...] = _graph_edges(CONTRACT)
+GRAPH_EDGE_LABELS: dict[tuple[str, str], str] = _edge_labels(CONTRACT)
+
+# Stations a run can legitimately START on. ``__start__`` goes to intake
+# normally, to extraction when a review resume re-extracts under the manifest
+# class, and to the reporting tail when a reviewer's own fields are applied on
+# a process that lost its interrupt checkpoint (llm-mailroom PR #203).
+RESUME_ENTRY_STAGES: frozenset[Stage] = frozenset({Stage.EXTRACT, Stage.COMPILE_REPORT})
+
 # Verb-first observation names (traced_node) plus LangGraph node names, so
 # a floor envelope never falls through to INBOX/unknown when the producer
 # records the underscored graph id instead of the display span.
@@ -604,6 +639,20 @@ def contract_gaps(contract: Optional[dict[str, Any]] = None) -> list[str]:
     for span in sorted(spans):
         if span not in SPAN_STAGE_MAP and span not in non_station:
             gaps.append(f"span {span!r} has no floor stage")
+
+    start = str((c.get("graph") or {}).get("start") or GRAPH_START)
+    for source, target in _graph_edges(c):
+        if source != start:
+            continue
+        # A new entry point changes where the floor must put a fresh envelope.
+        stage = SPAN_STAGE_MAP.get(target)
+        if stage is None:
+            gaps.append(f"start edge to {target!r} has no floor stage")
+        elif stage not in {Stage.INTAKE} | RESUME_ENTRY_STAGES:
+            gaps.append(
+                f"start edge to {target!r} enters at {stage.value!r}, "
+                "which is not a known run entry"
+            )
 
     upstream_names = set(spans) | set(nodes)
     for name in sorted(SPAN_STAGE_MAP):
