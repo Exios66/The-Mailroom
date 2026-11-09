@@ -11,8 +11,8 @@
  *    resolution=reclassify, which re-extracts and takes no field_corrections;
  *  - field_corrections are MERGED over the parked fields, so a key the reviewer
  *    removed from the JSON only reaches the producer as an explicit null (the
- *    producer has no delete: it clears an optional field, and refuses a
- *    required one with a schema 400);
+ *    producer has no delete: it clears an optional field, and its schema check
+ *    refuses a required or list field such as keywords, parties or confidence);
  *  - extracted_data is refused with any resolution, so it is only ever sent
  *    for the legacy Complete (no resolution), which replaces the extraction.
  */
@@ -59,8 +59,12 @@ var ReviewPlan = (() => {
     }
   }
 
+  /* An empty select value ("(keep current)" doc type, "(none / keep)" subtype)
+   * means "unchanged": the visualizer's review_actions drops it from the request,
+   * so the producer sees no move. Only a non-empty, different value is a move. */
   function classMoved(docType, docSubclass, baseType, baseSub) {
-    return (docType || "") !== (baseType || "") || (docSubclass || "") !== (baseSub || "");
+    return (!!docType && docType !== (baseType || ""))
+      || (!!docSubclass && docSubclass !== (baseSub || ""));
   }
 
   /* Decide what to send for one submit.

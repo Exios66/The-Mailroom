@@ -403,7 +403,7 @@ const App = (() => {
     const parked = run.stage === "review";
     const disp = parked ? "resume" : "record";
     const hint = parked
-      ? "Approve as-is archives the fields the reviewer checked (no LLM pass). Correct sends only your edits (a field you delete is cleared to null). Re-extract re-runs the pipeline under the chosen class. Record writes an audit row only. Requeue copies the file to the inbox. Complete replaces the extraction with your JSON."
+      ? "Approve as-is archives the fields the reviewer checked (no LLM pass). Correct sends only your edits (a deleted optional field is cleared to null; the producer refuses deleting a required or list field such as keywords, parties or confidence). Re-extract re-runs the pipeline under the chosen class. Record writes an audit row only. Requeue copies the file to the inbox. Complete replaces the extraction with your JSON."
       : "Not parked in the review bin — Approve, Correct, Re-extract and Complete are disabled. Record or requeue instead.";
     const currentType = run.doc_type || "";
     const currentSub = run.doc_subclass || run.contract_subtype || "";

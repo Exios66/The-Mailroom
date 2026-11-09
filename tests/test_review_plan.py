@@ -218,3 +218,44 @@ def test_reextract_and_reject_pass_through():
         out = _plan(resolution=res)
         assert out["resolution"] == res
         assert out.get("corrections") is None
+
+
+# ---- empty select = unchanged ---------------------------------------------
+
+@needs_node
+@pytest.mark.parametrize("which", ["type", "subtype"])
+def test_empty_select_is_not_a_class_move_for_correct(which):
+    """The desks' "(keep current)" / "(none / keep)" options are empty strings and
+    review_actions._class_override_body drops them, so the producer sees no move:
+    a Correct with an edit must stay a plain correct, not a class-change error."""
+    base = {"baseType": "contract", "baseSub": "nda"}
+    sel = {"docType": ""} if which == "type" else {"docSubclass": ""}
+    out = _plan(
+        resolution="correct", rawExtracted=_edited(indemnification="capped"),
+        **{"docType": "contract", "docSubclass": "nda", **base, **sel},
+    )
+    assert out.get("error") is None
+    assert out["resolution"] == "correct"
+    assert out["corrections"] == {"indemnification": "capped"}
+
+
+@needs_node
+@pytest.mark.parametrize("which", ["type", "subtype"])
+def test_empty_select_is_not_a_class_move_for_approve_as_is(which):
+    """Approve as-is with an empty select must stay approve_as_is (reclassify would
+    be a producer 400: "requires doc_type ...")."""
+    base = {"baseType": "contract", "baseSub": "nda"}
+    sel = {"docType": ""} if which == "type" else {"docSubclass": ""}
+    out = _plan(
+        resolution="approve_as_is", rawExtracted=json.dumps(PARKED),
+        **{"docType": "contract", "docSubclass": "nda", **base, **sel},
+    )
+    assert out == {"resolution": "approve_as_is", "extractedData": PARKED}
+
+
+@needs_node
+def test_a_different_non_empty_value_is_still_a_move():
+    out = _plan(resolution="approve_as_is", docType="contract", baseType="merger_agreement")
+    assert out["resolution"] == "reclassify"
+    out = _plan(resolution="approve_as_is", docSubclass="nda", baseSub="")
+    assert out["resolution"] == "reclassify"

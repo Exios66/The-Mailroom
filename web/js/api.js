@@ -506,7 +506,7 @@ const Mailroom = (() => {
     const parked = run.stage === "review";
     const disp = defaultDisposition(run);
     const hint = parked
-      ? "Approve archives the fields the reviewer checked (no LLM pass). Correct sends only your edits (a field you delete is cleared to null). Complete replaces the extraction with your JSON. Re-extract re-runs the pipeline under the chosen class. Record appends an audit row only. Requeue copies the file to the inbox."
+      ? "Approve archives the fields the reviewer checked (no LLM pass). Correct sends only your edits (a deleted optional field is cleared to null; the producer refuses deleting a required or list field such as keywords, parties or confidence). Complete replaces the extraction with your JSON. Re-extract re-runs the pipeline under the chosen class. Record appends an audit row only. Requeue copies the file to the inbox."
       : "This run is not parked in the review bin — Approve, Re-extract and Complete are disabled. Record writes an audit row; Requeue copies the file back to the inbox.";
     const currentType = run.doc_type || "";
     const currentSub = run.doc_subclass || run.contract_subtype || "";

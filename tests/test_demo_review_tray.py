@@ -331,3 +331,77 @@ def test_resolve_refuses_extracted_data_with_resume_resolution():
                 "extracted_data is not used with a resolution (disposition=resume or complete)"
                 in refused.json()["detail"]
             )
+
+
+def _resolve(store, doc_id, **body):
+    with TestClient(create_fake_producer(store)) as client:
+        return client.post(f"/v1/review/{doc_id}/resolve", headers=_auth(), json=body)
+
+
+def test_fake_producer_refuses_approve_as_is_with_a_class_change():
+    store = FakeProducerStore()
+    r = _resolve(store, "doc-merger-42", resolution="approve_as_is", override_doc_type="contract")
+    assert r.status_code == 400, r.text
+    assert "use resolution=reclassify" in r.text
+    assert store.documents["doc-merger-42"]["stage"] == "review"
+
+
+def test_fake_producer_refuses_correct_with_a_class_change():
+    store = FakeProducerStore()
+    r = _resolve(store, "doc-merger-42", resolution="correct", override_doc_type="contract",
+                 field_corrections={"consideration": "cash"})
+    assert r.status_code == 400, r.text
+    assert "cannot change doc_type" in r.text
+
+
+def test_fake_producer_refuses_reclassify_with_field_corrections():
+    store = FakeProducerStore()
+    r = _resolve(store, "doc-merger-42", resolution="reclassify", override_doc_type="contract",
+                 field_corrections={"consideration": "cash"})
+    assert r.status_code == 400, r.text
+    assert "reclassify takes no field_corrections" in r.text
+
+
+def test_fake_producer_refuses_reclassify_without_a_class_change():
+    store = FakeProducerStore()
+    r = _resolve(store, "doc-merger-42", resolution="reclassify")
+    assert r.status_code == 400, r.text
+    assert "reclassify requires doc_type" in r.text
+    ok = _resolve(store, "doc-merger-42", resolution="reclassify", override_doc_type="contract")
+    assert ok.status_code == 200, ok.text
+
+
+def test_fake_producer_refuses_reject_with_field_corrections():
+    store = FakeProducerStore()
+    r = _resolve(store, "doc-merger-42", resolution="reject", reject_reason="duplicate",
+                 field_corrections={"consideration": "cash"})
+    assert r.status_code == 400, r.text
+    assert "do not apply to resolution=reject" in r.text
+    assert store.documents["doc-merger-42"]["stage"] == "review"
+
+
+def test_fake_producer_legacy_complete_records_correct_with_changed_keys_and_removals():
+    store = FakeProducerStore()
+    r = _resolve(store, "doc-merger-42", decision="approved", disposition="complete",
+                 extracted_data={"consideration": "cash"})
+    assert r.status_code == 200, r.text
+    label = r.json()["human_label"]
+    assert r.json()["resolution"] == "correct"
+    assert label["field_corrections"] == {"consideration": "cash"}
+    # A parked key the posted object leaves out is a removal.
+    assert label["removed_fields"] == ["indemnification", "parties"]
+
+
+def test_fake_producer_legacy_complete_of_unchanged_fields_is_approve_as_is():
+    store = FakeProducerStore()
+    parked = {
+        k: v for k, v in store.documents["doc-merger-42"]["extracted_data"].items()
+        if not str(k).startswith("_")
+    }
+    r = _resolve(store, "doc-merger-42", decision="approved", disposition="complete",
+                 extracted_data=parked)
+    assert r.status_code == 200, r.text
+    label = r.json()["human_label"]
+    assert r.json()["resolution"] == "approve_as_is"
+    assert label["field_corrections"] == {}
+    assert "removed_fields" not in label

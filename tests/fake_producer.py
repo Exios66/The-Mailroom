@@ -172,6 +172,10 @@ class FakeProducerStore:
         if override_doc_type:
             kind = normalize_review_doc_type(str(override_doc_type))
             if kind:
+                if kind != doc.get("doc_type"):
+                    # Belong to the old class (llm-mailroom apply_classification_override).
+                    doc["doc_subclass"] = None
+                    doc["contract_subtype"] = None
                 doc["doc_type"] = kind
         if doc_subclass is not None and str(doc_subclass).strip():
             sub = str(doc_subclass).strip()
@@ -330,7 +334,7 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
         try:
             store.apply_override(
                 rec,
-                override_doc_type=body.get("override_doc_type"),
+                override_doc_type=body.get("override_doc_type") or body.get("doc_type"),
                 doc_subclass=body.get("doc_subclass"),
                 contract_subtype=body.get("contract_subtype"),
             )
@@ -374,6 +378,47 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
             k: v for k, v in (body.get("field_corrections") or {}).items()
             if not str(k).startswith("_")
         } if isinstance(body.get("field_corrections"), dict) else {}
+
+        # llm-mailroom ``plan_resolution`` inputs: what the override moved.
+        class_override = bool(
+            str(body.get("override_doc_type") or body.get("doc_type") or "").strip()
+            or str(body.get("doc_subclass") or "").strip()
+            or str(body.get("contract_subtype") or "").strip()
+        )
+        class_changed = bool(rec.get("doc_type")) and rec.get("doc_type") != before.get("doc_type")
+        details_changed = not class_changed and (
+            rec.get("contract_subtype") != before.get("contract_subtype")
+            or rec.get("doc_subclass") != before.get("doc_subclass")
+        )
+        if resolution == "reject" and corrections:
+            raise HTTPException(400, "field_corrections do not apply to resolution=reject")
+        if resolution in {"approve_as_is", "correct"}:
+            if class_changed:
+                raise HTTPException(
+                    400,
+                    "the parked fields belong to the old class; use resolution=reclassify "
+                    "to change doc_type" if resolution == "approve_as_is"
+                    else "resolution=correct cannot change doc_type; use resolution=reclassify",
+                )
+            if details_changed and parked:
+                raise HTTPException(
+                    400,
+                    "the parked fields were extracted for the old subtype/subclass; use "
+                    "resolution=reclassify to change it" if resolution == "approve_as_is"
+                    else "resolution=correct cannot change the subtype/subclass of parked "
+                    "fields; use resolution=reclassify",
+                )
+        if resolution == "reclassify":
+            if corrections:
+                raise HTTPException(
+                    400, "reclassify takes no field_corrections (the document is re-extracted)"
+                )
+            if not class_override and not (class_changed or details_changed):
+                raise HTTPException(
+                    400,
+                    "resolution=reclassify requires doc_type (or override_doc_type), "
+                    "doc_subclass or contract_subtype",
+                )
 
         human_label: dict[str, Any] = {
             "decision": decision,
@@ -443,6 +488,8 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
                 extracted = body.get("extracted_data")
                 if extracted is None or extracted == {}:
                     extracted = dict(parked)
+                if isinstance(extracted, dict):
+                    extracted = {k: v for k, v in extracted.items() if not str(k).startswith("_")}
             if not isinstance(extracted, dict) or not extracted:
                 raise HTTPException(
                     400, "Document has no parked extraction to approve; use disposition=resume"
@@ -455,6 +502,21 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
                     extracted = validate_operator_extraction(str(kind), extracted)
                 except ValueError as exc:
                     raise HTTPException(400, str(exc)) from exc
+            if not resolution and isinstance(extracted, dict):
+                # llm-mailroom plan_resolution, legacy complete: recorded as
+                # ``correct`` (changed keys as field_corrections; a parked key the
+                # posted object leaves out is a removal) or ``approve_as_is``.
+                changed = {k: v for k, v in extracted.items() if k not in parked or parked[k] != v}
+                removed = sorted(
+                    k for k in parked
+                    if k not in extracted and k not in ("confidence", "reasoning", "mock_extraction")
+                )
+                human_label["resolution"] = (
+                    "correct" if (changed or removed or class_changed) else "approve_as_is"
+                )
+                human_label["field_corrections"] = changed
+                if removed:
+                    human_label["removed_fields"] = removed
             if store.archive_fails:
                 # The report/archive tail can re-park: decision stands, the
                 # completion does not (llm-mailroom PR #203).

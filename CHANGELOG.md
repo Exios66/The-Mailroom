@@ -21,10 +21,17 @@ All notable changes to The-Mailroom are documented here, following
   `field_corrections`; field edits made with a class change are refused in the desk instead of
   dropped), and a field the reviewer deletes travels as an explicit `null` correction, because
   `field_corrections` merge over the parked fields and the producer has no delete (the legacy
-  Complete, which replaces the extraction, is the only true removal). The hosted desk passes the form
+  Complete, which replaces the extraction, is the only true removal; deleting a required or list
+  field such as `keywords`, `parties` or `confidence` is refused by the producer's schema check).
+  An empty select ("(keep current)" doc type, "(none / keep)" subtype) is "unchanged", as
+  `review_actions` drops it from the request, so it never turns Correct / Approve as-is into a
+  class move. The hosted desk passes the form
   to `onDone`, so the producer's `warning` survives the queue refresh. The fake producer merges
   `field_corrections` for `resolution=correct` with `disposition=complete` (it archived the parked
-  fields untouched) and treats a legacy complete with no posted object as the parked public fields.
+  fields untouched), treats a legacy complete with no posted object as the parked public fields,
+  records a legacy complete as `correct` (changed keys, `removed_fields`) or `approve_as_is`, and
+  refuses what `plan_resolution` refuses: approve_as_is / correct with a class change, reclassify
+  with `field_corrections` or with no class given, reject with `field_corrections`.
   README table cell no longer splits on `|`.
 
 ### Added
