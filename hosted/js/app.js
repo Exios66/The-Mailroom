@@ -403,7 +403,7 @@ const App = (() => {
     const parked = run.stage === "review";
     const disp = parked ? "resume" : "record";
     const hint = parked
-      ? "Approve as-is archives the fields the reviewer checked (no LLM pass). Correct sends only your edits. Re-extract re-runs the pipeline under the chosen class. Record writes an audit row only. Requeue copies the file to the inbox. Complete replaces the extraction with your JSON."
+      ? "Approve as-is archives the fields the reviewer checked (no LLM pass). Correct sends only your edits (a field you delete is cleared to null). Re-extract re-runs the pipeline under the chosen class. Record writes an audit row only. Requeue copies the file to the inbox. Complete replaces the extraction with your JSON."
       : "Not parked in the review bin — Approve, Correct, Re-extract and Complete are disabled. Record or requeue instead.";
     const currentType = run.doc_type || "";
     const currentSub = run.doc_subclass || run.contract_subtype || "";
@@ -452,14 +452,6 @@ const App = (() => {
       <p class="review-causes hint" hidden></p>
       <p class="review-status" role="status"></p>
     </form>`;
-  }
-
-  function fieldEdits(parked, next) {
-    const edits = {};
-    for (const [key, value] of Object.entries(next || {})) {
-      if (JSON.stringify((parked || {})[key]) !== JSON.stringify(value)) edits[key] = value;
-    }
-    return edits;
   }
 
   function publicFields(value) {
@@ -561,54 +553,26 @@ const App = (() => {
         const disposition = (btn && btn.dataset.disposition)
           || (form.disposition && form.disposition.value)
           || "resume";
-        let resolution = (btn && btn.dataset.resolution) || "";
         const notes = (form.notes && form.notes.value) || "";
         const docType = (form.doc_type && form.doc_type.value) || "";
         const docSubclass = (form.doc_subclass && form.doc_subclass.value) || "";
-        let extractedData;
-        let corrections;
-        const rawExtracted = (form.extracted_data && form.extracted_data.value) || "";
-        if (resolution === "approve_as_is"
-          && ((docType || "") !== (form.dataset.docType || "")
-            || (docSubclass || "") !== (form.dataset.docSubclass || ""))) {
-          // The parked fields belong to the old class: the producer requires
-          // reclassify (it re-extracts under the chosen one).
-          resolution = "reclassify";
+        // What to send (class move, edits, deletions) is one pure planner shared
+        // with the pixel console: web/js/review_plan.js (served at /static).
+        const plan = ReviewPlan.plan({
+          resolution: (btn && btn.dataset.resolution) || "",
+          disposition,
+          docType,
+          docSubclass,
+          baseType: form.dataset.docType,
+          baseSub: form.dataset.docSubclass,
+          rawExtracted: (form.extracted_data && form.extracted_data.value) || "",
+          parkedRaw: form.dataset.parked,
+        });
+        if (plan.error) {
+          if (status) status.textContent = plan.error;
+          return;
         }
-        if (rawExtracted.trim() || resolution === "correct" || disposition === "complete") {
-          try {
-            extractedData = rawExtracted.trim() ? JSON.parse(rawExtracted) : undefined;
-          } catch (_err) {
-            if (status) status.textContent = "extracted_data is not valid JSON";
-            return;
-          }
-          if (extractedData && (typeof extractedData !== "object" || Array.isArray(extractedData))) {
-            if (status) status.textContent = "extracted_data must be a JSON object";
-            return;
-          }
-          if (resolution === "correct" || resolution === "approve_as_is") {
-            // Only the reviewer's edits travel as field_corrections; the
-            // producer merges them over the parked fields. Approve as-is with
-            // an edited textarea is a correction, not a silent no-op.
-            let parked = {};
-            try {
-              parked = JSON.parse(form.dataset.parked || "{}") || {};
-            } catch (_err) { parked = {}; }
-            const edits = fieldEdits(parked, extractedData);
-            if (resolution === "correct" || Object.keys(edits).length) {
-              if (!Object.keys(edits).length) {
-                if (status) status.textContent = "No field changes to send — use Approve as-is.";
-                return;
-              }
-              corrections = edits;
-              resolution = "correct";
-            }
-          }
-          if (disposition === "complete" && (!extractedData || !Object.keys(extractedData).length)) {
-            if (status) status.textContent = "Complete needs an extracted_data JSON object";
-            return;
-          }
-        }
+        const { resolution, corrections, extractedData } = plan;
         if (status) status.textContent = "Submitting…";
         try {
           const payload = {
@@ -633,7 +597,7 @@ const App = (() => {
             const warn = out.warning ? ` — ${out.warning}` : "";
             status.textContent = `Saved — ${label} ${out.decision || decision}${who}${stage}${warn}`;
           }
-          if (typeof onDone === "function") onDone(result);
+          if (typeof onDone === "function") onDone(result, form);
         } catch (err) {
           if (status) status.textContent = err.message || String(err);
         }

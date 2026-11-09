@@ -12,6 +12,21 @@ All notable changes to The-Mailroom are documented here, following
   moved the reviewed pin from `9e8f30b` and re-vendored the display contract from the merge commit
   (bytes unchanged from the PR-head copy); `contract/source.json` now records `matches_pin: true`.
 
+### Fixed
+
+- **REVIEW desks send what the producer accepts (bot review of PR #71).** One shared pure planner,
+  `web/js/review_plan.js`, now builds the resolve request for both the pixel console and the hosted
+  Observatory (it replaces two drifting copies): Correct after a class / subtype change is sent as
+  `resolution=reclassify` (llm-mailroom refuses `correct` with a new class and `reclassify` takes no
+  `field_corrections`; field edits made with a class change are refused in the desk instead of
+  dropped), and a field the reviewer deletes travels as an explicit `null` correction, because
+  `field_corrections` merge over the parked fields and the producer has no delete (the legacy
+  Complete, which replaces the extraction, is the only true removal). The hosted desk passes the form
+  to `onDone`, so the producer's `warning` survives the queue refresh. The fake producer merges
+  `field_corrections` for `resolution=correct` with `disposition=complete` (it archived the parked
+  fields untouched) and treats a legacy complete with no posted object as the parked public fields.
+  README table cell no longer splits on `|`.
+
 ### Added
 
 - **Resolve refusals match llm-mailroom PR #203 head `ab090bd`.** The producer refuses a posted

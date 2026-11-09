@@ -506,7 +506,7 @@ const Mailroom = (() => {
     const parked = run.stage === "review";
     const disp = defaultDisposition(run);
     const hint = parked
-      ? "Approve archives the fields the reviewer checked (no LLM pass). Correct and Complete send your edited extracted_data. Re-extract re-runs the pipeline under the chosen class. Record appends an audit row only. Requeue copies the file to the inbox."
+      ? "Approve archives the fields the reviewer checked (no LLM pass). Correct sends only your edits (a field you delete is cleared to null). Complete replaces the extraction with your JSON. Re-extract re-runs the pipeline under the chosen class. Record appends an audit row only. Requeue copies the file to the inbox."
       : "This run is not parked in the review bin — Approve, Re-extract and Complete are disabled. Record writes an audit row; Requeue copies the file back to the inbox.";
     const currentType = run.doc_type || "";
     const currentSub = run.doc_subclass || run.contract_subtype || "";
@@ -652,48 +652,26 @@ const Mailroom = (() => {
         const disposition = (btn && btn.dataset.disposition)
           || (form.disposition && form.disposition.value)
           || "resume";
-        let resolution = (btn && btn.dataset.resolution) || "";
         const notes = (form.notes && form.notes.value) || "";
         const docType = (form.doc_type && form.doc_type.value) || "";
         const docSubclass = (form.doc_subclass && form.doc_subclass.value) || "";
-        let extractedData;
-        let corrections;
-        const rawExtracted = (form.extracted_data && form.extracted_data.value) || "";
-        if (resolution === "approve_as_is" && classMoved(docType, docSubclass, form)) {
-          // The parked fields belong to the old class: the producer requires
-          // reclassify (it re-extracts under the chosen one).
-          resolution = "reclassify";
+        // What to send (class move, edits, deletions) is one pure planner shared
+        // with the hosted desk: web/js/review_plan.js.
+        const plan = ReviewPlan.plan({
+          resolution: (btn && btn.dataset.resolution) || "",
+          disposition,
+          docType,
+          docSubclass,
+          baseType: form.dataset.docType,
+          baseSub: form.dataset.docSubclass,
+          rawExtracted: (form.extracted_data && form.extracted_data.value) || "",
+          parkedRaw: form.dataset.parked,
+        });
+        if (plan.error) {
+          if (status) status.textContent = plan.error;
+          return;
         }
-        if (rawExtracted.trim() || resolution === "correct" || disposition === "complete") {
-          try {
-            extractedData = rawExtracted.trim() ? JSON.parse(rawExtracted) : undefined;
-          } catch (err) {
-            if (status) status.textContent = "extracted_data is not valid JSON";
-            return;
-          }
-          if (extractedData && (typeof extractedData !== "object" || Array.isArray(extractedData))) {
-            if (status) status.textContent = "extracted_data must be a JSON object";
-            return;
-          }
-          if (resolution === "correct" || resolution === "approve_as_is") {
-            // Only the reviewer's edits travel as field_corrections; the
-            // producer merges them over the parked fields. Approve as-is with
-            // an edited textarea is a correction, not a silent no-op.
-            const edits = fieldEdits(parkedExtraction(form, extractedData), extractedData);
-            if (resolution === "correct" || Object.keys(edits).length) {
-              if (!Object.keys(edits).length) {
-                if (status) status.textContent = "no field changes to send — use Approve as-is";
-                return;
-              }
-              corrections = edits;
-              resolution = "correct";
-            }
-          }
-          if (disposition === "complete" && (!extractedData || !Object.keys(extractedData).length)) {
-            if (status) status.textContent = "Complete needs an extracted_data JSON object";
-            return;
-          }
-        }
+        const { resolution, corrections, extractedData } = plan;
         if (status) status.textContent = "submitting…";
         try {
           const payload = {
@@ -730,28 +708,6 @@ const Mailroom = (() => {
       if (!key.startsWith("_")) out[key] = val;
     }
     return out;
-  }
-
-  function fieldEdits(parked, next) {
-    const edits = {};
-    for (const [key, value] of Object.entries(next || {})) {
-      if (JSON.stringify((parked || {})[key]) !== JSON.stringify(value)) edits[key] = value;
-    }
-    return edits;
-  }
-
-  function parkedExtraction(form, fallback) {
-    try {
-      const raw = form.dataset.parked;
-      if (raw) return JSON.parse(raw) || {};
-    } catch (_err) { /* fall through to the textarea value */ }
-    return fallback || {};
-  }
-
-  function classMoved(docType, docSubclass, form) {
-    const baseType = form.dataset.docType || "";
-    const baseSub = form.dataset.docSubclass || "";
-    return (docType || "") !== baseType || (docSubclass || "") !== baseSub;
   }
 
   function describeResolve(result, { resolution, disposition, decision }) {

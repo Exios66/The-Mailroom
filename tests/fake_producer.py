@@ -432,12 +432,17 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
                 )
             if resolution == "correct" and not corrections:
                 raise HTTPException(400, "resolution=correct requires non-empty field_corrections")
-            if disposition == "complete":
+            if resolution:
+                # Any resolution (resume or complete alike) works from the
+                # parked fields plus field_corrections, as in llm-mailroom
+                # ``plan_resolution``; a posted extracted_data was refused above.
+                extracted = {**parked, **corrections} if corrections else dict(parked)
+            else:
+                # Legacy complete (no resolution): the posted object is a FULL
+                # replacement, else the parked public fields.
                 extracted = body.get("extracted_data")
                 if extracted is None or extracted == {}:
-                    extracted = rec.get("extracted_data")
-            else:
-                extracted = {**parked, **corrections} if corrections else dict(parked)
+                    extracted = dict(parked)
             if not isinstance(extracted, dict) or not extracted:
                 raise HTTPException(
                     400, "Document has no parked extraction to approve; use disposition=resume"

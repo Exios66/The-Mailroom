@@ -187,6 +187,68 @@ def test_fake_producer_correct_merges_field_corrections():
     assert applied["consideration"] == "all-stock"  # untouched parked field
 
 
+def test_fake_producer_correct_with_complete_disposition_merges_corrections():
+    """llm-mailroom plan_resolution: a resolution works from the parked fields plus
+    field_corrections whether disposition is resume or complete (the fake used to
+    archive the parked fields untouched when disposition was complete)."""
+    store = FakeProducerStore()
+    with TestClient(create_fake_producer(store)) as client:
+        response = client.post(
+            "/v1/review/doc-merger-42/resolve", headers=_auth(),
+            json={
+                "disposition": "complete",
+                "resolution": "correct",
+                "field_corrections": {"indemnification": "capped", "consideration": None},
+            },
+        )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["disposition"] == "complete"
+    assert body["resolution"] == "correct"
+    assert body["complete"]["extracted_data"]["indemnification"] == "capped"
+    applied = store.documents["doc-merger-42"]["extracted_data"]
+    assert applied["indemnification"] == "capped"
+    # A null correction CLEARS the field (the producer merges, it never deletes).
+    assert applied["consideration"] is None
+    assert applied["parties"] == ["Helios Holdings Inc.", "Northwind Target LLC"]
+    assert body["human_label"]["field_corrections"] == {
+        "indemnification": "capped", "consideration": None,
+    }
+
+
+def test_fake_producer_approve_as_is_with_complete_disposition_archives_parked_fields():
+    store = FakeProducerStore()
+    parked = {
+        k: v for k, v in store.documents["doc-merger-42"]["extracted_data"].items()
+        if not str(k).startswith("_")
+    }
+    with TestClient(create_fake_producer(store)) as client:
+        response = client.post(
+            "/v1/review/doc-merger-42/resolve", headers=_auth(),
+            json={"disposition": "complete", "resolution": "approve_as_is"},
+        )
+    assert response.status_code == 200, response.text
+    assert response.json()["complete"]["extracted_data"] == parked
+
+
+def test_fake_producer_legacy_complete_replaces_the_extraction():
+    """No resolution: the posted object is a FULL replacement (a parked key it
+    leaves out is gone), unlike field_corrections which merge."""
+    store = FakeProducerStore()
+    with TestClient(create_fake_producer(store)) as client:
+        response = client.post(
+            "/v1/review/doc-merger-42/resolve", headers=_auth(),
+            json={
+                "decision": "approved", "disposition": "complete",
+                "extracted_data": {"consideration": "cash"},
+            },
+        )
+    assert response.status_code == 200, response.text
+    applied = store.documents["doc-merger-42"]["extracted_data"]
+    assert applied["consideration"] == "cash"
+    assert "parties" not in applied
+
+
 def test_fake_producer_reject_needs_a_reason():
     store = FakeProducerStore()
     with TestClient(create_fake_producer(store)) as client:

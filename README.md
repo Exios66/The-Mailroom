@@ -280,7 +280,7 @@ Open a section below to expand the stills.
 | ![Inspector overlay on the floor](docs/screenshots/inspector.png) |
 | **INSPECTOR** — node spans, LLM generations, classification / extraction / judge scores. |
 | ![REVIEW siding — human-review queue](docs/screenshots/review.png) |
-| **REVIEW** — parked + RECONSIDER cards with Approve as-is / Correct / Re-extract / Reject / Requeue / Complete (resolution approve_as_is|correct|reclassify|reject, or the legacy disposition resume|record|requeue|complete). |
+| **REVIEW** — parked + RECONSIDER cards with Approve as-is / Correct / Re-extract / Reject / Requeue / Complete (resolution approve_as_is / correct / reclassify / reject, or the legacy disposition resume / record / requeue / complete). |
 | ![SESSIONS / matters](docs/screenshots/sessions.png) |
 | **SESSIONS** — Langfuse matters with their traces, stages, and verdicts. |
 | ![HISTORY with replay](docs/screenshots/history.png) |
