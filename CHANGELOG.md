@@ -8,6 +8,11 @@ All notable changes to The-Mailroom are documented here, following
 
 ### Added
 
+- **Resolve refusals match llm-mailroom PR #203 head `ab090bd`.** The producer refuses a posted
+  `extracted_data` with any `resolution`, `disposition=resume` included; the fake producer now does
+  too (it refused only `complete`), and both it and `review_actions` use the producer's wording.
+  `contract/source.json` records the `ab090bd` head; the contract bytes are unchanged.
+
 - **llm-mailroom PR #203 follow-ups (pipeline 0.9.3).** The visualizer is ready
   for the pipeline's calibration + two-way human-review landing before that PR
   merges; the vendored display contract is provisionally taken from its head

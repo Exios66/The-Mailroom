@@ -248,3 +248,24 @@ def test_fake_producer_mirrors_resolution_contract():
 
     assert RESOLUTIONS == frozenset({"approve_as_is", "correct", "reclassify", "reject"})
     assert "not_a_legal_document" in REJECT_REASONS
+
+
+def test_resolve_refuses_extracted_data_with_resume_resolution():
+    """llm-mailroom #203 refuses a posted ``extracted_data`` with any resolution,
+    resume included (``src/api/main.py``); the fake producer must agree."""
+    with TestClient(create_fake_producer(FakeProducerStore())) as c:
+        for disposition in ("resume", "complete"):
+            refused = c.post(
+                "/v1/review/doc-claim-fnol/resolve",
+                headers=_auth(),
+                json={
+                    "disposition": disposition,
+                    "resolution": "approve_as_is",
+                    "extracted_data": {"claim_number": "CL-1"},
+                },
+            )
+            assert refused.status_code == 400, disposition
+            assert (
+                "extracted_data is not used with a resolution (disposition=resume or complete)"
+                in refused.json()["detail"]
+            )

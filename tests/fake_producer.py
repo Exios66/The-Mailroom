@@ -308,11 +308,13 @@ def create_fake_producer(store: Optional[FakeProducerStore] = None, *, token: st
                 raise HTTPException(
                     400, "resolution only applies to disposition=resume or disposition=complete"
                 )
-            if disposition == "complete" and body.get("extracted_data"):
+            if body.get("extracted_data"):
+                # Mirrors llm-mailroom src/api/main.py: any resolution, resume included.
                 raise HTTPException(
                     400,
-                    "extracted_data is not used with a resolution; send field_corrections "
-                    "with resolution=correct (or omit resolution for the legacy complete)",
+                    "extracted_data is not used with a resolution (disposition=resume or "
+                    "complete); send field_corrections with resolution=correct (or omit "
+                    "resolution for the legacy complete)",
                 )
             decision = decision or ("rejected" if resolution == "reject" else "approved")
         if decision not in DECISIONS:

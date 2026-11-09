@@ -603,8 +603,9 @@ def _resolution_fields(
             # or ``field_corrections`` (correct); a posted ``extracted_data`` is
             # ignored by the producer, so refuse it rather than drop the edit.
             raise ReviewActionError(
-                "extracted_data is not used with a resolution; send field_corrections "
-                "with resolution=correct (or omit resolution for the legacy complete)",
+                "extracted_data is not used with a resolution (disposition=resume or "
+                "complete); send field_corrections with resolution=correct (or omit "
+                "resolution for the legacy complete)",
                 status=400,
             )
         extra["resolution"] = token
